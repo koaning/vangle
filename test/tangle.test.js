@@ -11,11 +11,6 @@ import {
   parseTex,
   toTex,
   snap,
-  compileFn,
-  niceTicks,
-  toPoints,
-  linePath,
-  areaPath,
   vegaBindings,
   diffRows,
 } from "../tangle.js";
@@ -158,43 +153,6 @@ test("toTex escapes formatted values for KaTeX", () => {
   assert.equal(toTex(-2), "-2");
   assert.equal(toTex("complex"), String.raw`\text{complex}`);
   assert.equal(toTex(5, "%d km"), String.raw`\text{5 km}`);
-});
-
-test("niceTicks picks round steps that cover the domain", () => {
-  assert.deepEqual(niceTicks(0, 100), [0, 20, 40, 60, 80, 100]);
-  assert.deepEqual(niceTicks(0, 1), [0, 0.2, 0.4, 0.6, 0.8, 1]);
-  assert.deepEqual(niceTicks(-3, 3, 6), [-3, -2, -1, 0, 1, 2, 3]);
-  assert.deepEqual(niceTicks(0.5, 9.5, 4), [2, 4, 6, 8]);
-  assert.deepEqual(niceTicks(5, 5), [5]);
-  assert.deepEqual(niceTicks(0, Infinity), [0]);
-});
-
-test("toPoints accepts numbers, pairs and {x, y} objects", () => {
-  assert.deepEqual(toPoints([3, 5]), [[0, 3], [1, 5]]);
-  assert.deepEqual(toPoints([[2, 4], { x: 3, y: 9 }]), [[2, 4], [3, 9]]);
-  assert.deepEqual(toPoints("nope"), []);
-});
-
-test("linePath rounds to 0.1px and splits at gaps", () => {
-  const id = (v) => v;
-  assert.equal(linePath([[0, 0], [1.234, 2], [2, 4]], id, id), "M0,0L1.2,2L2,4");
-  assert.equal(linePath([[0, 0], [1, NaN], [2, 2], [3, 3]], id, id), "M0,0M2,2L3,3");
-  assert.equal(linePath([], id, id), "");
-  assert.equal(areaPath([[0, 1], [2, 3]], id, id, 0), "M0,0L0,1L2,3L2,0Z");
-});
-
-test("compileFn's parameter shadows a scope variable of the same name", async () => {
-  const scope = new Scope();
-  scope.set("x", 100);
-  scope.set("a", 2);
-  const seen = [];
-  scope.effect(() => {
-    const f = compileFn("a * x", "x")(scope.proxy);
-    seen.push([f(1), f(3)]);
-  });
-  scope.set("a", 3);
-  await tick();
-  assert.deepEqual(seen, [[2, 6], [3, 9]]);
 });
 
 test("vegaBindings finds top-level params and named data anywhere", () => {

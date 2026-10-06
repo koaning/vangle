@@ -1,8 +1,8 @@
 # `<t-vega>`
 
 A [Vega-Lite](https://vega.github.io/vega-lite/) chart that shares variables with the page.
-Use it for what [`<t-chart>`](t-chart.md) doesn't do: scatter plots, tooltips, stacking,
-legends from data, selections. Vega loads only on pages that have a `<t-vega>`.
+Use it for lines, bars, scatter plots, tooltips, stacking, legends from data and selections.
+Vega loads only on pages that have a `<t-vega>`.
 
 <t-scope class="example" data-show-source>
   <p>Cars with more than <t-num name="hp" min="50" max="230" step="10">150</t-num> horsepower
@@ -144,8 +144,8 @@ Unless the spec says otherwise, the chart takes its look from the CSS around it:
 
 - text, axes and gridlines from the text color (`currentColor`),
 - the color of single-color marks from `--tangle-accent`,
-- label size and font from `--tangle-chart-font`, and strengths from `--tangle-chart-text` and
-  `--tangle-chart-grid`, the same properties [`<t-chart>`](t-chart.md#restyling) uses.
+- label size and font from `--tangle-chart-font`, and the strength of labels and gridlines
+  from `--tangle-chart-text` (`60%`) and `--tangle-chart-grid` (`12%`).
 
 When the theme changes (a dark mode toggle, or the system setting), the charts re-render with the
 new colors. A `config` in the spec wins over all of this, so you can still set a color scheme
@@ -175,11 +175,3 @@ network, because it's compressed), which is why it isn't part of `tangle.js`. Pa
 
 Until Vega has loaded, the element shows "Loading chart…" (`.tangle-vega.is-loading`). A failure
 to load Vega or to parse the spec shows a message in its place (`.tangle-vega-error`).
-
-## `<t-chart>` or `<t-vega>`?
-
-- [`<t-chart>`](t-chart.md) is built in: no download, plain HTML, styled with CSS, and it redraws
-  only the shapes whose inputs changed. Use it for a few lines, areas or bars that follow the
-  numbers in your text.
-- `<t-vega>` costs a download, but can draw almost anything: scatter plots, tooltips, legends from
-  data, stacked and faceted charts, and selections the reader makes in the chart.

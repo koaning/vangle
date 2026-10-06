@@ -40,7 +40,6 @@ Serve the repo locally (`python3 -m http.server`) and open:
 | `<t-out expr="x * 2" format="%.1f">` | Shows the result of an expression. |
 | `<t-choice name="n" options="yearly:1, monthly:12">monthly</t-choice>` | Click to cycle through options. Each option is `label` or `label:value`, and numeric values become numbers. Two options make a toggle. |
 | `<t-math display>…</t-math>` | A KaTeX formula with live markers (see below). Omit `display` for inline math. |
-| `<t-chart xmin xmax ymin ymax>…</t-chart>` | An SVG chart. Put `<t-line y="a * x">`, `<t-area>` or `<t-bars data="values">` inside. See [Charts](#charts). |
 | `<t-vega>…</t-vega>` | A Vega-Lite chart, with its spec in a `<script type="application/json">` or `src`. Vega loads only if the page has one. See [Vega](#vega). |
 | `<t-scope>…</t-scope>` | Gives its contents their own variables. Without one, everything shares a page-wide scope. |
 
@@ -86,29 +85,9 @@ Things to know when writing TeX inside HTML:
 - A marker inserts just the number. So with negative values, write `-(\tangle{b})` rather than `-\tangle{b}`.
 - Text values, such as the result of `\val{x > 0 ? 'yes' : 'no'}`, are rendered with `\text{…}`.
 
-## Charts
-
-`<t-chart>` draws lines, areas and bars as SVG. A mark's `y` is an expression of `x`, sampled across the x axis, or its `data` is an expression that gives an array:
-
-```html
-<t-chart xmin="0" xmax="10" ymin="0" ymax="100" x-label="years" y-format="$%d">
-  <t-area y="start * (1 + rate / 100) ** x"></t-area>
-  <t-line y="start + 5 * x" class="baseline" color="#c2410c #fb923c"></t-line>
-</t-chart>
-
-<t-chart ymax="50" labels="Mon, Tue, Wed">
-  <t-bars data="sales"></t-bars>
-</t-chart>
-```
-
-- The axes are drawn once (unless `xmin`…`ymax` use variables). Each mark has its own effect and rewrites only its own path or bars, only when a variable it reads changes.
-- To chart data from your own script, set a variable to a new array: `scope.set("sales", [12, 30, 18])`.
-- Give a mark a `label="…"` to show a legend (`legend="bottom"` on the chart moves it below).
-- Colors come from `currentColor` and `--tangle-accent`. Restyle with `--tangle-chart-stroke`, `--tangle-chart-area`, `--tangle-chart-grid`, `--tangle-chart-text` and `--tangle-chart-font`, or with the classes `.tangle-line`, `.tangle-area`, `.tangle-bar`, `.tangle-grid`, `.tangle-axis` and `.tangle-legend`. A mark's `class` is copied onto its shape and its legend swatch.
-
 ## Vega
 
-For charts `<t-chart>` can't draw (scatter plots, tooltips, stacking, selections), `<t-vega>` renders a [Vega-Lite](https://vega.github.io/vega-lite/) spec:
+For charts, `<t-vega>` renders a [Vega-Lite](https://vega.github.io/vega-lite/) spec:
 
 ```html
 <p>Highlight cars over <t-num name="hp" min="50" max="230" step="10">150</t-num> horsepower.</p>

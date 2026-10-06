@@ -12,7 +12,7 @@ so it's easy to fit to your blog's look.
 | `--tangle-surface` | `#fff` (dark: `#22201d`) | Background of the typing field and text of the "drag" hint. |
 | `--tangle-error` | `#c9382b` | Broken outputs and formula errors. |
 | `--tangle-color` | | Set per element from a variable's `color` attribute. |
-| `--tangle-chart-stroke`, `--tangle-chart-area`, `--tangle-chart-grid`, `--tangle-chart-text`, `--tangle-chart-font` | | Chart lines, fills, gridlines and labels. See [Restyling charts](t-chart.md#restyling). |
+| `--tangle-chart-grid`, `--tangle-chart-text`, `--tangle-chart-font` | `12%`, `60%`, `12px` system font | Strength of chart gridlines and labels, and their font. See [`<t-vega>`](t-vega.md#theme). |
 
 Set them on `:root` to restyle the whole site, or on any container to restyle part of a page:
 
@@ -51,7 +51,7 @@ The stylesheet behind that example:
 | `.tangle-editor` | The typing field. `.is-invalid` while it holds something unparseable. |
 | `t-out.is-error` | An output whose expression threw. |
 | `.tangle-math-error` | The message shown in place of a formula that doesn't parse. |
-| `.tangle-chart`, `.tangle-line`, `.tangle-area`, `.tangle-bar`, `.tangle-legend` | A chart's `<svg>`, its shapes and its legend. See [`<t-chart>`](t-chart.md#restyling). |
+| `.tangle-vega` | A Vega chart. `.is-loading` until Vega has loaded; `.tangle-vega-error` replaces it on failure. See [`<t-vega>`](t-vega.md#how-vega-loads). |
 
 ### Recipes
 

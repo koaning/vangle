@@ -12,7 +12,7 @@
 
 - [Getting started](docs/index.md): install, a first reactive paragraph, and how variables, reactivity and scopes work.
 - [Expressions & formats](docs/expressions.md): what names an expression can use, registering functions, conditional text, and printf-style and named formats.
-- [Updating a chart](docs/charts.md): for charts `<t-chart>` can't draw: drawing an SVG chart with fixed scales from the variables with `scopeOf(...).effect`, canvas and chart libraries, and setting variables from a click in the chart.
+- [Updating a chart](docs/charts.md): for charts `<t-vega>` doesn't cover: drawing an SVG chart with fixed scales from the variables with `scopeOf(...).effect`, canvas and chart libraries, and setting variables from a click in the chart.
 - [Using it on a blog](docs/blogging.md): layouts, raw-HTML settings for Markdown generators, KaTeX setup, CSP and feeds.
 
 ## Elements
@@ -23,7 +23,6 @@
 - [`<t-out>`](docs/t-out.md): shows the live result of an expression in the text.
 - [`<t-choice>`](docs/t-choice.md): a word the reader clicks to cycle through options, or a toggle.
 - [`<t-math>`](docs/t-math.md): a KaTeX formula with draggable `\tangle{}` parameters and live `\val{}` results.
-- [`<t-chart>`](docs/t-chart.md): a line, area or bar chart in SVG, drawn from expressions or array variables, with an optional legend, that redraws only the marks whose inputs changed. Restyled with CSS custom properties and classes.
 - [`<t-vega>`](docs/t-vega.md): a Vega-Lite chart (JSON spec in a `<script type="application/json">`, or `src`). Spec params and named data sources with a variable's name are linked to it; Vega loads from jsDelivr only on pages that use it.
 - [`<t-scope>`](docs/t-scope.md): gives part of the page its own set of variables.
 

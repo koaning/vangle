@@ -3,20 +3,29 @@
 The elements cover most documents. For charts, simulations and anything custom, the same
 reactive variables are available from JavaScript.
 
-<t-scope id="growth" class="example">
-  <p>Growing by <t-num name="g" min="-20" max="50">10</t-num>% a year for
-    <t-num name="years" min="1" max="20">8</t-num> years:</p>
-  <div class="bars"></div>
-</t-scope>
+## A first script {#first-script}
+
+Here, the HTML declares two variables, `g` and `years`, and an empty `.bars` element. A
+script draws one bar per year, and the button resets both numbers:
+
+<div class="example" data-show-source="open">
+  <t-scope id="growth">
+    <p>Growing by <t-num name="g" min="-20" max="50">10</t-num>% a year for
+      <t-num name="years" min="1" max="20">8</t-num> years:</p>
+    <div class="bars"></div>
+    <button type="button">Reset</button>
+  </t-scope>
+</div>
 
 <script type="module" data-show-source="open">
   import { scopeOf } from "../tangle.js";
 
   const root = document.querySelector("#growth");
+  const scope = scopeOf(root);
   const bars = root.querySelector(".bars");
 
-  // Re-runs whenever a variable it reads (g or years) changes.
-  scopeOf(root).effect((s) => {
+  // Runs now, and again whenever g or years changes.
+  scope.effect((s) => {
     const values = Array.from({ length: s.get("years") }, (_, i) => (1 + s.get("g") / 100) ** i);
     const top = Math.max(...values);
     bars.replaceChildren(...values.map((v) => {
@@ -25,12 +34,45 @@ reactive variables are available from JavaScript.
       return bar;
     }));
   });
+
+  root.querySelector("button").addEventListener("click", () => {
+    scope.setValues({ g: 10, years: 8 });
+  });
 </script>
 
-<style>
+<style data-show-source>
   .bars { display: flex; align-items: flex-end; gap: 6px; height: 120px; margin: 1rem 0; }
   .bars div { flex: 1; border-radius: 4px 4px 0 0; background: var(--tangle-accent); transition: height 80ms; }
 </style>
+
+Step by step:
+
+1. **Find the variables.** A page can have more than one set of variables: one page-wide
+   set, plus one for each [`<t-scope>`](t-scope.md). Every example in these docs sits in its
+   own `<t-scope>`, so this `years` can't clash with a `years` elsewhere on the page.
+   `scopeOf(element)` returns the set that `element` belongs to, which is why it needs an
+   element. Here that's `root`, the `<t-scope id="growth">`, found by its id. Any element inside
+   it works too: `scopeOf(bars)` returns the same scope.
+2. **Read them in an effect.** `scope.effect(fn)` runs `fn` straight away. While it runs,
+   each `s.get("…")` returns the current value and records that `fn` depends on it. Here that's
+   `g` and `years`.
+3. **Re-run when they change.** When the reader drags `g` or `years`, `fn` runs again and
+   rebuilds the bars. Each bar's height is a percentage of the tallest one.
+4. **Set them from anywhere.** The button calls `scope.setValues`. The numbers in the text
+   update, and so do the bars, because the effect depends on both values.
+
+On a page without any `<t-scope>`, everything is page-wide. There, use `scopeOf(document)`
+and skip the id:
+
+```js
+const scope = scopeOf(document);
+scope.effect((s) => console.log(s.get("years")));
+```
+
+An effect finds its dependencies by running, so you never list them. If an `if` skips a
+`s.get`, that variable isn't watched until a later run reads it.
+[Updating a chart](charts.md) builds a bigger example, and covers canvas and chart
+libraries.
 
 ## Importing
 
@@ -42,7 +84,7 @@ two separate copies with separate variables.
 import { scopeOf, registerFunction, registerFormat, configure } from "/tangle.js";
 ```
 
-## Scopes
+## Scopes {#scopes}
 
 `scopeOf(element)` returns the scope an element belongs to: its nearest
 [`<t-scope>`](t-scope.md), or the page-wide scope. Call

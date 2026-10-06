@@ -11,6 +11,37 @@
 //   generated from Markdown (site/build.js), whose code fences produce these.
 // - <script type="text/plain" data-lang="html|js|css"> is replaced by a
 //   highlighted code block. Write "</script>" inside it as "<\/script>".
+// - [data-theme-toggle] buttons switch between light and dark by setting
+//   data-theme on <html>, remembered in localStorage. Until one is clicked, the
+//   page follows prefers-color-scheme. A script in <head> restores the choice
+//   before the page renders.
+(() => {
+  const root = document.documentElement;
+  const prefersDark = matchMedia("(prefers-color-scheme: dark)");
+  const toggles = document.querySelectorAll("[data-theme-toggle]");
+  const isDark = () => (root.dataset.theme ?? (prefersDark.matches ? "dark" : "light")) === "dark";
+
+  function showTheme() {
+    for (const button of toggles) {
+      button.textContent = isDark() ? "\u2600\ufe0e" : "\u263e";
+      button.setAttribute("aria-pressed", isDark());
+      button.title = isDark() ? "Switch to light mode" : "Switch to dark mode";
+    }
+  }
+
+  for (const button of toggles) {
+    button.addEventListener("click", () => {
+      root.dataset.theme = isDark() ? "light" : "dark";
+      try {
+        localStorage.setItem("theme", root.dataset.theme);
+      } catch {}
+      showTheme();
+    });
+  }
+  prefersDark.addEventListener("change", showTheme);
+  showTheme();
+})();
+
 (() => {
   const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
   const span = (cls, html) => `<span class="hl-${cls}">${html}</span>`;

@@ -86,4 +86,4 @@ RSS readers and no-JS browsers still get a readable sentence.
 | [`<t-scope>`](t-scope.md) | Giving part of the page its own variables. |
 
 For charts and other custom logic, the same variables are available from
-[JavaScript](javascript.md).
+[JavaScript](javascript.md). See [Updating a chart](charts.md) for a walkthrough.

@@ -32,7 +32,6 @@
 <li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
 <li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
 <li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
-<li><a href="t-chart.html"><code>&lt;t-chart&gt;</code></a></li>
 <li><a href="t-vega.html" aria-current="page"><code>&lt;t-vega&gt;</code></a></li>
 <li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
 </ul>
@@ -45,8 +44,8 @@
 <main>
 <h1><code>&lt;t-vega&gt;</code></h1>
 <p class="lede">A <a href="https://vega.github.io/vega-lite/">Vega-Lite</a> chart that shares variables with the page.
-Use it for what <a href="t-chart.html"><code>&lt;t-chart&gt;</code></a> doesn't do: scatter plots, tooltips, stacking,
-legends from data, selections. Vega loads only on pages that have a <code>&lt;t-vega&gt;</code>.</p>
+Use it for lines, bars, scatter plots, tooltips, stacking, legends from data and selections.
+Vega loads only on pages that have a <code>&lt;t-vega&gt;</code>.</p>
 <t-scope class="example" data-show-source>
   <p>Cars with more than <t-num name="hp" min="50" max="230" step="10">150</t-num> horsepower
     are highlighted. Hover over a point to see the car.</p>
@@ -172,8 +171,8 @@ together, and the chart redraws once.</li>
 <ul>
 <li>text, axes and gridlines from the text color (<code>currentColor</code>),</li>
 <li>the color of single-color marks from <code>--tangle-accent</code>,</li>
-<li>label size and font from <code>--tangle-chart-font</code>, and strengths from <code>--tangle-chart-text</code> and
-<code>--tangle-chart-grid</code>, the same properties <a href="t-chart.html#restyling"><code>&lt;t-chart&gt;</code></a> uses.</li>
+<li>label size and font from <code>--tangle-chart-font</code>, and the strength of labels and gridlines
+from <code>--tangle-chart-text</code> (<code>60%</code>) and <code>--tangle-chart-grid</code> (<code>12%</code>).</li>
 </ul>
 <p>When the theme changes (a dark mode toggle, or the system setting), the charts re-render with the
 new colors. A <code>config</code> in the spec wins over all of this, so you can still set a color scheme
@@ -202,15 +201,7 @@ Content-Security-Policy needs <code>'unsafe-eval'</code> for both.</li>
 </ul>
 <p>Until Vega has loaded, the element shows "Loading chart…" (<code>.tangle-vega.is-loading</code>). A failure
 to load Vega or to parse the spec shows a message in its place (<code>.tangle-vega-error</code>).</p>
-<h2><code>&lt;t-chart&gt;</code> or <code>&lt;t-vega&gt;</code>?</h2>
-<ul>
-<li><a href="t-chart.html"><code>&lt;t-chart&gt;</code></a> is built in: no download, plain HTML, styled with CSS, and it redraws
-only the shapes whose inputs changed. Use it for a few lines, areas or bars that follow the
-numbers in your text.</li>
-<li><code>&lt;t-vega&gt;</code> costs a download, but can draw almost anything: scatter plots, tooltips, legends from
-data, stacked and faceted charts, and selections the reader makes in the chart.</li>
-</ul>
-<div class="pager"><a class="prev" href="t-chart.html"><small>Previous</small><code>&lt;t-chart&gt;</code></a><a class="next" href="t-scope.html"><small>Next</small><code>&lt;t-scope&gt;</code></a></div>
+<div class="pager"><a class="prev" href="t-math.html"><small>Previous</small><code>&lt;t-math&gt;</code></a><a class="next" href="t-scope.html"><small>Next</small><code>&lt;t-scope&gt;</code></a></div>
 </main>
 <script src="../site/site.js"></script>
 </body>

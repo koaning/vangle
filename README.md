@@ -40,6 +40,8 @@ Serve the repo locally (`python3 -m http.server`) and open:
 | `<t-out expr="x * 2" format="%.1f">` | Shows the result of an expression. |
 | `<t-choice name="n" options="yearly:1, monthly:12">monthly</t-choice>` | Click to cycle through options. Each option is `label` or `label:value`, and numeric values become numbers. Two options make a toggle. |
 | `<t-math display>…</t-math>` | A KaTeX formula with live markers (see below). Omit `display` for inline math. |
+| `<t-chart xmin xmax ymin ymax>…</t-chart>` | An SVG chart. Put `<t-line y="a * x">`, `<t-area>` or `<t-bars data="values">` inside. See [Charts](#charts). |
+| `<t-vega>…</t-vega>` | A Vega-Lite chart, with its spec in a `<script type="application/json">` or `src`. Vega loads only if the page has one. See [Vega](#vega). |
 | `<t-scope>…</t-scope>` | Gives its contents their own variables. Without one, everything shares a page-wide scope. |
 
 Declaration order doesn't matter: you can use a variable before the element that declares it.
@@ -84,6 +86,49 @@ Things to know when writing TeX inside HTML:
 - A marker inserts just the number. So with negative values, write `-(\tangle{b})` rather than `-\tangle{b}`.
 - Text values, such as the result of `\val{x > 0 ? 'yes' : 'no'}`, are rendered with `\text{…}`.
 
+## Charts
+
+`<t-chart>` draws lines, areas and bars as SVG. A mark's `y` is an expression of `x`, sampled across the x axis, or its `data` is an expression that gives an array:
+
+```html
+<t-chart xmin="0" xmax="10" ymin="0" ymax="100" x-label="years" y-format="$%d">
+  <t-area y="start * (1 + rate / 100) ** x"></t-area>
+  <t-line y="start + 5 * x" class="baseline" color="#c2410c #fb923c"></t-line>
+</t-chart>
+
+<t-chart ymax="50" labels="Mon, Tue, Wed">
+  <t-bars data="sales"></t-bars>
+</t-chart>
+```
+
+- The axes are drawn once (unless `xmin`…`ymax` use variables). Each mark has its own effect and rewrites only its own path or bars, only when a variable it reads changes.
+- To chart data from your own script, set a variable to a new array: `scope.set("sales", [12, 30, 18])`.
+- Give a mark a `label="…"` to show a legend (`legend="bottom"` on the chart moves it below).
+- Colors come from `currentColor` and `--tangle-accent`. Restyle with `--tangle-chart-stroke`, `--tangle-chart-area`, `--tangle-chart-grid`, `--tangle-chart-text` and `--tangle-chart-font`, or with the classes `.tangle-line`, `.tangle-area`, `.tangle-bar`, `.tangle-grid`, `.tangle-axis` and `.tangle-legend`. A mark's `class` is copied onto its shape and its legend swatch.
+
+## Vega
+
+For charts `<t-chart>` can't draw (scatter plots, tooltips, stacking, selections), `<t-vega>` renders a [Vega-Lite](https://vega.github.io/vega-lite/) spec:
+
+```html
+<p>Highlight cars over <t-num name="hp" min="50" max="230" step="10">150</t-num> horsepower.</p>
+<t-vega>
+  <script type="application/json">
+  { "data": { "url": "cars.json" },
+    "params": [{ "name": "hp", "value": 150 }],
+    "mark": "point",
+    "encoding": {
+      "x": { "field": "Horsepower", "type": "quantitative" },
+      "y": { "field": "Miles_per_Gallon", "type": "quantitative" },
+      "opacity": { "condition": { "test": "datum.Horsepower > hp", "value": 1 }, "value": 0.2 } } }
+  </script>
+</t-vega>
+```
+
+- A top-level param with a variable's name is linked to it both ways; selections (`select`) only flow from the chart to the page. A named data source (`"data": { "name": "rows" }`) is fed from the variable `rows`.
+- Colors and fonts come from the surrounding CSS (`currentColor`, `--tangle-accent`, `--tangle-chart-*`), and charts re-render when the theme changes.
+- Vega 6.4.0, Vega-Lite 6.4.3 and vega-embed 7.3.0 (about 830 KB minified) load from jsDelivr only when the page has a `<t-vega>`. An existing `window.vega`/`vegaLite`/`vegaEmbed` is reused, or set other URLs with `configure({ vegaUrl, vegaLiteUrl, vegaEmbedUrl })`.
+
 ## Expressions
 
 Expressions (`expr`, `\val{…}`) are plain JavaScript evaluated against the scope. A name in an expression is one of:
@@ -106,7 +151,7 @@ Nothing else from `window` leaks in, so a variable called `top`, `name` or `leng
 
 ## JavaScript API
 
-The declarative elements cover most posts. For charts and other custom logic, the same reactive scope is available from JS:
+The declarative elements cover most posts. For custom charts and other logic, the same reactive scope is available from JS:
 
 ```js
 import { scopeOf, registerFormat, registerFunction, configure } from "./tangle.js";
@@ -122,13 +167,14 @@ scope.eval("a * 2");
 
 Lower-level primitives are exported too: `signal`, `computed`, `effect`, `untracked`.
 
-### KaTeX source
+### KaTeX and Vega sources
 
 By default KaTeX 0.19.0 comes from jsdelivr. To use a different copy:
 
 - If `window.katex` exists (your blog loads KaTeX itself), it is used.
 - Otherwise, call `configure({ katexUrl, katexCssUrl })` in the same module that imports `tangle.js`.
 - Or set `window.TangleConfig = { katexUrl, katexCssUrl }` before the module loads.
+- Vega works the same way, with `window.vega`, `window.vegaLite` and `window.vegaEmbed`, and the options `vegaUrl`, `vegaLiteUrl` and `vegaEmbedUrl`.
 
 ## Development
 

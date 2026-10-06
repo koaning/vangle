@@ -142,10 +142,11 @@ stop();
 ## Configuration {#configuration}
 
 `configure(options)` changes global defaults. Call it in the same module that imports
-`tangle.js`, before the first formula loads KaTeX.
+`tangle.js`, before the first formula loads KaTeX or the first [`<t-vega>`](t-vega.md) loads Vega.
 
 | Option | Default | Description |
 |---|---|---|
 | `katexUrl` | jsDelivr, KaTeX 0.19.0 | The KaTeX ES module to import. |
 | `katexCssUrl` | jsDelivr, KaTeX 0.19.0 | The KaTeX stylesheet, added if the page has none. |
+| `vegaUrl`, `vegaLiteUrl`, `vegaEmbedUrl` | jsDelivr: Vega 6.4.0, Vega-Lite 6.4.3, vega-embed 7.3.0 | The three Vega scripts, loaded in order. Each is skipped if its global (`vega`, `vegaLite`, `vegaEmbed`) already exists. |
 | `pixelsPerStep` | `5` | The default drag sensitivity. |

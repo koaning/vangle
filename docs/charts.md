@@ -1,7 +1,9 @@
 # Updating a chart
 
-The elements cover text and formulas. A chart needs a few lines of JavaScript: the variables
-stay in the HTML, and a script reads them and draws.
+For lines, areas and bars, use [`<t-chart>`](t-chart.md), which needs no script. For
+scatter plots, tooltips and the like, [`<t-vega>`](t-vega.md) draws a Vega-Lite spec. For any
+other chart, a few lines of JavaScript do it: the variables stay in the HTML, and a script
+reads them and draws.
 
 ## A live chart
 

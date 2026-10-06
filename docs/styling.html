@@ -32,6 +32,8 @@
 <li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
 <li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
 <li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
+<li><a href="t-chart.html"><code>&lt;t-chart&gt;</code></a></li>
+<li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
 <li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
 </ul>
 <h4>Reference</h4>
@@ -53,6 +55,7 @@ so it's easy to fit to your blog's look.</p>
 <tr><td><code>--tangle-surface</code></td><td><code>#fff</code> (dark: <code>#22201d</code>)</td><td>Background of the typing field and text of the "drag" hint.</td></tr>
 <tr><td><code>--tangle-error</code></td><td><code>#c9382b</code></td><td>Broken outputs and formula errors.</td></tr>
 <tr><td><code>--tangle-color</code></td><td></td><td>Set per element from a variable's <code>color</code> attribute.</td></tr>
+<tr><td><code>--tangle-chart-stroke</code>, <code>--tangle-chart-area</code>, <code>--tangle-chart-grid</code>, <code>--tangle-chart-text</code>, <code>--tangle-chart-font</code></td><td></td><td>Chart lines, fills, gridlines and labels. See <a href="t-chart.html#restyling">Restyling charts</a>.</td></tr>
 </tbody>
 </table>
 <p>Set them on <code>:root</code> to restyle the whole site, or on any container to restyle part of a page:</p>
@@ -88,6 +91,7 @@ so it's easy to fit to your blog's look.</p>
 <tr><td><code>.tangle-editor</code></td><td>The typing field. <code>.is-invalid</code> while it holds something unparseable.</td></tr>
 <tr><td><code>t-out.is-error</code></td><td>An output whose expression threw.</td></tr>
 <tr><td><code>.tangle-math-error</code></td><td>The message shown in place of a formula that doesn't parse.</td></tr>
+<tr><td><code>.tangle-chart</code>, <code>.tangle-line</code>, <code>.tangle-area</code>, <code>.tangle-bar</code>, <code>.tangle-legend</code></td><td>A chart's <code>&lt;svg&gt;</code>, its shapes and its legend. See <a href="t-chart.html#restyling"><code>&lt;t-chart&gt;</code></a>.</td></tr>
 </tbody>
 </table>
 <h3>Recipes</h3>

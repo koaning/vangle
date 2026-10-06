@@ -11,6 +11,13 @@ import {
   parseTex,
   toTex,
   snap,
+  compileFn,
+  niceTicks,
+  toPoints,
+  linePath,
+  areaPath,
+  vegaBindings,
+  diffRows,
 } from "../tangle.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve));
@@ -151,4 +158,92 @@ test("toTex escapes formatted values for KaTeX", () => {
   assert.equal(toTex(-2), "-2");
   assert.equal(toTex("complex"), String.raw`\text{complex}`);
   assert.equal(toTex(5, "%d km"), String.raw`\text{5 km}`);
+});
+
+test("niceTicks picks round steps that cover the domain", () => {
+  assert.deepEqual(niceTicks(0, 100), [0, 20, 40, 60, 80, 100]);
+  assert.deepEqual(niceTicks(0, 1), [0, 0.2, 0.4, 0.6, 0.8, 1]);
+  assert.deepEqual(niceTicks(-3, 3, 6), [-3, -2, -1, 0, 1, 2, 3]);
+  assert.deepEqual(niceTicks(0.5, 9.5, 4), [2, 4, 6, 8]);
+  assert.deepEqual(niceTicks(5, 5), [5]);
+  assert.deepEqual(niceTicks(0, Infinity), [0]);
+});
+
+test("toPoints accepts numbers, pairs and {x, y} objects", () => {
+  assert.deepEqual(toPoints([3, 5]), [[0, 3], [1, 5]]);
+  assert.deepEqual(toPoints([[2, 4], { x: 3, y: 9 }]), [[2, 4], [3, 9]]);
+  assert.deepEqual(toPoints("nope"), []);
+});
+
+test("linePath rounds to 0.1px and splits at gaps", () => {
+  const id = (v) => v;
+  assert.equal(linePath([[0, 0], [1.234, 2], [2, 4]], id, id), "M0,0L1.2,2L2,4");
+  assert.equal(linePath([[0, 0], [1, NaN], [2, 2], [3, 3]], id, id), "M0,0M2,2L3,3");
+  assert.equal(linePath([], id, id), "");
+  assert.equal(areaPath([[0, 1], [2, 3]], id, id, 0), "M0,0L0,1L2,3L2,0Z");
+});
+
+test("compileFn's parameter shadows a scope variable of the same name", async () => {
+  const scope = new Scope();
+  scope.set("x", 100);
+  scope.set("a", 2);
+  const seen = [];
+  scope.effect(() => {
+    const f = compileFn("a * x", "x")(scope.proxy);
+    seen.push([f(1), f(3)]);
+  });
+  scope.set("a", 3);
+  await tick();
+  assert.deepEqual(seen, [[2, 6], [3, 9]]);
+});
+
+test("vegaBindings finds top-level params and named data anywhere", () => {
+  const spec = {
+    params: [{ name: "hp", value: 1 }, { name: "brush", select: "interval" }],
+    data: { name: "rows" },
+    layer: [{ mark: "rule", data: { name: "limits" } }, { data: { url: "x.json" } }],
+    transform: [{ lookup: "id", from: { data: { name: "people" }, key: "id" } }],
+  };
+  assert.deepEqual(vegaBindings(spec), {
+    params: [{ name: "hp", selection: false }, { name: "brush", selection: true }],
+    data: ["rows", "limits", "people"],
+  });
+  // A Vega spec: signals, and inline data at the top level (not loaded from a URL).
+  const vega = { signals: [{ name: "k" }], data: [{ name: "table", values: [] }, { name: "web", url: "x.json" }] };
+  assert.deepEqual(vegaBindings(vega), { params: [{ name: "k", selection: false }], data: ["table"] });
+});
+
+test("diffRows modifies rows in place, and only adds or removes the difference", () => {
+  // A stand-in for vega.changeset() that records what it was asked to do.
+  const vega = {
+    changeset() {
+      const log = { modify: [], insert: [], remove: [] };
+      const cs = {
+        log,
+        modify: (t, k, v) => (log.modify.push([t, k, v]), cs),
+        insert: (rows) => (log.insert.push(...rows), cs),
+        remove: (rows) => (log.remove.push(...(typeof rows === "function" ? ["all"] : rows)), cs),
+      };
+      return cs;
+    },
+  };
+  const first = [{ year: 0, amount: 1 }, { year: 5, amount: 2 }];
+  const [initial, tuples] = diffRows(vega, null, first);
+  assert.deepEqual(initial.log.remove, ["all"]);
+  assert.deepEqual(initial.log.insert, first);
+  assert.notEqual(tuples[0], first[0]); // Vega gets copies, never the caller's objects
+
+  const [changes, next] = diffRows(vega, tuples, [{ year: 0, amount: 1 }, { year: 5, amount: 3 }, { year: 10, amount: 4 }]);
+  assert.deepEqual(changes.log.modify, [[tuples[1], "amount", 3]]);
+  assert.deepEqual(changes.log.insert, [{ year: 10, amount: 4 }]);
+  assert.deepEqual(changes.log.remove, []);
+  assert.equal(next[0], tuples[0]);
+
+  const [shorter] = diffRows(vega, next, [{ year: 0, amount: 1 }]);
+  assert.deepEqual(shorter.log.remove, next.slice(1));
+
+  // Plain values can't be modified in place: replace them all.
+  const [plain, none] = diffRows(vega, next, [1, 2]);
+  assert.deepEqual(plain.log.remove, ["all"]);
+  assert.equal(none, null);
 });

@@ -1,0 +1,217 @@
+<!doctype html>
+<!-- Generated from t-chart.md by site/build.js. Edit the Markdown, then run `make docs`. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;t-chart&gt; · vangle docs</title>
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+<link rel="alternate" type="text/markdown" href="t-chart.md">
+<link rel="stylesheet" href="../tangle.css">
+<link rel="stylesheet" href="../site/site.css">
+<script type="module" src="../tangle.js"></script>
+</head>
+<body class="docs">
+<nav class="docs-nav">
+<div class="docs-nav-top">
+<a class="brand" href="../index.html">vangle</a>
+<button class="theme-toggle" type="button" data-theme-toggle aria-label="Dark mode"></button>
+</div>
+<h4>Guide</h4>
+<ul>
+<li><a href="index.html">Getting started</a></li>
+<li><a href="expressions.html">Expressions &amp; formats</a></li>
+<li><a href="charts.html">Updating a chart</a></li>
+<li><a href="blogging.html">Using it on a blog</a></li>
+</ul>
+<h4>Elements</h4>
+<ul>
+<li><a href="t-num.html"><code>&lt;t-num&gt;</code></a></li>
+<li><a href="t-var.html"><code>&lt;t-var&gt;</code></a></li>
+<li><a href="t-let.html"><code>&lt;t-let&gt;</code></a></li>
+<li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
+<li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
+<li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
+<li><a href="t-chart.html" aria-current="page"><code>&lt;t-chart&gt;</code></a></li>
+<li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
+<li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
+</ul>
+<h4>Reference</h4>
+<ul>
+<li><a href="javascript.html">JavaScript API</a></li>
+<li><a href="styling.html">Styling</a></li>
+</ul>
+</nav>
+<main>
+<h1><code>&lt;t-chart&gt;</code></h1>
+<p class="lede">A line, area or bar chart drawn from your variables, as SVG. You write the chart in HTML,
+and when the reader drags a number, only the shapes that depend on it are redrawn.</p>
+<t-scope class="example" data-show-source="open">
+  <p>Put away <t-num name="deposit" min="0" max="400" step="10" format="$%d">200</t-num> a month
+    at <t-num name="rate" min="0" max="8" step="0.5" format="%.1f%%">6</t-num> a year.
+    After 30 years you have <t-out expr="saved(30)" format="dollars"></t-out>, of which you paid in
+    <t-out expr="yearly * 30" format="dollars"></t-out>.</p>
+  <t-let name="yearly" expr="deposit * 12"></t-let>
+  <!-- saved(year) is what you have after that many years. A t-let can hold a function. -->
+  <t-let name="saved" expr="(year) => rate ? yearly * ((1 + rate / 100) ** year - 1) / (rate / 100) : yearly * year"></t-let>
+  <!-- var="year" names the x axis variable: each mark is drawn for year = 0 … 30. -->
+  <t-chart var="year" xmin="0" xmax="30" ymin="0" ymax="600000" x-label="years" y-format="$%,d" label="Savings over 30 years">
+    <t-area y="saved(year)"></t-area>
+    <t-line y="saved(year)" label="Your savings"></t-line>
+    <t-line y="yearly * year" class="paid-in" label="What you paid in"></t-line>
+  </t-chart>
+</t-scope>
+<style data-show-source>
+  t-chart .paid-in {
+    stroke: currentColor;
+    stroke-opacity: 0.45;
+    stroke-dasharray: 4 5;
+  }
+</style>
+<h2 id="sampling">How a line is drawn</h2>
+<p>A <code>y</code> expression describes the line one point at a time. The chart walks across the x axis, from
+<code>xmin</code> to <code>xmax</code>, in small even steps (about 135 of them). At each step it sets the x variable to
+that position, works out <code>y</code>, and puts a point there. Then it connects the points.</p>
+<p>In this example the x variable is called <code>year</code>, and <code>xmin</code>/<code>xmax</code> are 0 and 30. So
+<code>&lt;t-line y="saved(year)"&gt;</code> works out <code>saved(0)</code>, <code>saved(0.22)</code>, <code>saved(0.44)</code>, and so on up to
+<code>saved(30)</code>, and the line is drawn through those points. <code>y="yearly * year"</code> does the same for the
+money you paid in.</p>
+<ul>
+<li>The x variable only exists inside <code>y</code> expressions. You don't declare it, and it doesn't change
+your other variables.</li>
+<li>It's called <code>x</code> unless you name it with <code>var</code>. The other examples on this page use <code>x</code>, as in
+<code>y="amp * Math.sin(freq * x)"</code>.</li>
+<li><code>saved</code> is a <code>&lt;t-let&gt;</code> whose value is a function, so the chart (<code>saved(year)</code>) and the text
+(<code>saved(30)</code>) share one formula.</li>
+</ul>
+<h2>Legends</h2>
+<p>Give a mark a <code>label</code> and the chart shows a legend, above the chart by default, or below it with
+<code>legend="bottom"</code>. Each swatch takes the same classes and color as its mark, so the
+<code>t-chart .paid-in</code> rule above dashes both the line and its swatch. The area has no <code>label</code>, so it
+stays out of the legend.</p>
+<h2>Bars</h2>
+<t-scope class="example" data-show-source="open">
+  <p>A café sells <t-num name="base" min="0" max="40">20</t-num> coffees on a weekday, and
+    <t-num name="boost" min="0" max="100" step="5" format="%d%%">50</t-num> more on weekends.</p>
+  <t-let name="week" expr="[0, 0, 0, 0, 0, 1, 1].map((weekend) => base * (1 + weekend * boost / 100))"></t-let>
+  <t-chart ymax="80" labels="Mon, Tue, Wed, Thu, Fri, Sat, Sun" height="220" label="Coffees sold per day">
+    <t-bars data="week"></t-bars>
+  </t-chart>
+</t-scope>
+<p>With <code>labels</code>, bar <code>i</code> gets the <code>i</code>-th label, and the x axis fits the bars without an <code>xmin</code> or <code>xmax</code>.</p>
+<h2>Data from JavaScript</h2>
+<p>A chart can draw any variable that holds an array. To chart data your own script loads or
+computes, put it in a variable with <code>scope.set</code>:</p>
+<t-scope class="example" id="weather" data-show-source="open">
+  <p>Above <t-num name="limit" min="0" max="20" format="%d °C">12</t-num>, Amsterdam has
+    <t-out expr="temps.filter((t) => t > limit).length"></t-out> warm months a year.</p>
+  <t-chart ymin="0" ymax="20" labels="Jan, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec"
+           y-format="%d°" height="220" legend="bottom" label="Average temperature per month in Amsterdam">
+    <t-line data="temps" label="Average temperature"></t-line>
+    <t-line y="limit" class="paid-in" label="Warm enough"></t-line>
+  </t-chart>
+</t-scope>
+<script type="module" data-show-source="open">
+  import { scopeOf } from "../tangle.js";
+
+  scopeOf(document.querySelector("#weather"))
+    .set("temps", [3.4, 3.7, 6.4, 9.6, 13.3, 16, 18.1, 17.9, 15, 11.1, 7, 4.1]);
+</script>
+<p>To update the chart, set a new array. Changing the old one in place (<code>temps.push(…)</code>) isn't
+noticed, because the variable still holds the same array.</p>
+<h2>Attributes</h2>
+<h3><code>&lt;t-chart&gt;</code></h3>
+<table>
+<thead><tr><th>Attribute</th><th>Default</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>xmin</code>, <code>xmax</code></td><td><code>0</code>, <code>1</code></td><td>The x axis range. These are <a href="expressions.html">expressions</a>, so they can use variables. With bars or <code>labels</code>, the default fits the bars.</td></tr>
+<tr><td><code>ymin</code>, <code>ymax</code></td><td><code>0</code>, <code>1</code></td><td>The y axis range, also expressions.</td></tr>
+<tr><td><code>labels</code></td><td></td><td>Comma-separated names for x = 0, 1, 2…, shown on the x axis.</td></tr>
+<tr><td><code>x-label</code>, <code>y-label</code></td><td></td><td>Axis titles.</td></tr>
+<tr><td><code>x-format</code>, <code>y-format</code></td><td></td><td><a href="expressions.html#formats">Formats</a> for the tick labels.</td></tr>
+<tr><td><code>x-ticks</code>, <code>y-ticks</code></td><td><code>5</code></td><td>About how many ticks to show. They land on round numbers.</td></tr>
+<tr><td><code>width</code>, <code>height</code></td><td><code>600</code>, <code>300</code></td><td>The size of the drawing in SVG units. The chart always fills the width of its container, so these set the aspect ratio.</td></tr>
+<tr><td><code>var</code></td><td><code>x</code></td><td>The name of the x variable in <code>y</code> expressions. See <a href="#sampling">How a line is drawn</a>.</td></tr>
+<tr><td><code>label</code></td><td><code>Chart</code></td><td>The accessible name of the chart.</td></tr>
+<tr><td><code>legend</code></td><td><code>top</code></td><td>Where the legend goes: <code>top</code> or <code>bottom</code>. There's only a legend if a mark has a <code>label</code>.</td></tr>
+</tbody>
+</table>
+<h3>Marks</h3>
+<table>
+<thead><tr><th>Element</th><th>Attributes</th></tr></thead>
+<tbody>
+<tr><td><code>&lt;t-line&gt;</code></td><td><code>y</code>: an expression of <code>x</code>, worked out at <code>samples</code> points across the x axis (default: one per 4 units of width; see <a href="#sampling">How a line is drawn</a>). Or <code>data</code>: an expression that gives an array.</td></tr>
+<tr><td><code>&lt;t-area&gt;</code></td><td>The same as <code>&lt;t-line&gt;</code>, plus <code>y0</code> (default <code>0</code>): the area is filled down to that value.</td></tr>
+<tr><td><code>&lt;t-bars&gt;</code></td><td><code>data</code>: an array expression. <code>width</code> (default <code>0.8</code>): bar width, in x units. <code>y0</code> (default <code>0</code>): where bars start, so negative values hang down.</td></tr>
+</tbody>
+</table>
+<p>All three also take:</p>
+<ul>
+<li><code>color</code>: one CSS color, or two for light and dark mode, as on <a href="t-num.html"><code>&lt;t-num&gt;</code></a>. The
+default is <code>--tangle-accent</code>.</li>
+<li><code>class</code>: copied onto the SVG shape and its legend swatch, so your CSS can style one series.</li>
+<li><code>label</code>: the series name, shown in the <a href="#legends">legend</a>.</li>
+</ul>
+<p><code>data</code> can hold numbers, which are drawn at x = 0, 1, 2…, or <code>[x, y]</code> pairs, or <code>{ x, y }</code>
+objects. A value that isn't a number (like <code>NaN</code>) leaves a gap in a line.</p>
+<h2>What redraws when</h2>
+<p>The chart is built to stay cheap while the reader drags:</p>
+<ul>
+<li>The SVG, gridlines and tick labels are drawn once. They're only redrawn if <code>xmin</code>, <code>xmax</code>,
+<code>ymin</code> or <code>ymax</code> uses a variable that changes.</li>
+<li>Each mark redraws on its own, and only when something it reads changes. In the first example,
+dragging <code>rate</code> redraws the area and the curve, but not the paid-in line, which doesn't use it.</li>
+<li>A line or area rewrites one attribute (its path). Bars reuse their rectangles and only update
+the sizes that changed.</li>
+<li>Changes are batched. Dragging <code>deposit</code> also changes <code>yearly</code> and <code>saved</code>, but each mark
+redraws once per change.</li>
+</ul>
+<p>For a chart this element can't draw, use <a href="t-vega.html"><code>&lt;t-vega&gt;</code></a>, which loads Vega-Lite on
+pages that need it, or see <a href="charts.html">Updating a chart</a>, which draws with your own script.</p>
+<h2>Restyling</h2>
+<p>Charts use <code>currentColor</code> for the axes and <code>--tangle-accent</code> for the marks, so they follow your
+text color and dark mode. Set these properties on <code>:root</code>, or on any container:</p>
+<table>
+<thead><tr><th>Property</th><th>Default</th><th>Used for</th></tr></thead>
+<tbody>
+<tr><td><code>--tangle-chart-stroke</code></td><td><code>2.5px</code></td><td>Line width.</td></tr>
+<tr><td><code>--tangle-chart-area</code></td><td><code>20%</code></td><td>Strength of an area's fill, mixed from the mark color.</td></tr>
+<tr><td><code>--tangle-chart-grid</code></td><td><code>12%</code></td><td>Strength of the gridlines, mixed from the text color.</td></tr>
+<tr><td><code>--tangle-chart-text</code></td><td><code>60%</code></td><td>Strength of the tick and axis labels.</td></tr>
+<tr><td><code>--tangle-chart-font</code></td><td><code>12px system-ui</code></td><td>Font of the tick and axis labels.</td></tr>
+</tbody>
+</table>
+<t-scope class="example bold-chart" data-show-source="open">
+  <p>A wave with amplitude <t-num name="amp" min="0" max="2" step="0.1">1.2</t-num>
+    and frequency <t-num name="freq" min="1" max="6">2</t-num>.</p>
+  <t-chart xmin="0" xmax="2 * Math.PI" ymin="-2" ymax="2" height="200" x-format="%.1f" label="A sine wave">
+    <t-area y="amp * Math.sin(freq * x)"></t-area>
+    <t-line y="amp * Math.sin(freq * x)"></t-line>
+  </t-chart>
+</t-scope>
+<style data-show-source="open">
+  .bold-chart {
+    --tangle-accent: #c2410c;
+    --tangle-chart-stroke: 4px;
+    --tangle-chart-area: 35%;
+    --tangle-chart-grid: 0%;
+  }
+</style>
+<p>The SVG and its parts have classes, for anything the properties don't cover:</p>
+<table>
+<thead><tr><th>Selector</th><th>Matches</th></tr></thead>
+<tbody>
+<tr><td><code>.tangle-chart</code></td><td>The <code>&lt;svg&gt;</code>.</td></tr>
+<tr><td><code>.tangle-grid line</code></td><td>Gridlines.</td></tr>
+<tr><td><code>.tangle-axis text</code></td><td>Tick labels: <code>.x</code> and <code>.y</code>, and <code>.label</code> for the axis titles.</td></tr>
+<tr><td><code>.tangle-line</code>, <code>.tangle-area</code></td><td>A line or area's <code>&lt;path&gt;</code>.</td></tr>
+<tr><td><code>.tangle-bars</code>, <code>.tangle-bar</code></td><td>The group of bars, and each <code>&lt;rect&gt;</code>.</td></tr>
+<tr><td><code>.tangle-legend</code></td><td>The legend, a flex row of <code>.tangle-legend-item</code>s.</td></tr>
+<tr><td><code>.tangle-swatch</code></td><td>The small <code>&lt;svg&gt;</code> in each legend item.</td></tr>
+</tbody>
+</table>
+<div class="pager"><a class="prev" href="t-math.html"><small>Previous</small><code>&lt;t-math&gt;</code></a><a class="next" href="t-vega.html"><small>Next</small><code>&lt;t-vega&gt;</code></a></div>
+</main>
+<script src="../site/site.js"></script>
+</body>
+</html>

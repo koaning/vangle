@@ -5,6 +5,11 @@
   --tangle-soft: 14%; /* strength of the hover/drag highlight */
   --tangle-surface: #fff;
   --tangle-error: #c9382b;
+  --tangle-chart-stroke: 2.5px;
+  --tangle-chart-area: 20%; /* strength of the area fill */
+  --tangle-chart-grid: 12%; /* strength of the gridlines */
+  --tangle-chart-text: 60%; /* strength of the tick and axis labels */
+  --tangle-chart-font: 12px ui-sans-serif, system-ui, sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -148,7 +153,8 @@ t-math .katex-html [data-tangle-param] {
   z-index: 1;
 }
 
-.tangle-math-error {
+.tangle-math-error,
+.tangle-vega-error {
   color: var(--tangle-error);
   font: 0.85em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
   white-space: pre-wrap;
@@ -177,4 +183,137 @@ t-math .katex-html [data-tangle-param] {
 .tangle-editor.is-invalid {
   border-color: var(--tangle-error);
   color: var(--tangle-error);
+}
+
+/* Charts ------------------------------------------------------------------ */
+
+t-chart {
+  display: block;
+  margin: 1rem 0;
+}
+
+t-line,
+t-area,
+t-bars {
+  display: none;
+}
+
+.tangle-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.tangle-grid line {
+  stroke: color-mix(in srgb, currentColor var(--tangle-chart-grid), transparent);
+  shape-rendering: crispEdges;
+}
+
+.tangle-axis text {
+  fill: color-mix(in srgb, currentColor var(--tangle-chart-text), transparent);
+  font: var(--tangle-chart-font);
+  font-variant-numeric: tabular-nums;
+  text-anchor: middle;
+}
+
+.tangle-axis text.y {
+  text-anchor: end;
+}
+
+.tangle-axis text.label.y {
+  text-anchor: middle;
+}
+
+.tangle-line {
+  fill: none;
+  stroke: var(--tangle-color, var(--tangle-accent));
+  stroke-width: var(--tangle-chart-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.tangle-area {
+  fill: color-mix(in srgb, var(--tangle-color, var(--tangle-accent)) var(--tangle-chart-area), transparent);
+  stroke: none;
+}
+
+.tangle-bar {
+  fill: var(--tangle-color, var(--tangle-accent));
+}
+
+.tangle-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3em 1.4em;
+  margin: 0 0 0.6em;
+  font: var(--tangle-chart-font);
+}
+
+t-chart[legend="bottom"] .tangle-legend {
+  margin: 0.6em 0 0;
+}
+
+.tangle-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.tangle-swatch {
+  width: 16px;
+  height: 12px;
+  overflow: visible;
+}
+
+/* Vega -------------------------------------------------------------------- */
+
+t-vega {
+  display: block;
+  margin: 1rem 0;
+}
+
+.tangle-vega {
+  width: 100%;
+}
+
+.tangle-vega.is-loading {
+  display: grid;
+  place-items: center;
+  min-height: 8em;
+  color: color-mix(in srgb, currentColor var(--tangle-chart-text), transparent);
+  font: var(--tangle-chart-font);
+}
+
+/* Vega's tooltip, which lives at the end of <body>. */
+#vg-tooltip-element.tangle-theme {
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 6px;
+  background: var(--tangle-surface);
+  color: inherit;
+  font: var(--tangle-chart-font);
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
+}
+
+/* The tooltip is a <table>: undo the page's table styles. */
+#vg-tooltip-element.tangle-theme table {
+  width: auto;
+  margin: 0;
+  border-collapse: collapse;
+  font: inherit;
+}
+
+#vg-tooltip-element.tangle-theme td {
+  padding: 1px 0;
+  border: 0;
+  vertical-align: baseline;
+}
+
+#vg-tooltip-element.tangle-theme td.key {
+  padding-right: 10px;
+  color: inherit;
+  opacity: 0.6;
 }

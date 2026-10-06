@@ -1,0 +1,12 @@
+{
+  "name": "vangle",
+  "version": "0.1.0",
+  "description": "Reactive documents for static HTML, after Bret Victor's Tangle, with KaTeX support.",
+  "type": "module",
+  "main": "tangle.js",
+  "files": ["tangle.js", "tangle.css"],
+  "scripts": {
+    "test": "node --test"
+  },
+  "license": "MIT"
+}

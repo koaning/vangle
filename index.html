@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>vangle: reactive documents with formulas</title>
+  <link rel="stylesheet" href="tangle.css">
+  <script type="module" src="tangle.js"></script>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --ink: #25221d;
+      --muted: #706a60;
+      --paper: #fffdf9;
+      --line: #e6e0d6;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink: #f2ede4; --muted: #a8a094; --paper: #1b1a18; --line: #36322d; }
+    }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 19px/1.6 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    }
+    main { max-width: 680px; margin: 0 auto; padding: 3rem 1.25rem 6rem; }
+    h1 { font-size: 2.1rem; line-height: 1.15; margin: 0 0 0.3rem; }
+    h2 { font-size: 1.3rem; margin: 3rem 0 0.5rem; }
+    .lede { color: var(--muted); margin-top: 0; }
+    details { margin: 0.5rem 0 0; font-size: 0.8rem; }
+    summary { cursor: pointer; color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; }
+    pre {
+      overflow-x: auto;
+      padding: 0.8rem 1rem;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font: 0.78rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre;
+    }
+    code { font: 0.85em ui-monospace, SFMono-Regular, Menlo, monospace; }
+    canvas { display: block; width: 100%; height: 220px; margin: 1rem 0; border: 1px solid var(--line); border-radius: 8px; }
+    /* Syntax highlighting for the source panels */
+    .hl-punct, .hl-comment { color: var(--muted); }
+    .hl-comment { font-style: italic; }
+    .hl-tag { color: light-dark(#6f5cbd, #b9a8ff); }
+    .hl-tangle-tag { color: light-dark(#246bce, #75a7ff); font-weight: 600; }
+    .hl-attr { color: light-dark(#b45b1b, #ffad66); }
+    .hl-string { color: light-dark(#147a68, #5ed5bd); }
+    .hl-tex { color: light-dark(#a23b78, #f08bc2); }
+    .hl-marker { color: light-dark(#246bce, #75a7ff); font-weight: 700; }
+    .hl-keyword { color: light-dark(#a23b78, #f08bc2); }
+    .hl-number { color: light-dark(#b45b1b, #ffad66); }
+    .hl-call { color: light-dark(#246bce, #75a7ff); }
+    footer { margin-top: 4rem; color: var(--muted); font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Reactive documents, with formulas</h1>
+  <p class="lede">A modern take on Bret Victor's <a href="https://worrydream.com/Tangle/">Tangle</a>:
+    one ES module, no dependencies, declarative HTML, and KaTeX. Drag the colored numbers.
+    Click one to type a value. Use the arrow keys when it's focused.</p>
+
+  <h2>Cookies</h2>
+  <section data-show-source>
+    <p>When you eat <t-num name="cookies" min="0" max="30">3</t-num> cookies, you consume
+      <t-out expr="calories">150</t-out> calories. That's
+      <t-out expr="calories / 2000" format="percent">8%</t-out> of a recommended daily intake.
+      <t-out expr="cookies > 20 ? 'Maybe slow down.' : ''"></t-out></p>
+    <t-let name="calories" expr="cookies * 50"></t-let>
+  </section>
+
+  <h2>Compound interest</h2>
+  <section data-show-source>
+    <p>Invest <t-num name="principal" value="1000" min="0" max="100000" step="100" format="$%,d"></t-num>
+      at <t-num name="rate" min="0" max="20" step="0.1">5</t-num>% interest, compounded
+      <t-choice name="n" options="yearly:1, monthly:12, daily:365">monthly</t-choice>.
+      After <t-num name="years" min="1" max="50">10</t-num> years you'd have
+      <t-out expr="total" format="$%,.2f"></t-out>, and
+      <t-out expr="total - principal" format="$%,.2f"></t-out> of that is interest.</p>
+    <t-let name="total" expr="principal * (1 + rate / 100 / n) ** (n * years)"></t-let>
+    <t-math display>
+      A = \tangle{principal} \left(1 + \frac{\tangle{rate}\%}{\val{n}}\right)^{\val{n} \cdot \tangle{years}}
+        = \val[$%,.2f]{total}
+    </t-math>
+  </section>
+
+  <h2>A parabola</h2>
+  <section data-show-source>
+    <t-var name="a" value="1" min="-3" max="3" step="0.1" color="#246bce #75a7ff"></t-var>
+    <t-var name="b" value="-1" min="-6" max="6" step="0.2" color="#b45b1b #ffad66"></t-var>
+    <t-var name="c" value="-2" min="-6" max="6" step="0.2" color="#147a68 #5ed5bd"></t-var>
+    <t-let name="disc" expr="b * b - 4 * a * c"></t-let>
+    <t-math display>f(x) = \tangle[a]{a}\,x^2 + \tangle[b]{b}\,x + \tangle[c]{c}</t-math>
+    <p>With <t-num name="a"></t-num>, <t-num name="b"></t-num> and <t-num name="c"></t-num>
+      the parabola opens <t-out expr="a > 0 ? 'upward' : a < 0 ? 'downward' : 'not at all (it is a line)'"></t-out>
+      and has <t-out expr="disc > 0 ? 'two real roots' : disc === 0 ? 'one real root' : 'no real roots'"></t-out>:</p>
+    <t-math display>
+      x = \frac{-(\tangle{b}) \pm \sqrt{\val[%.2f]{disc}}}{2 \cdot \tangle{a}}
+      \quad\Rightarrow\quad
+      x_1 = \val[%.2f]{(-b - sqrt(disc)) / (2 * a)}, \;
+      x_2 = \val[%.2f]{(-b + sqrt(disc)) / (2 * a)}
+    </t-math>
+    <canvas id="plot" aria-label="Plot of f(x)"></canvas>
+  </section>
+  <details>
+    <summary>plot script (the JS escape hatch)</summary>
+<pre><code data-lang="js">import { scopeOf } from "./tangle.js";
+
+const scope = scopeOf(document);
+scope.effect((s) => draw(s.get("a"), s.get("b"), s.get("c")));</code></pre>
+  </details>
+
+  <h2>Two scopes, same names</h2>
+  <section data-show-source>
+    <t-scope>
+      <p>Alice runs <t-num name="km" min="0" max="42" step="0.5">5</t-num> km at
+        <t-num name="pace" min="3" max="9" step="0.1">5.5</t-num> min/km, which takes
+        <t-out expr="km * pace" format="%d"></t-out> minutes.</p>
+    </t-scope>
+    <t-scope>
+      <p>Bob runs <t-num name="km" min="0" max="42" step="0.5">10</t-num> km at
+        <t-num name="pace" min="3" max="9" step="0.1">6</t-num> min/km, which takes
+        <t-out expr="km * pace" format="%d"></t-out> minutes.</p>
+    </t-scope>
+  </section>
+
+  <footer>
+    See <a href="README.md">README.md</a> for the full API.
+    Original Tangle © Bret Victor, MIT license.
+  </footer>
+</main>
+
+<script>
+  // Demo helper: show each example's source before tangle.js upgrades it.
+  // Classic scripts run before deferred module scripts, so this sees the raw HTML.
+  // A tiny highlighter keeps the demo dependency-free and knows about tangle's
+  // elements and its \tangle / \val TeX markers.
+  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+  const span = (cls, html) => `<span class="hl-${cls}">${html}</span>`;
+
+  function highlightTex(src) {
+    return src
+      .split(/(\\(?:tangle|val)(?![A-Za-z])|\\[A-Za-z]+|\\.)/)
+      .map((part, i) => (i % 2 ? span(/^\\(tangle|val)$/.test(part) ? "marker" : "tex", esc(part)) : esc(part)))
+      .join("");
+  }
+
+  function highlightAttrs(attrs, tag) {
+    return attrs.replace(/(\s+)([\w-]+)(?:(=)"([^"]*)")?/g, (_, ws, name, eq, value) => {
+      // The serializer writes boolean attributes as display=""; show them bare.
+      if (!eq || value === "") return ws + span("attr", name);
+      // Chrome serializes < and > inside attributes as entities; show the original.
+      value = value.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+      const body = tag === "t-math" && name === "tex" ? highlightTex(value) : esc(value);
+      return `${ws}${span("attr", name)}${span("punct", "=")}${span("string", `"${body}"`)}`;
+    });
+  }
+
+  function highlightHtml(src) {
+    let inMath = false;
+    return src.replace(
+      /(<!--[\s\S]*?-->)|(<\/?)([\w-]+)((?:\s+[\w-]+(?:="[^"]*")?)*)(\s*\/?>)|([^<]+)/g,
+      (match, comment, open, tag, attrs, close, text) => {
+        if (comment) return span("comment", esc(comment));
+        if (text) return inMath ? highlightTex(text) : esc(text);
+        if (tag === "t-math") inMath = open === "<";
+        const cls = tag.startsWith("t-") ? "tangle-tag" : "tag";
+        return span("punct", esc(open)) + span(cls, tag) + highlightAttrs(attrs, tag) + span("punct", esc(close));
+      },
+    );
+  }
+
+  function highlightJs(src) {
+    return src.replace(
+      /(\/\/.*)|("[^"]*"|'[^']*'|`[^`]*`)|\b(import|from|export|const|let|var|function|return|if|else|new|for|of)\b|\b(\d+(?:\.\d+)?)\b|([A-Za-z_$][\w$]*)(?=\()|([^"'`/\w]+|.)/g,
+      (match, comment, string, keyword, number, call) => {
+        if (comment) return span("comment", esc(comment));
+        if (string) return span("string", esc(string));
+        if (keyword) return span("keyword", keyword);
+        if (number) return span("number", number);
+        if (call) return span("call", call);
+        return esc(match);
+      },
+    );
+  }
+
+  for (const section of document.querySelectorAll("[data-show-source]")) {
+    const lines = section.innerHTML.replace(/^\n+|\s+$/g, "").split("\n");
+    const indent = Math.min(...lines.filter((l) => l.trim()).map((l) => l.match(/^ */)[0].length));
+    const details = document.createElement("details");
+    details.innerHTML = "<summary>source</summary><pre><code></code></pre>";
+    details.querySelector("code").innerHTML = highlightHtml(lines.map((l) => l.slice(indent)).join("\n"));
+    section.after(details);
+  }
+  for (const code of document.querySelectorAll('code[data-lang="js"]')) {
+    code.innerHTML = highlightJs(code.textContent);
+  }
+</script>
+
+<script type="module">
+  import { scopeOf } from "./tangle.js";
+
+  const canvas = document.getElementById("plot");
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  function draw(a, b, c) {
+    const dpr = window.devicePixelRatio || 1;
+    const { width, height } = canvas.getBoundingClientRect();
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    const g = canvas.getContext("2d");
+    g.scale(dpr, dpr);
+    const xs = [-5, 5], ys = [-8, 8];
+    const X = (x) => ((x - xs[0]) / (xs[1] - xs[0])) * width;
+    const Y = (y) => height - ((y - ys[0]) / (ys[1] - ys[0])) * height;
+
+    g.strokeStyle = css("--line");
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(0, Y(0)); g.lineTo(width, Y(0));
+    g.moveTo(X(0), 0); g.lineTo(X(0), height);
+    g.stroke();
+
+    g.strokeStyle = css("--tangle-accent");
+    g.lineWidth = 2.5;
+    g.beginPath();
+    for (let px = 0; px <= width; px += 2) {
+      const x = xs[0] + (px / width) * (xs[1] - xs[0]);
+      g.lineTo(px, Y(a * x * x + b * x + c));
+    }
+    g.stroke();
+
+    const disc = b * b - 4 * a * c;
+    if (a !== 0 && disc >= 0) {
+      g.fillStyle = css("--ink");
+      for (const r of new Set([(-b - Math.sqrt(disc)) / (2 * a), (-b + Math.sqrt(disc)) / (2 * a)])) {
+        g.beginPath();
+        g.arc(X(r), Y(0), 4.5, 0, 2 * Math.PI);
+        g.fill();
+      }
+    }
+  }
+
+  const scope = scopeOf(document);
+  scope.effect((s) => draw(s.get("a"), s.get("b"), s.get("c")));
+  new ResizeObserver(() => draw(scope.peek("a"), scope.peek("b"), scope.peek("c"))).observe(canvas);
+</script>
+</body>
+</html>

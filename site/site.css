@@ -11,14 +11,25 @@
   --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+/* Dark by OS preference, unless the theme toggle (site.js) picked light. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --ink: #f2ede4;
     --muted: #a8a094;
     --paper: #1b1a18;
     --panel: #232120;
     --line: #36322d;
   }
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #f2ede4;
+  --muted: #a8a094;
+  --paper: #1b1a18;
+  --panel: #232120;
+  --line: #36322d;
 }
 
 body {
@@ -90,6 +101,17 @@ td:first-child { white-space: nowrap; }
   border-radius: 10px;
 }
 .example + details.source { margin-bottom: 1.4rem; }
+.example button {
+  margin-bottom: 1rem;
+  padding: 0.25rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--ink);
+  font: 0.85rem var(--sans);
+  cursor: pointer;
+}
+.example button:hover { border-color: var(--muted); }
 .example + details.source pre { margin-top: 0.4rem; }
 
 .callout {
@@ -123,6 +145,17 @@ body.landing main { max-width: 680px; margin: 0 auto; padding: 2rem 1.25rem 6rem
 }
 .topbar .brand { margin-right: auto; color: var(--ink); font-weight: 700; text-decoration: none; }
 .cta { font: 600 0.95rem var(--sans); }
+
+.theme-toggle {
+  padding: 0.1rem 0.45rem;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  font: 1rem/1.4 var(--sans);
+  cursor: pointer;
+}
+.theme-toggle:hover { background: var(--panel); color: var(--ink); }
 footer { margin-top: 4rem; color: var(--muted); font-size: 0.85rem; }
 
 /* Docs layout */
@@ -141,7 +174,8 @@ body.docs main { min-width: 0; }
   align-self: start;
   font: 0.86rem/1.5 var(--sans);
 }
-.docs-nav .brand { display: block; margin-bottom: 1.5rem; color: var(--ink); font-weight: 700; font-size: 1rem; text-decoration: none; }
+.docs-nav-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.docs-nav .brand { color: var(--ink); font-weight: 700; font-size: 1rem; text-decoration: none; }
 .docs-nav h4 {
   margin: 1.4rem 0 0.3rem;
   color: var(--muted);

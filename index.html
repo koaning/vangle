@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>vangle: reactive documents with formulas</title>
+  <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
   <link rel="stylesheet" href="tangle.css">
   <script type="module" src="tangle.js"></script>
   <link rel="stylesheet" href="site/site.css">
@@ -14,6 +15,7 @@
     <a class="brand" href="index.html">vangle</a>
     <a href="docs/index.html">Docs</a>
     <a href="https://github.com/koaning/vangle">GitHub</a>
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Dark mode"></button>
   </nav>
   <h1>Reactive documents, with formulas</h1>
   <p class="lede">A modern take on Bret Victor's <a href="https://worrydream.com/Tangle/">Tangle</a>:
@@ -141,7 +143,9 @@
 
   const scope = scopeOf(document);
   scope.effect((s) => draw(s.get("a"), s.get("b"), s.get("c")));
-  new ResizeObserver(() => draw(scope.peek("a"), scope.peek("b"), scope.peek("c"))).observe(canvas);
+  const redraw = () => draw(scope.peek("a"), scope.peek("b"), scope.peek("c"));
+  new ResizeObserver(redraw).observe(canvas);
+  new MutationObserver(redraw).observe(document.documentElement, { attributeFilter: ["data-theme"] });
 </script>
 </body>
 </html>

@@ -12,6 +12,7 @@
 
 - [Getting started](docs/index.md): install, a first reactive paragraph, and how variables, reactivity and scopes work.
 - [Expressions & formats](docs/expressions.md): what names an expression can use, registering functions, conditional text, and printf-style and named formats.
+- [Updating a chart](docs/charts.md): drawing an SVG chart with fixed scales from the variables with `scopeOf(...).effect`, canvas and chart libraries, and setting variables from a click in the chart.
 - [Using it on a blog](docs/blogging.md): layouts, raw-HTML settings for Markdown generators, KaTeX setup, CSP and feeds.
 
 ## Elements

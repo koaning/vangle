@@ -10,9 +10,10 @@ docs:
 test:
 	node --test
 
-# Serve the site at http://localhost:8000.
+# Serve the site at http://localhost:8000 (or another port: make serve PORT=8080).
+PORT ?= 8000
 serve:
-	python3 -m http.server 8000
+	python3 -m http.server $(PORT)
 
 # Rebuild and test, then push the current branch and open a pull request
 # against main, filled in from the commits. Commit your work first.

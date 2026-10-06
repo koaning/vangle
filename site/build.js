@@ -20,6 +20,7 @@ export const NAV = [
   ["Guide", [
     ["index", "Getting started"],
     ["expressions", "Expressions &amp; formats"],
+    ["charts", "Updating a chart"],
     ["blogging", "Using it on a blog"],
   ]],
   ["Elements", [
@@ -196,6 +197,7 @@ export function page(name, md) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${title} · vangle docs</title>
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="alternate" type="text/markdown" href="${name}.md">
 <link rel="stylesheet" href="../tangle.css">
 <link rel="stylesheet" href="../site/site.css">
@@ -203,7 +205,10 @@ export function page(name, md) {
 </head>
 <body class="docs">
 <nav class="docs-nav">
+<div class="docs-nav-top">
 <a class="brand" href="../index.html">vangle</a>
+<button class="theme-toggle" type="button" data-theme-toggle aria-label="Dark mode"></button>
+</div>
 ${nav}
 </nav>
 <main>

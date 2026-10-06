@@ -1,0 +1,30 @@
+# vangle
+
+> Reactive documents for static HTML, after Bret Victor's Tangle, with KaTeX support. Authors write custom elements (`<t-num>`, `<t-out>`, `<t-math>`, …) in plain HTML or Markdown, and readers drag numbers in the text or inside formulas while everything that depends on them updates.
+
+- It is one ES module (`tangle.js`) and one stylesheet (`tangle.css`), with no build step and no dependencies. Add `<link rel="stylesheet" href="tangle.css">` and `<script type="module" src="tangle.js"></script>` to the page.
+- To load it from a CDN instead, use jsDelivr: `<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/koaning/vangle@v0.1.0/tangle.min.css">` and `<script type="module" src="https://cdn.jsdelivr.net/gh/koaning/vangle@v0.1.0/tangle.min.js"></script>`. A module that imports from `tangle.js` must use the same URL as the `<script>` tag, or it gets a second copy with separate variables.
+- Variables are declared by elements, and declaration order doesn't matter. Expressions are plain JavaScript over those variables, plus `Math` and a few other globals.
+- Without JavaScript, every element shows its fallback text, so feeds and readers stay readable.
+- Each docs page below is Markdown with live examples written as raw HTML blocks. Those blocks are exactly the markup to copy.
+
+## Docs
+
+- [Getting started](docs/index.md): install, a first reactive paragraph, and how variables, reactivity and scopes work.
+- [Expressions & formats](docs/expressions.md): what names an expression can use, registering functions, conditional text, and printf-style and named formats.
+- [Using it on a blog](docs/blogging.md): layouts, raw-HTML settings for Markdown generators, KaTeX setup, CSP and feeds.
+
+## Elements
+
+- [`<t-num>`](docs/t-num.md): a number the reader can drag, type or step with the keyboard.
+- [`<t-var>`](docs/t-var.md): declares a variable without showing it, for example a formula parameter.
+- [`<t-let>`](docs/t-let.md): a named value computed from other variables.
+- [`<t-out>`](docs/t-out.md): shows the live result of an expression in the text.
+- [`<t-choice>`](docs/t-choice.md): a word the reader clicks to cycle through options, or a toggle.
+- [`<t-math>`](docs/t-math.md): a KaTeX formula with draggable `\tangle{}` parameters and live `\val{}` results.
+- [`<t-scope>`](docs/t-scope.md): gives part of the page its own set of variables.
+
+## Reference
+
+- [JavaScript API](docs/javascript.md): `scopeOf`, scope methods, effects, signals, `registerFunction`, `registerFormat` and `configure`.
+- [Styling](docs/styling.md): CSS custom properties, selectors and states, recipes and dark mode.

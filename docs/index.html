@@ -1,0 +1,110 @@
+<!doctype html>
+<!-- Generated from index.md by site/build.js. Edit the Markdown, then run `make docs`. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started · vangle docs</title>
+<link rel="alternate" type="text/markdown" href="index.md">
+<link rel="stylesheet" href="../tangle.css">
+<link rel="stylesheet" href="../site/site.css">
+<script type="module" src="../tangle.js"></script>
+</head>
+<body class="docs">
+<nav class="docs-nav">
+<a class="brand" href="../index.html">vangle</a>
+<h4>Guide</h4>
+<ul>
+<li><a href="index.html" aria-current="page">Getting started</a></li>
+<li><a href="expressions.html">Expressions &amp; formats</a></li>
+<li><a href="blogging.html">Using it on a blog</a></li>
+</ul>
+<h4>Elements</h4>
+<ul>
+<li><a href="t-num.html"><code>&lt;t-num&gt;</code></a></li>
+<li><a href="t-var.html"><code>&lt;t-var&gt;</code></a></li>
+<li><a href="t-let.html"><code>&lt;t-let&gt;</code></a></li>
+<li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
+<li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
+<li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
+<li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
+</ul>
+<h4>Reference</h4>
+<ul>
+<li><a href="javascript.html">JavaScript API</a></li>
+<li><a href="styling.html">Styling</a></li>
+</ul>
+</nav>
+<main>
+<h1>Getting started</h1>
+<p class="lede">vangle turns a static HTML page into a reactive document. Readers drag numbers
+in the text or inside formulas, and everything that depends on them updates as they drag.</p>
+<p>It's a modern take on Bret Victor's <a href="https://worrydream.com/Tangle/">Tangle</a>.
+You describe the document with a handful of custom HTML elements. You don't write an
+<code>update()</code> function, and there's no build step and no dependencies.</p>
+<h2>Install</h2>
+<p>Copy <code>tangle.js</code> and <code>tangle.css</code> into your site, then add two lines to
+the page's <code>&lt;head&gt;</code>, or to your blog's layout template:</p>
+<pre><code class="language-html">&lt;link rel="stylesheet" href="/tangle.css"&gt;
+&lt;script type="module" src="/tangle.js"&gt;&lt;/script&gt;</code></pre>
+<p>That's all. KaTeX is only downloaded on pages that contain a <a href="t-math.html"><code>&lt;t-math&gt;</code></a> formula.</p>
+<h2>Your first reactive paragraph</h2>
+<t-scope class="example" data-show-source="open">
+  <p>When you eat <t-num name="cookies" min="0" max="30">3</t-num> cookies, you consume
+    <t-out expr="calories">150</t-out> calories. That's
+    <t-out expr="calories / 2000" format="percent">8%</t-out> of a recommended daily intake.</p>
+  <t-let name="calories" expr="cookies * 50"></t-let>
+</t-scope>
+<p>Here's what each element does:</p>
+<ul>
+<li><code>&lt;t-num name="cookies"&gt;</code> declares a variable called <code>cookies</code> and shows it as a
+draggable number. Its text, <code>3</code>, is the starting value.</li>
+<li><code>&lt;t-let name="calories" expr="cookies * 50"&gt;</code> defines a computed variable. It's invisible.</li>
+<li><code>&lt;t-out expr="…"&gt;</code> shows the result of an expression and keeps it up to date.</li>
+</ul>
+<p>Try dragging the number. You can also click it to type a value, or focus it and press the arrow keys.</p>
+<h2>How it works</h2>
+<h3>Variables</h3>
+<p>Every value in the document is a named <em>variable</em>. A variable is declared by
+<a href="t-num.html"><code>&lt;t-num&gt;</code></a>,
+<a href="t-var.html"><code>&lt;t-var&gt;</code></a> or
+<a href="t-choice.html"><code>&lt;t-choice&gt;</code></a> (values the reader can change), or by
+<a href="t-let.html"><code>&lt;t-let&gt;</code></a> (values computed from other variables).
+Names follow JavaScript identifier rules: <code>rate</code>, <code>x2</code>, <code>total_cost</code>.</p>
+<h3>Reactivity</h3>
+<p>Expressions are plain JavaScript (see <a href="expressions.html">Expressions &amp; formats</a>).
+While an expression runs, vangle records which variables it reads. When one of them changes,
+only the outputs, computed values and formulas that depend on it update. Changes are batched,
+so a drag that moves several values redraws each output once.</p>
+<h3>Order doesn't matter</h3>
+<p>You can use a variable before the element that declares it: in the example above,
+<code>calories</code> is used before the <code>&lt;t-let&gt;</code> that defines it. This lets you
+put declarations wherever reads best, for example next to the formula that uses them.</p>
+<h3>Scopes</h3>
+<p>By default, every element on the page shares one set of variables. Wrap part of the page in
+<a href="t-scope.html"><code>&lt;t-scope&gt;</code></a> to give it its own. Each example in these docs
+sits in its own scope, so they don't interfere with each other.</p>
+<h3>Without JavaScript</h3>
+<p>The markup degrades gracefully. A <code>&lt;t-num&gt;</code> shows its starting value, and a
+<code>&lt;t-out&gt;</code> shows whatever fallback text you put inside it (the <code>150</code> above).
+RSS readers and no-JS browsers still get a readable sentence.</p>
+<h2>The elements</h2>
+<table>
+<thead><tr><th>Element</th><th>Use it for</th></tr></thead>
+<tbody>
+<tr><td><a href="t-num.html"><code>&lt;t-num&gt;</code></a></td><td>A number the reader can drag, type or step with the keyboard.</td></tr>
+<tr><td><a href="t-var.html"><code>&lt;t-var&gt;</code></a></td><td>Declaring a variable without showing it, for example one used only in a formula.</td></tr>
+<tr><td><a href="t-let.html"><code>&lt;t-let&gt;</code></a></td><td>A named value computed from other variables.</td></tr>
+<tr><td><a href="t-out.html"><code>&lt;t-out&gt;</code></a></td><td>Showing the live result of an expression in the text.</td></tr>
+<tr><td><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></td><td>A word the reader clicks to cycle through options, or a toggle.</td></tr>
+<tr><td><a href="t-math.html"><code>&lt;t-math&gt;</code></a></td><td>A KaTeX formula with draggable parameters and live results.</td></tr>
+<tr><td><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></td><td>Giving part of the page its own variables.</td></tr>
+</tbody>
+</table>
+<p>For charts and other custom logic, the same variables are available from
+<a href="javascript.html">JavaScript</a>.</p>
+<div class="pager"><a class="next" href="expressions.html"><small>Next</small>Expressions &amp; formats</a></div>
+</main>
+<script src="../site/site.js"></script>
+</body>
+</html>

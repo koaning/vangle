@@ -30,6 +30,8 @@ export const NAV = [
     ["t-out", "<code>&lt;t-out&gt;</code>"],
     ["t-choice", "<code>&lt;t-choice&gt;</code>"],
     ["t-math", "<code>&lt;t-math&gt;</code>"],
+    ["t-chart", "<code>&lt;t-chart&gt;</code>"],
+    ["t-vega", "<code>&lt;t-vega&gt;</code>"],
     ["t-scope", "<code>&lt;t-scope&gt;</code>"],
   ]],
   ["Reference", [

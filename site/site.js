@@ -7,10 +7,10 @@
 // - [data-show-source] on an element appends a panel with its highlighted
 //   source (innerHTML for markup, textContent for a <script> or <style>).
 //   Use data-show-source="open" to expand the panel.
+// - <pre><code class="language-html|js|css"> is highlighted. The docs are
+//   generated from Markdown (site/build.js), whose code fences produce these.
 // - <script type="text/plain" data-lang="html|js|css"> is replaced by a
 //   highlighted code block. Write "</script>" inside it as "<\/script>".
-// - <nav data-docs-nav> is filled with the docs navigation, and
-//   <div data-docs-pager> with previous/next links.
 (() => {
   const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
   const span = (cls, html) => `<span class="hl-${cls}">${html}</span>`;
@@ -101,55 +101,12 @@
     el.after(details);
   }
 
+  for (const code of document.querySelectorAll('pre > code[class^="language-"]')) {
+    const lang = code.className.slice("language-".length);
+    if (highlighters[lang]) code.innerHTML = highlighters[lang](code.textContent);
+  }
+
   for (const el of document.querySelectorAll('script[type="text/plain"][data-lang]')) {
     el.replaceWith(codeBlock(el.textContent.replace(/<\\\//g, "</"), el.dataset.lang));
-  }
-
-  // Docs navigation ---------------------------------------------------------
-
-  const NAV = [
-    ["Guide", [
-      ["index.html", "Getting started"],
-      ["expressions.html", "Expressions &amp; formats"],
-      ["blogging.html", "Using it on a blog"],
-    ]],
-    ["Elements", [
-      ["t-num.html", "<code>&lt;t-num&gt;</code>"],
-      ["t-var.html", "<code>&lt;t-var&gt;</code>"],
-      ["t-let.html", "<code>&lt;t-let&gt;</code>"],
-      ["t-out.html", "<code>&lt;t-out&gt;</code>"],
-      ["t-choice.html", "<code>&lt;t-choice&gt;</code>"],
-      ["t-math.html", "<code>&lt;t-math&gt;</code>"],
-      ["t-scope.html", "<code>&lt;t-scope&gt;</code>"],
-    ]],
-    ["Reference", [
-      ["javascript.html", "JavaScript API"],
-      ["styling.html", "Styling"],
-    ]],
-  ];
-
-  const here = location.pathname.split("/").pop() || "index.html";
-  const nav = document.querySelector("[data-docs-nav]");
-  if (nav) {
-    nav.innerHTML =
-      '<a class="brand" href="../index.html">vangle</a>' +
-      NAV.map(
-        ([title, links]) =>
-          `<h4>${title}</h4><ul>${links
-            .map(([href, label]) => `<li><a href="${href}"${href === here ? ' aria-current="page"' : ""}>${label}</a></li>`)
-            .join("")}</ul>`,
-      ).join("");
-  }
-
-  const pager = document.querySelector("[data-docs-pager]");
-  if (pager) {
-    const flat = NAV.flatMap(([, links]) => links);
-    const i = flat.findIndex(([href]) => href === here);
-    const link = ([href, label], cls, hint) =>
-      `<a class="${cls}" href="${href}"><small>${hint}</small>${label}</a>`;
-    pager.className = "pager";
-    pager.innerHTML =
-      (i > 0 ? link(flat[i - 1], "prev", "Previous") : "") +
-      (i >= 0 && i < flat.length - 1 ? link(flat[i + 1], "next", "Next") : "");
   }
 })();

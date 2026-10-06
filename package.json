@@ -6,7 +6,8 @@
   "main": "tangle.js",
   "files": ["tangle.js", "tangle.css"],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "docs": "node site/build.js"
   },
   "license": "MIT"
 }

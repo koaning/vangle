@@ -15,10 +15,20 @@ Reactive documents for static HTML. This is a modern take on Bret Victor's [Tang
 <t-let name="calories" expr="cookies * 50"></t-let>
 ```
 
+To skip copying the files, load them from [jsDelivr](https://www.jsdelivr.com/), which serves them straight from this repo. The `.min` versions are minified by jsDelivr:
+
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/koaning/vangle@v0.1.0/tangle.min.css">
+<script type="module" src="https://cdn.jsdelivr.net/gh/koaning/vangle@v0.1.0/tangle.min.js"></script>
+```
+
+If you import from `tangle.js` in your own module (to register functions, or for the JavaScript API), use the same URL as the `<script>` tag. A different URL loads a second copy with its own variables.
+
 Serve the repo locally (`python3 -m http.server`) and open:
 
 - `index.html` for the demos.
 - `docs/index.html` for the documentation: a page per element with live examples, plus guides on expressions and formats, blogging (Markdown, KaTeX, CSP), the JavaScript API, and styling.
+- `llms.txt` for LLMs. It links to the Markdown source of each docs page.
 
 ## Elements
 
@@ -123,8 +133,16 @@ By default KaTeX 0.19.0 comes from jsdelivr. To use a different copy:
 ## Development
 
 ```sh
-npm test    # node --test: signals, formats, expressions, TeX parsing
+make           # rebuild the docs, then run the tests
+make test      # node --test: signals, formats, expressions, TeX parsing, docs build
+make docs      # regenerate docs/*.html from docs/*.md
+make serve     # serve the site at http://localhost:8000
+make pr        # rebuild and test, push the branch and open a pull request
 ```
+
+CI runs `make test` on every push to main and on pull requests.
+
+The docs are written in Markdown (`docs/*.md`), and `site/build.js` turns them into the HTML pages, which are committed. Edit the Markdown, not the HTML. A test fails if the two are out of sync, and `make pr` refuses to push if the docs build left uncommitted changes. Live examples are raw HTML blocks in the Markdown, so the HTML in the docs is the HTML a reader would copy. `llms.txt` is written by hand; update it when a page is added.
 
 ## Credits
 

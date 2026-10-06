@@ -1,60 +1,80 @@
 <!doctype html>
+<!-- Generated from t-var.md by site/build.js. Edit the Markdown, then run `make docs`. -->
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>&lt;t-var&gt; · vangle docs</title>
-  <link rel="stylesheet" href="../tangle.css">
-  <link rel="stylesheet" href="../site/site.css">
-  <script type="module" src="../tangle.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;t-var&gt; · vangle docs</title>
+<link rel="alternate" type="text/markdown" href="t-var.md">
+<link rel="stylesheet" href="../tangle.css">
+<link rel="stylesheet" href="../site/site.css">
+<script type="module" src="../tangle.js"></script>
 </head>
 <body class="docs">
-<nav class="docs-nav" data-docs-nav></nav>
+<nav class="docs-nav">
+<a class="brand" href="../index.html">vangle</a>
+<h4>Guide</h4>
+<ul>
+<li><a href="index.html">Getting started</a></li>
+<li><a href="expressions.html">Expressions &amp; formats</a></li>
+<li><a href="blogging.html">Using it on a blog</a></li>
+</ul>
+<h4>Elements</h4>
+<ul>
+<li><a href="t-num.html"><code>&lt;t-num&gt;</code></a></li>
+<li><a href="t-var.html" aria-current="page"><code>&lt;t-var&gt;</code></a></li>
+<li><a href="t-let.html"><code>&lt;t-let&gt;</code></a></li>
+<li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
+<li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
+<li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
+<li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
+</ul>
+<h4>Reference</h4>
+<ul>
+<li><a href="javascript.html">JavaScript API</a></li>
+<li><a href="styling.html">Styling</a></li>
+</ul>
+</nav>
 <main>
-  <h1><code>&lt;t-var&gt;</code></h1>
-  <p class="lede">Declares a variable without showing anything. Use it for values that only appear
-    in formulas, or to keep a variable's settings out of the prose.</p>
-
-  <t-scope class="example" data-show-source="open">
-    <t-var name="m" value="2" min="0.1" max="10" step="0.1" color="#246bce #75a7ff"></t-var>
-    <t-var name="v" value="3" min="0" max="20" step="0.5" color="#b45b1b #ffad66"></t-var>
-    <t-math display>E_k = \tfrac{1}{2}\,\tangle[m]{m}\,\tangle[v]{v}^2 = \val[%.1f]{0.5 * m * v ** 2}\ \text{J}</t-math>
-    <p>A <t-num name="m"></t-num> kg ball at <t-num name="v"></t-num> m/s carries
-      <t-out expr="0.5 * m * v ** 2" format="%.1f"></t-out> joules.</p>
-  </t-scope>
-
-  <p>The formula's <code>m</code> and <code>v</code> are draggable. They show their symbols until you
-    drag them. The sentence holds two plain <code>&lt;t-num&gt;</code> views of the same variables, and
-    hovering one highlights its twin in the formula.</p>
-
-  <h2>Attributes</h2>
-  <table>
-    <thead><tr><th>Attribute</th><th>Default</th><th>Description</th></tr></thead>
-    <tbody>
-      <tr><td><code>name</code></td><td><em>required</em></td><td>The variable to declare.</td></tr>
-      <tr><td><code>value</code></td><td><code>undefined</code></td><td>The starting value. Ignored if the variable was already given a value.</td></tr>
-      <tr><td><code>min</code>, <code>max</code></td><td>unbounded</td><td>The range for every control bound to this variable.</td></tr>
-      <tr><td><code>step</code></td><td><code>1</code></td><td>The drag and keyboard increment, and the default display precision.</td></tr>
-      <tr><td><code>format</code></td><td>from <code>step</code></td><td>The default <a href="expressions.html#formats">format</a> wherever the variable is shown, including <code>\tangle{}</code> in formulas.</td></tr>
-      <tr><td><code>color</code></td><td>accent color</td><td>One CSS color, or two separated by a space for light and dark mode.</td></tr>
-      <tr><td><code>label</code></td><td>the name</td><td>The accessible name.</td></tr>
-      <tr><td><code>pixels-per-step</code></td><td><code>5</code></td><td>Drag sensitivity.</td></tr>
-    </tbody>
-  </table>
-  <p>These are the same settings as <a href="t-num.html"><code>&lt;t-num&gt;</code></a>; a <code>&lt;t-var&gt;</code>
-    simply doesn't render.</p>
-
-  <h2>When to use it</h2>
-  <ul>
-    <li><strong>Formula parameters.</strong> A <code>\tangle{a}</code> in a formula needs its range and step
-      from somewhere. Declare them with a <code>&lt;t-var&gt;</code> next to the formula.</li>
-    <li><strong>Constants.</strong> A value the reader shouldn't change, but that you want to name, such as
-      <code>&lt;t-var name="g" value="9.81"&gt;</code>. Expressions can then use <code>g</code>.</li>
-    <li><strong>Cleaner prose.</strong> Put all of a post's declarations in one place, and use bare
-      <code>&lt;t-num name="…"&gt;</code> views in the text.</li>
-  </ul>
-
-  <div data-docs-pager></div>
+<h1><code>&lt;t-var&gt;</code></h1>
+<p class="lede">Declares a variable without showing anything. Use it for values that only appear
+in formulas, or to keep a variable's settings out of the prose.</p>
+<t-scope class="example" data-show-source="open">
+  <t-var name="m" value="2" min="0.1" max="10" step="0.1" color="#246bce #75a7ff"></t-var>
+  <t-var name="v" value="3" min="0" max="20" step="0.5" color="#b45b1b #ffad66"></t-var>
+  <t-math display>E_k = \tfrac{1}{2}\,\tangle[m]{m}\,\tangle[v]{v}^2 = \val[%.1f]{0.5 * m * v ** 2}\ \text{J}</t-math>
+  <p>A <t-num name="m"></t-num> kg ball at <t-num name="v"></t-num> m/s carries
+    <t-out expr="0.5 * m * v ** 2" format="%.1f"></t-out> joules.</p>
+</t-scope>
+<p>The formula's <code>m</code> and <code>v</code> are draggable. They show their symbols until you
+drag them. The sentence holds two plain <code>&lt;t-num&gt;</code> views of the same variables, and
+hovering one highlights its twin in the formula.</p>
+<h2>Attributes</h2>
+<table>
+<thead><tr><th>Attribute</th><th>Default</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>name</code></td><td><em>required</em></td><td>The variable to declare.</td></tr>
+<tr><td><code>value</code></td><td><code>undefined</code></td><td>The starting value. Ignored if the variable was already given a value.</td></tr>
+<tr><td><code>min</code>, <code>max</code></td><td>unbounded</td><td>The range for every control bound to this variable.</td></tr>
+<tr><td><code>step</code></td><td><code>1</code></td><td>The drag and keyboard increment, and the default display precision.</td></tr>
+<tr><td><code>format</code></td><td>from <code>step</code></td><td>The default <a href="expressions.html#formats">format</a> wherever the variable is shown, including <code>\tangle{}</code> in formulas.</td></tr>
+<tr><td><code>color</code></td><td>accent color</td><td>One CSS color, or two separated by a space for light and dark mode.</td></tr>
+<tr><td><code>label</code></td><td>the name</td><td>The accessible name.</td></tr>
+<tr><td><code>pixels-per-step</code></td><td><code>5</code></td><td>Drag sensitivity.</td></tr>
+</tbody>
+</table>
+<p>These are the same settings as <a href="t-num.html"><code>&lt;t-num&gt;</code></a>; a <code>&lt;t-var&gt;</code>
+simply doesn't render.</p>
+<h2>When to use it</h2>
+<ul>
+<li><strong>Formula parameters.</strong> A <code>\tangle{a}</code> in a formula needs its range and step
+from somewhere. Declare them with a <code>&lt;t-var&gt;</code> next to the formula.</li>
+<li><strong>Constants.</strong> A value the reader shouldn't change, but that you want to name, such as
+<code>&lt;t-var name="g" value="9.81"&gt;</code>. Expressions can then use <code>g</code>.</li>
+<li><strong>Cleaner prose.</strong> Put all of a post's declarations in one place, and use bare
+<code>&lt;t-num name="…"&gt;</code> views in the text.</li>
+</ul>
+<div class="pager"><a class="prev" href="t-num.html"><small>Previous</small><code>&lt;t-num&gt;</code></a><a class="next" href="t-let.html"><small>Next</small><code>&lt;t-let&gt;</code></a></div>
 </main>
 <script src="../site/site.js"></script>
 </body>

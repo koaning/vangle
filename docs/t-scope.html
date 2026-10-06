@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>&lt;t-scope&gt; · vangle docs</title>
+  <link rel="stylesheet" href="../tangle.css">
+  <link rel="stylesheet" href="../site/site.css">
+  <script type="module" src="../tangle.js"></script>
+</head>
+<body class="docs">
+<nav class="docs-nav" data-docs-nav></nav>
+<main>
+  <h1><code>&lt;t-scope&gt;</code></h1>
+  <p class="lede">Gives part of the page its own set of variables.</p>
+
+  <p>Without any <code>&lt;t-scope&gt;</code>, all elements on a page share one page-wide set of variables.
+    Every element inside a <code>&lt;t-scope&gt;</code> uses that scope's variables instead, so the same
+    names can mean different things in different places:</p>
+
+  <div class="example" data-show-source="open">
+    <t-scope>
+      <p>Alice runs <t-num name="km" min="0" max="42" step="0.5">5</t-num> km at
+        <t-num name="pace" min="3" max="9" step="0.1">5.5</t-num> min/km:
+        <t-out expr="km * pace" format="%d"></t-out> minutes.</p>
+    </t-scope>
+    <t-scope>
+      <p>Bob runs <t-num name="km" min="0" max="42" step="0.5">10</t-num> km at
+        <t-num name="pace" min="3" max="9" step="0.1">6</t-num> min/km:
+        <t-out expr="km * pace" format="%d"></t-out> minutes.</p>
+    </t-scope>
+  </div>
+
+  <h2>When to use it</h2>
+  <ul>
+    <li><strong>Blog index pages.</strong> When a page shows several posts in full, wrap each post in a
+      <code>&lt;t-scope&gt;</code> so their variables can't collide.</li>
+    <li><strong>Side-by-side comparisons</strong>, like the example above.</li>
+    <li><strong>Reusable snippets</strong>, such as an include or shortcode used more than once on a page.</li>
+  </ul>
+
+  <h2>Behavior</h2>
+  <ul>
+    <li>Scopes don't inherit. Inside a <code>&lt;t-scope&gt;</code>, variables from the page-wide scope or
+      from an enclosing <code>&lt;t-scope&gt;</code> aren't visible. An element always uses its nearest scope.</li>
+    <li>A <code>&lt;t-scope&gt;</code> doesn't affect layout. It has <code>display: contents</code>, so it
+      can wrap blocks or a fragment of a sentence. Override that in CSS if you want to style it as a box.</li>
+    <li>The element has no attributes.</li>
+  </ul>
+
+  <h2>From JavaScript</h2>
+  <p>Get a scope with <code>scopeOf(element)</code>, using any element inside it, or from the
+    <code>scope</code> property of the <code>&lt;t-scope&gt;</code> itself:</p>
+  <script type="text/plain" data-lang="js">
+    import { scopeOf } from "/tangle.js";
+
+    const alice = scopeOf(document.querySelector("#alice"));
+    alice.set("km", 21.1);
+
+    const page = scopeOf(document); // the page-wide scope
+  </script>
+  <p>See the <a href="javascript.html">JavaScript API</a> for what a scope can do.</p>
+
+  <div data-docs-pager></div>
+</main>
+<script src="../site/site.js"></script>
+</body>
+</html>

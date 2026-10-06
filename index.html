@@ -6,60 +6,20 @@
   <title>vangle: reactive documents with formulas</title>
   <link rel="stylesheet" href="tangle.css">
   <script type="module" src="tangle.js"></script>
-  <style>
-    :root {
-      color-scheme: light dark;
-      --ink: #25221d;
-      --muted: #706a60;
-      --paper: #fffdf9;
-      --line: #e6e0d6;
-    }
-    @media (prefers-color-scheme: dark) {
-      :root { --ink: #f2ede4; --muted: #a8a094; --paper: #1b1a18; --line: #36322d; }
-    }
-    body {
-      margin: 0;
-      background: var(--paper);
-      color: var(--ink);
-      font: 19px/1.6 "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-    }
-    main { max-width: 680px; margin: 0 auto; padding: 3rem 1.25rem 6rem; }
-    h1 { font-size: 2.1rem; line-height: 1.15; margin: 0 0 0.3rem; }
-    h2 { font-size: 1.3rem; margin: 3rem 0 0.5rem; }
-    .lede { color: var(--muted); margin-top: 0; }
-    details { margin: 0.5rem 0 0; font-size: 0.8rem; }
-    summary { cursor: pointer; color: var(--muted); font-family: ui-sans-serif, system-ui, sans-serif; }
-    pre {
-      overflow-x: auto;
-      padding: 0.8rem 1rem;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      font: 0.78rem/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
-      white-space: pre;
-    }
-    code { font: 0.85em ui-monospace, SFMono-Regular, Menlo, monospace; }
-    canvas { display: block; width: 100%; height: 220px; margin: 1rem 0; border: 1px solid var(--line); border-radius: 8px; }
-    /* Syntax highlighting for the source panels */
-    .hl-punct, .hl-comment { color: var(--muted); }
-    .hl-comment { font-style: italic; }
-    .hl-tag { color: light-dark(#6f5cbd, #b9a8ff); }
-    .hl-tangle-tag { color: light-dark(#246bce, #75a7ff); font-weight: 600; }
-    .hl-attr { color: light-dark(#b45b1b, #ffad66); }
-    .hl-string { color: light-dark(#147a68, #5ed5bd); }
-    .hl-tex { color: light-dark(#a23b78, #f08bc2); }
-    .hl-marker { color: light-dark(#246bce, #75a7ff); font-weight: 700; }
-    .hl-keyword { color: light-dark(#a23b78, #f08bc2); }
-    .hl-number { color: light-dark(#b45b1b, #ffad66); }
-    .hl-call { color: light-dark(#246bce, #75a7ff); }
-    footer { margin-top: 4rem; color: var(--muted); font-size: 0.85rem; }
-  </style>
+  <link rel="stylesheet" href="site/site.css">
 </head>
-<body>
+<body class="landing">
 <main>
+  <nav class="topbar">
+    <a class="brand" href="index.html">vangle</a>
+    <a href="docs/index.html">Docs</a>
+    <a href="https://github.com/koaning/vangle">GitHub</a>
+  </nav>
   <h1>Reactive documents, with formulas</h1>
   <p class="lede">A modern take on Bret Victor's <a href="https://worrydream.com/Tangle/">Tangle</a>:
     one ES module, no dependencies, declarative HTML, and KaTeX. Drag the colored numbers.
     Click one to type a value. Use the arrow keys when it's focused.</p>
+  <p class="cta"><a href="docs/index.html">Read the docs →</a></p>
 
   <h2>Cookies</h2>
   <section data-show-source>
@@ -101,14 +61,16 @@
       x_1 = \val[%.2f]{(-b - sqrt(disc)) / (2 * a)}, \;
       x_2 = \val[%.2f]{(-b + sqrt(disc)) / (2 * a)}
     </t-math>
-    <canvas id="plot" aria-label="Plot of f(x)"></canvas>
+    <canvas id="plot" class="plot" aria-label="Plot of f(x)"></canvas>
   </section>
   <details>
     <summary>plot script (the JS escape hatch)</summary>
-<pre><code data-lang="js">import { scopeOf } from "./tangle.js";
+    <script type="text/plain" data-lang="js">
+      import { scopeOf } from "./tangle.js";
 
-const scope = scopeOf(document);
-scope.effect((s) => draw(s.get("a"), s.get("b"), s.get("c")));</code></pre>
+      const scope = scopeOf(document);
+      scope.effect((s) => draw(s.get("a"), s.get("b"), s.get("c")));
+    </script>
   </details>
 
   <h2>Two scopes, same names</h2>
@@ -126,77 +88,12 @@ scope.effect((s) => draw(s.get("a"), s.get("b"), s.get("c")));</code></pre>
   </section>
 
   <footer>
-    See <a href="README.md">README.md</a> for the full API.
+    See the <a href="docs/index.html">docs</a> for every element and the full API.
     Original Tangle © Bret Victor, MIT license.
   </footer>
 </main>
 
-<script>
-  // Demo helper: show each example's source before tangle.js upgrades it.
-  // Classic scripts run before deferred module scripts, so this sees the raw HTML.
-  // A tiny highlighter keeps the demo dependency-free and knows about tangle's
-  // elements and its \tangle / \val TeX markers.
-  const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
-  const span = (cls, html) => `<span class="hl-${cls}">${html}</span>`;
-
-  function highlightTex(src) {
-    return src
-      .split(/(\\(?:tangle|val)(?![A-Za-z])|\\[A-Za-z]+|\\.)/)
-      .map((part, i) => (i % 2 ? span(/^\\(tangle|val)$/.test(part) ? "marker" : "tex", esc(part)) : esc(part)))
-      .join("");
-  }
-
-  function highlightAttrs(attrs, tag) {
-    return attrs.replace(/(\s+)([\w-]+)(?:(=)"([^"]*)")?/g, (_, ws, name, eq, value) => {
-      // The serializer writes boolean attributes as display=""; show them bare.
-      if (!eq || value === "") return ws + span("attr", name);
-      // Chrome serializes < and > inside attributes as entities; show the original.
-      value = value.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-      const body = tag === "t-math" && name === "tex" ? highlightTex(value) : esc(value);
-      return `${ws}${span("attr", name)}${span("punct", "=")}${span("string", `"${body}"`)}`;
-    });
-  }
-
-  function highlightHtml(src) {
-    let inMath = false;
-    return src.replace(
-      /(<!--[\s\S]*?-->)|(<\/?)([\w-]+)((?:\s+[\w-]+(?:="[^"]*")?)*)(\s*\/?>)|([^<]+)/g,
-      (match, comment, open, tag, attrs, close, text) => {
-        if (comment) return span("comment", esc(comment));
-        if (text) return inMath ? highlightTex(text) : esc(text);
-        if (tag === "t-math") inMath = open === "<";
-        const cls = tag.startsWith("t-") ? "tangle-tag" : "tag";
-        return span("punct", esc(open)) + span(cls, tag) + highlightAttrs(attrs, tag) + span("punct", esc(close));
-      },
-    );
-  }
-
-  function highlightJs(src) {
-    return src.replace(
-      /(\/\/.*)|("[^"]*"|'[^']*'|`[^`]*`)|\b(import|from|export|const|let|var|function|return|if|else|new|for|of)\b|\b(\d+(?:\.\d+)?)\b|([A-Za-z_$][\w$]*)(?=\()|([^"'`/\w]+|.)/g,
-      (match, comment, string, keyword, number, call) => {
-        if (comment) return span("comment", esc(comment));
-        if (string) return span("string", esc(string));
-        if (keyword) return span("keyword", keyword);
-        if (number) return span("number", number);
-        if (call) return span("call", call);
-        return esc(match);
-      },
-    );
-  }
-
-  for (const section of document.querySelectorAll("[data-show-source]")) {
-    const lines = section.innerHTML.replace(/^\n+|\s+$/g, "").split("\n");
-    const indent = Math.min(...lines.filter((l) => l.trim()).map((l) => l.match(/^ */)[0].length));
-    const details = document.createElement("details");
-    details.innerHTML = "<summary>source</summary><pre><code></code></pre>";
-    details.querySelector("code").innerHTML = highlightHtml(lines.map((l) => l.slice(indent)).join("\n"));
-    section.after(details);
-  }
-  for (const code of document.querySelectorAll('code[data-lang="js"]')) {
-    code.innerHTML = highlightJs(code.textContent);
-  }
-</script>
+<script src="site/site.js"></script>
 
 <script type="module">
   import { scopeOf } from "./tangle.js";

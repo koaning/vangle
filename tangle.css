@@ -25,6 +25,11 @@ t-let {
   display: none;
 }
 
+/* A scope groups content without adding a box of its own. */
+t-scope {
+  display: contents;
+}
+
 /* Draggable numbers, in prose and in formulas ----------------------------- */
 
 t-num,

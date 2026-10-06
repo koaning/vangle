@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Expressions &amp; formats · vangle docs</title>
+  <link rel="stylesheet" href="../tangle.css">
+  <link rel="stylesheet" href="../site/site.css">
+  <script type="module" src="../tangle.js"></script>
+</head>
+<body class="docs">
+<nav class="docs-nav" data-docs-nav></nav>
+<main>
+  <h1>Expressions &amp; formats</h1>
+  <p class="lede">Expressions compute values; formats decide how those values look.</p>
+
+  <h2>Expressions</h2>
+  <p>Expressions appear in <code>&lt;t-out expr="…"&gt;</code>, <code>&lt;t-let expr="…"&gt;</code> and
+    <code>\val{…}</code> inside formulas. They're ordinary JavaScript expressions, with three
+    kinds of names in scope:</p>
+  <ul>
+    <li><strong>Your variables</strong>, by name: <code>principal * rate</code>.</li>
+    <li><strong>Everything on <code>Math</code></strong>, without the prefix: <code>sqrt(x)</code>,
+      <code>PI</code>, <code>round(v)</code>, <code>max(a, b)</code>, <code>log10(n)</code>.</li>
+    <li><strong>Browser globals</strong>, such as <code>Number</code>, <code>Infinity</code> and <code>Date</code>.</li>
+  </ul>
+  <p>If a variable has the same name as a <code>Math</code> member, the variable wins. For example, a
+    variable called <code>E</code> hides <code>Math.E</code>.</p>
+
+  <t-scope class="example" data-show-source="open">
+    <p>A circle with radius <t-num name="r" min="0" max="10" step="0.1">1.5</t-num> has an area of
+      <t-out expr="PI * r ** 2" format="%.2f"></t-out> and a circumference of
+      <t-out expr="2 * PI * r" format="%.2f"></t-out>. Rounded up, that's a
+      <t-out expr="ceil(2 * r)"></t-out>-unit-wide box.</p>
+  </t-scope>
+
+  <h3>Conditional text</h3>
+  <p>There's no special element for conditions. Use a ternary, which can return text:</p>
+  <t-scope class="example" data-show-source="open">
+    <p>The thermostat is set to <t-num name="temp" min="10" max="30" step="0.5" format="%.1f °C">21</t-num>,
+      so the heating is <t-out expr="temp > 19 ? 'on' : 'off'"></t-out>
+      <t-out expr="temp > 26 ? '(and your energy bill is not amused)' : ''"></t-out>.</p>
+  </t-scope>
+
+  <h3>Writing expressions inside HTML</h3>
+  <ul>
+    <li>Use single quotes for strings inside a double-quoted attribute: <code>expr="x > 0 ? 'yes' : 'no'"</code>.</li>
+    <li><code>&lt;</code>, <code>&gt;</code> and <code>&amp;&amp;</code> work as-is inside attribute values.</li>
+    <li>Inside element <em>text</em> (such as a <code>\val{}</code> in a <code>&lt;t-math&gt;</code>), write
+      <code>&lt;</code> as <code>&amp;lt;</code> and <code>&amp;</code> as <code>&amp;amp;</code>.</li>
+  </ul>
+
+  <h3>Errors and missing values</h3>
+  <ul>
+    <li>A variable that is never declared is <code>undefined</code>. Arithmetic on it gives
+      <code>NaN</code>, which is shown as <code>–</code>.</li>
+    <li>An expression that throws shows <code>⚠</code>. Hover over it to see the error message.</li>
+  </ul>
+
+  <div class="callout">Expressions are compiled with <code>new Function</code>. If your site sends a
+    Content-Security-Policy header, it needs to allow <code>'unsafe-eval'</code>.</div>
+
+  <h2 id="formats">Formats</h2>
+  <p>The <code>format</code> attribute (on <code>&lt;t-num&gt;</code>, <code>&lt;t-var&gt;</code> and
+    <code>&lt;t-out&gt;</code>) and the optional argument of <code>\val[…]{…}</code> control how a
+    value is displayed. A format is either printf-style or the name of a registered format.</p>
+
+  <h3>printf-style</h3>
+  <table>
+    <thead><tr><th>Format</th><th>Value</th><th>Shows</th></tr></thead>
+    <tbody>
+      <tr><td><code>%d</code></td><td>4.6</td><td>5 (rounded to an integer)</td></tr>
+      <tr><td><code>%.2f</code></td><td>3.14159</td><td>3.14</td></tr>
+      <tr><td><code>%f</code></td><td>2</td><td>2.000000 (six decimals, as in C)</td></tr>
+      <tr><td><code>%,d</code></td><td>1234567</td><td>1,234,567</td></tr>
+      <tr><td><code>%+.1f</code></td><td>2</td><td>+2.0 (always show the sign)</td></tr>
+      <tr><td><code>$%,.2f</code></td><td>1647.009</td><td>$1,647.01</td></tr>
+      <tr><td><code>%d km</code></td><td>42</td><td>42 km</td></tr>
+      <tr><td><code>%s</code></td><td>"monthly"</td><td>monthly</td></tr>
+      <tr><td><code>%%</code></td><td></td><td>a literal %</td></tr>
+    </tbody>
+  </table>
+  <p>Text around the placeholder is kept, so prefixes and suffixes need no extra attributes.</p>
+
+  <h3>Named formats</h3>
+  <table>
+    <thead><tr><th>Name</th><th>Value</th><th>Shows</th></tr></thead>
+    <tbody>
+      <tr><td><code>percent</code></td><td>0.256</td><td>26% (multiplies by 100)</td></tr>
+      <tr><td><code>dollars</code></td><td>1499.5</td><td>$1,500</td></tr>
+      <tr><td><code>int</code></td><td>2.5</td><td>3</td></tr>
+    </tbody>
+  </table>
+  <p>Register your own from JavaScript. The function receives the value and returns a string:</p>
+  <script type="text/plain" data-lang="js">
+    import { registerFormat } from "/tangle.js";
+
+    registerFormat("hz", (v) => (v < 1000 ? `${v.toFixed(0)} Hz` : `${(v / 1000).toFixed(2)} kHz`));
+  </script>
+
+  <h3>Without a format</h3>
+  <ul>
+    <li>A variable with a <code>step</code> is shown with as many decimals as the step: <code>step="0.1"</code> gives
+      <code>2.0</code>, <code>2.1</code>, ….</li>
+    <li>Other numbers are shown as integers when they are integers, rounded when they are 1000 or more, and
+      with four significant digits otherwise.</li>
+    <li>Text values are shown as-is.</li>
+  </ul>
+
+  <t-scope class="example" data-show-source="open">
+    <p><t-num name="v" min="0" max="5" step="0.001">0.25</t-num> is
+      <t-out expr="v" format="percent"></t-out>, or <t-out expr="v * 1000" format="%,d"></t-out> per mille, or
+      <t-out expr="v" format="%+.3f"></t-out>, or <t-out expr="v * 9999" format="dollars"></t-out>
+      out of $9,999.</p>
+  </t-scope>
+
+  <div data-docs-pager></div>
+</main>
+<script src="../site/site.js"></script>
+</body>
+</html>

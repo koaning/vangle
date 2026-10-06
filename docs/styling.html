@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Styling · vangle docs</title>
+  <link rel="stylesheet" href="../tangle.css">
+  <link rel="stylesheet" href="../site/site.css">
+  <script type="module" src="../tangle.js"></script>
+</head>
+<body class="docs">
+<nav class="docs-nav" data-docs-nav></nav>
+<main>
+  <h1>Styling</h1>
+  <p class="lede"><code>tangle.css</code> is small and built on custom properties and plain selectors,
+    so it's easy to fit to your blog's look.</p>
+
+  <h2>Custom properties</h2>
+  <table>
+    <thead><tr><th>Property</th><th>Default</th><th>Used for</th></tr></thead>
+    <tbody>
+      <tr><td><code>--tangle-accent</code></td><td><code>#246bce</code> (dark: <code>#75a7ff</code>)</td><td>Color of numbers, choices and formula parameters without their own <code>color</code>.</td></tr>
+      <tr><td><code>--tangle-soft</code></td><td><code>14%</code></td><td>Strength of the hover and drag highlight.</td></tr>
+      <tr><td><code>--tangle-surface</code></td><td><code>#fff</code> (dark: <code>#22201d</code>)</td><td>Background of the typing field and text of the "drag" hint.</td></tr>
+      <tr><td><code>--tangle-error</code></td><td><code>#c9382b</code></td><td>Broken outputs and formula errors.</td></tr>
+      <tr><td><code>--tangle-color</code></td><td></td><td>Set per element from a variable's <code>color</code> attribute.</td></tr>
+    </tbody>
+  </table>
+  <p>Set them on <code>:root</code> to restyle the whole site, or on any container to restyle part of a page:</p>
+
+  <div class="example warm" data-show-source="open">
+    <p>Brew <t-num name="cups" min="1" max="12">2</t-num> cups with
+      <t-out expr="cups * 15"></t-out> g of coffee.</p>
+  </div>
+  <p>The stylesheet behind that example:</p>
+  <style data-show-source="open">
+    .warm {
+      --tangle-accent: #c2410c;
+      --tangle-soft: 22%;
+    }
+    .warm t-num {
+      border-bottom-style: solid;
+      font-weight: 600;
+    }
+    .warm t-num::after {
+      content: "↔";
+    }
+  </style>
+
+  <h2>Selectors and states</h2>
+  <table>
+    <thead><tr><th>Selector</th><th>Matches</th></tr></thead>
+    <tbody>
+      <tr><td><code>t-num</code>, <code>t-choice</code>, <code>t-out</code></td><td>The elements themselves.</td></tr>
+      <tr><td><code>t-math [data-tangle-param]</code></td><td>A <code>\tangle{}</code> inside a formula.</td></tr>
+      <tr><td><code>t-math .tangle-val</code></td><td>A <code>\val{}</code> inside a formula. Unstyled by default.</td></tr>
+      <tr><td><code>.is-hot</code></td><td>Every number bound to the variable under the pointer.</td></tr>
+      <tr><td><code>.is-active</code></td><td>Every number bound to the variable being dragged or edited.</td></tr>
+      <tr><td><code>t-num::after</code></td><td>The "drag" hint shown on hover.</td></tr>
+      <tr><td><code>html.tangle-dragging</code></td><td>The page, during a drag.</td></tr>
+      <tr><td><code>.tangle-editor</code></td><td>The typing field. <code>.is-invalid</code> while it holds something unparseable.</td></tr>
+      <tr><td><code>t-out.is-error</code></td><td>An output whose expression threw.</td></tr>
+      <tr><td><code>.tangle-math-error</code></td><td>The message shown in place of a formula that doesn't parse.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Recipes</h3>
+  <script type="text/plain" data-lang="css">
+    /* No "drag" hint */
+    t-num::after { display: none; }
+
+    /* Make computed results in formulas stand out */
+    t-math .tangle-val { color: var(--tangle-accent); }
+
+    /* A dotted underline instead of dashed */
+    t-num { border-bottom-style: dotted; }
+
+    /* Style a scope as a card (scopes have display: contents by default) */
+    t-scope.card { display: block; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+  </script>
+
+  <h2>Dark mode</h2>
+  <p>The defaults follow <code>prefers-color-scheme</code>. If your site switches themes with a class or
+    attribute, the dark values also apply under <code>html.dark</code> and <code>html[data-theme="dark"]</code>,
+    and <code>html[data-theme="light"]</code> forces the light ones.</p>
+  <p>Variables can have a color per theme: <code>color="#246bce #75a7ff"</code> means blue on light
+    backgrounds and light blue on dark ones. This uses CSS <code>light-dark()</code>, which only picks the
+    dark color when the page declares support for it:</p>
+  <script type="text/plain" data-lang="css">
+    :root { color-scheme: light dark; }
+  </script>
+
+  <div data-docs-pager></div>
+</main>
+<script src="../site/site.js"></script>
+</body>
+</html>

@@ -15,7 +15,10 @@ Reactive documents for static HTML. This is a modern take on Bret Victor's [Tang
 <t-let name="calories" expr="cookies * 50"></t-let>
 ```
 
-Open `index.html` through a local server (`python3 -m http.server`) to see the demos.
+Serve the repo locally (`python3 -m http.server`) and open:
+
+- `index.html` for the demos.
+- `docs/index.html` for the documentation: a page per element with live examples, plus guides on expressions and formats, blogging (Markdown, KaTeX, CSP), the JavaScript API, and styling.
 
 ## Elements
 

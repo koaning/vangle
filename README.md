@@ -46,7 +46,7 @@ Declaration order doesn't matter: you can use a variable before the element that
 ### Interaction
 
 - **Drag** horizontally to change a value.
-- **Click** without dragging, or press **Enter**, to type a value. The field also accepts an expression such as `2 * PI`.
+- **Click** without dragging, or press **Enter**, to type a value. The field also accepts an expression such as `w + 1`.
 - **Arrow keys** step the value, **Shift** multiplies the step by 10, and **Home**/**End** jump to min and max.
 - **Hover** over a variable to highlight every place it appears, in prose and in formulas.
 
@@ -76,11 +76,13 @@ Things to know when writing TeX inside HTML:
 
 ## Expressions
 
-Expressions (`expr`, `\val{…}`) are plain JavaScript evaluated against the scope:
+Expressions (`expr`, `\val{…}`) are plain JavaScript evaluated against the scope. A name in an expression is one of:
 
-- Variables are in scope by name.
-- `Math` members are available directly: `sqrt(x)`, `PI`, `max(a, b)`.
-- Dependencies are tracked automatically.
+- **A scope variable.** Any name that isn't one of the two kinds below, even before it's declared. Dependencies are tracked automatically.
+- **A function you registered** with `registerFunction("bmi", (kg, m) => kg / m ** 2)`.
+- **A standard JS global** from a short allowlist: `Math`, `Number`, `String`, `Boolean`, `Array`, `Object`, `JSON`, `Date`, `Intl`, `parseInt`, `parseFloat`, `isNaN`, `isFinite`, `Infinity`, `NaN`, `undefined`. So write `Math.sqrt(x)`, not `sqrt(x)`.
+
+Nothing else from `window` leaks in, so a variable called `top`, `name` or `length` is just a variable.
 - For conditional text, use a ternary instead of a special element: `<t-out expr="x > 0 ? 'gain' : 'lose'">`.
 
 > Expressions are compiled with `new Function`. If your site sends a Content-Security-Policy, it must allow `'unsafe-eval'`.
@@ -97,7 +99,7 @@ Expressions (`expr`, `\val{…}`) are plain JavaScript evaluated against the sco
 The declarative elements cover most posts. For charts and other custom logic, the same reactive scope is available from JS:
 
 ```js
-import { scopeOf, registerFormat, configure } from "./tangle.js";
+import { scopeOf, registerFormat, registerFunction, configure } from "./tangle.js";
 
 const scope = scopeOf(document);           // or scopeOf(someElementInsideATScope)
 scope.effect((s) => draw(s.get("a")));      // re-runs whenever `a` changes

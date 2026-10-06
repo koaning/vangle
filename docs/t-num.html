@@ -50,7 +50,7 @@
     </tbody>
   </table>
   <p>In the typing field, <kbd>Enter</kbd> confirms and <kbd>Esc</kbd> cancels; clicking away also
-    confirms. The field accepts expressions, so readers can type <code>2 * PI</code> or <code>w + 1</code>.</p>
+    confirms. The field accepts expressions, so readers can type <code>w + 1</code> or <code>2 * Math.PI</code>.</p>
   <p>Hovering a number highlights every place its variable appears on the page, in text and in formulas.</p>
 
   <h2 id="views">Several views of one variable</h2>
@@ -59,7 +59,7 @@
   <t-scope class="example" data-show-source="open">
     <p>Set the budget to <t-num name="budget" value="500" min="0" max="2000" step="10" format="$%,d"></t-num>.</p>
     <p>… three paragraphs later …</p>
-    <p>With your <t-num name="budget"></t-num> budget, you can buy <t-out expr="floor(budget / 35)"></t-out> books.</p>
+    <p>With your <t-num name="budget"></t-num> budget, you can buy <t-out expr="Math.floor(budget / 35)"></t-out> books.</p>
   </t-scope>
 
   <h2>Drag sensitivity</h2>

@@ -16,23 +16,50 @@
 
   <h2>Expressions</h2>
   <p>Expressions appear in <code>&lt;t-out expr="…"&gt;</code>, <code>&lt;t-let expr="…"&gt;</code> and
-    <code>\val{…}</code> inside formulas. They're ordinary JavaScript expressions, with three
-    kinds of names in scope:</p>
-  <ul>
-    <li><strong>Your variables</strong>, by name: <code>principal * rate</code>.</li>
-    <li><strong>Everything on <code>Math</code></strong>, without the prefix: <code>sqrt(x)</code>,
-      <code>PI</code>, <code>round(v)</code>, <code>max(a, b)</code>, <code>log10(n)</code>.</li>
-    <li><strong>Browser globals</strong>, such as <code>Number</code>, <code>Infinity</code> and <code>Date</code>.</li>
-  </ul>
-  <p>If a variable has the same name as a <code>Math</code> member, the variable wins. For example, a
-    variable called <code>E</code> hides <code>Math.E</code>.</p>
+    <code>\val{…}</code> inside formulas. They're ordinary JavaScript expressions. A name in an expression
+    is one of three things:</p>
+  <ol>
+    <li><strong>A function you registered</strong> with <a href="#functions"><code>registerFunction</code></a>.</li>
+    <li><strong>A standard JavaScript global</strong> from a short list: <code>Math</code>, <code>Number</code>,
+      <code>String</code>, <code>Boolean</code>, <code>Array</code>, <code>Object</code>, <code>JSON</code>,
+      <code>Date</code>, <code>Intl</code>, <code>parseInt</code>, <code>parseFloat</code>, <code>isNaN</code>,
+      <code>isFinite</code>, <code>Infinity</code>, <code>NaN</code> and <code>undefined</code>.</li>
+    <li><strong>A variable</strong>: every other name, whether or not it has been declared yet.</li>
+  </ol>
+  <p>There are no other names, so <code>Math</code> is spelled out (<code>Math.sqrt(x)</code>, <code>Math.PI</code>),
+    and nothing else from <code>window</code> leaks in: a variable called <code>top</code>, <code>name</code> or
+    <code>length</code> is simply a variable. If a variable and a registered function share a name, the variable
+    wins once it has a value.</p>
 
   <t-scope class="example" data-show-source="open">
     <p>A circle with radius <t-num name="r" min="0" max="10" step="0.1">1.5</t-num> has an area of
-      <t-out expr="PI * r ** 2" format="%.2f"></t-out> and a circumference of
-      <t-out expr="2 * PI * r" format="%.2f"></t-out>. Rounded up, that's a
-      <t-out expr="ceil(2 * r)"></t-out>-unit-wide box.</p>
+      <t-out expr="Math.PI * r ** 2" format="%.2f"></t-out> and a circumference of
+      <t-out expr="2 * Math.PI * r" format="%.2f"></t-out>. Rounded up, that's a
+      <t-out expr="Math.ceil(2 * r)"></t-out>-unit-wide box.</p>
   </t-scope>
+
+  <h3 id="functions">Your own functions</h3>
+  <p>For anything longer than a one-liner, write a JavaScript function and register it. Every expression
+    on the page can then call it by name:</p>
+  <t-scope class="example" data-show-source="open">
+    <p>At <t-num name="kg" min="40" max="150">70</t-num> kg and
+      <t-num name="cm" min="140" max="210">175</t-num> cm, your BMI is
+      <t-out expr="bmi(kg, cm / 100)" format="%.1f"></t-out>, which counts as
+      <t-out expr="bmiClass(bmi(kg, cm / 100))"></t-out>.</p>
+  </t-scope>
+  <script type="module" data-show-source="open">
+    import { registerFunction } from "../tangle.js";
+
+    registerFunction("bmi", (kg, m) => kg / m ** 2);
+    registerFunction("bmiClass", (bmi) =>
+      bmi < 18.5 ? "underweight" : bmi < 25 ? "a healthy weight" : bmi < 30 ? "overweight" : "obese",
+    );
+  </script>
+  <p>Registration can happen at any time, even after the page has rendered: outputs that call a function
+    re-run as soon as it's registered. For short names, register what you need:
+    <code>registerFunction("sqrt", Math.sqrt)</code>.</p>
+  <p>To give a single <a href="t-scope.html">scope</a> its own function, store it as a variable instead:
+    <code>scopeOf(el).set("f", (x) =&gt; x * 2)</code>.</p>
 
   <h3>Conditional text</h3>
   <p>There's no special element for conditions. Use a ternary, which can return text:</p>

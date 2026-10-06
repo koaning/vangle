@@ -47,7 +47,7 @@
     browser loads a module once per URL, so <code>/tangle.js</code> and <code>/tangle.js?v=2</code> would be
     two separate copies with separate variables.</p>
   <script type="text/plain" data-lang="js">
-    import { scopeOf, registerFormat, configure } from "/tangle.js";
+    import { scopeOf, registerFunction, registerFormat, configure } from "/tangle.js";
   </script>
 
   <h2>Scopes</h2>
@@ -93,10 +93,11 @@
     stop();
   </script>
 
-  <h2>Formatting</h2>
+  <h2>Functions and formats</h2>
   <table>
     <thead><tr><th>Export</th><th>Description</th></tr></thead>
     <tbody>
+      <tr><td><code>registerFunction(name, fn)</code></td><td>Makes <code>fn</code> callable by name from every expression. Expressions that already ran re-run. See <a href="expressions.html#functions">Your own functions</a>.</td></tr>
       <tr><td><code>registerFormat(name, fn)</code></td><td>Adds a named format. <code>fn(value)</code> returns a string.</td></tr>
       <tr><td><code>formatValue(value, format, step)</code></td><td>Formats a value the way the elements do.</td></tr>
       <tr><td><code>formats</code></td><td>The registry of named formats, as a plain object.</td></tr>

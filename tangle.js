@@ -167,6 +167,24 @@ class Formula {
   }
 }
 
+// Names an expression can use besides scope variables: functions registered
+// with registerFunction(), and a short allowlist of standard JS globals. Any
+// other name is a scope variable, even before it is declared. So lookup never
+// depends on declaration order or on whatever happens to live on `window`.
+const ALLOWED_GLOBALS = new Set([
+  "Math", "Number", "String", "Boolean", "Array", "Object", "JSON", "Date", "Intl",
+  "parseInt", "parseFloat", "isNaN", "isFinite", "Infinity", "NaN", "undefined",
+]);
+const functions = new Map();
+const functionsVersion = new Signal(0);
+
+/** Make `fn` callable by name from every expression, e.g. registerFunction("clamp", …). */
+export function registerFunction(name, fn) {
+  if (!NAME_RE.test(name)) throw new Error(`registerFunction: "${name}" is not a valid name`);
+  functions.set(name, fn);
+  functionsVersion.value++; // expressions that ran before registration re-run
+}
+
 let scopeCount = 0;
 
 export class Scope {
@@ -174,17 +192,22 @@ export class Scope {
     this.id = ++scopeCount;
     this.slots = new Map();
     const scope = this;
-    // The `with` target for expressions. Scope variables shadow Math members,
-    // which shadow globals. An unknown name that isn't a global becomes a
-    // (lazily created) variable, so declaration order never matters.
+    // The `with` target for expressions: scope variables first, then
+    // registered functions. Allowlisted globals fall through to the real ones.
     this.proxy = new Proxy(Object.create(null), {
       has(_, key) {
-        if (typeof key !== "string") return false;
-        return scope.slots.has(key) || key in Math || !(key in globalThis);
+        return typeof key === "string" && !ALLOWED_GLOBALS.has(key);
       },
       get(_, key) {
         if (typeof key !== "string") return undefined;
-        if (!scope.slots.has(key) && key in Math) return Math[key];
+        // A variable wins once it holds something; an empty (lazily created)
+        // slot doesn't hide a function. Both reads subscribe, so registering
+        // or setting either one later re-runs the expression.
+        const slot = scope.slots.get(key);
+        if (!slot || slot.def.value === undefined) {
+          functionsVersion.value;
+          if (functions.has(key)) return functions.get(key);
+        }
         return scope.get(key);
       },
     });
@@ -610,7 +633,7 @@ function onKeyDown(event) {
 }
 
 // Click without dragging (or press Enter) to type a value. Accepts numbers
-// ("1,250") or expressions over the scope ("2 * PI", "cookies + 1").
+// ("1,250") or expressions over the scope ("2 * Math.PI", "cookies + 1").
 function openEditor(el) {
   closeEditor(false);
   const { scope, name } = paramOf(el);

@@ -7,6 +7,7 @@ import {
   effect,
   formatValue,
   registerFormat,
+  registerFunction,
   parseTex,
   toTex,
   snap,
@@ -40,7 +41,7 @@ test("scope expressions track variables, Math, and late declarations", async () 
   const s = new Scope();
   const seen = [];
   // `calories` is used before it is defined, and `y` before it is set.
-  effect(() => seen.push(s.eval("round(calories + (y ?? 0))")));
+  effect(() => seen.push(s.eval("Math.round(calories + (y ?? 0))")));
   s.define("calories", "cookies * 50");
   s.set("cookies", 3);
   await tick();
@@ -52,10 +53,46 @@ test("scope expressions track variables, Math, and late declarations", async () 
   assert.equal(seen.at(-1), 200);
 });
 
-test("scope variables shadow Math members", () => {
+test("Math and other standard globals are used explicitly", () => {
   const s = new Scope();
-  s.set("E", 5);
-  assert.equal(s.eval("E + PI > 8"), true);
+  s.set("r", 2);
+  assert.equal(s.eval("Math.round(Math.PI * r ** 2)"), 13);
+  assert.equal(s.eval("Number.isInteger(r) && isFinite(r)"), true);
+  // Bare Math names are not injected: `sqrt` is just an undeclared variable.
+  assert.throws(() => s.eval("sqrt(r)"), TypeError);
+});
+
+test("names that exist on globalThis are still scope variables", async () => {
+  const s = new Scope();
+  const seen = [];
+  // `console` and `setTimeout` live on globalThis, but here they are variables,
+  // even before anything declares them.
+  effect(() => seen.push(s.eval("(console ?? 0) + (setTimeout ?? 0)")));
+  s.set("console", 1);
+  s.set("setTimeout", 2);
+  await tick();
+  assert.deepEqual(seen, [0, 3]);
+});
+
+test("registered functions are callable, and late registration re-runs", async () => {
+  const s = new Scope();
+  s.set("x", 9);
+  const seen = [];
+  effect(() => {
+    try {
+      seen.push(s.eval("twice(x)"));
+    } catch {
+      seen.push("error");
+    }
+  });
+  registerFunction("twice", (v) => v * 2);
+  await tick();
+  assert.deepEqual(seen, ["error", 18]);
+  // A scope variable with the same name wins.
+  s.set("twice", (v) => v * 3);
+  await tick();
+  assert.equal(seen.at(-1), 27);
+  assert.throws(() => registerFunction("not valid", () => 0), /valid name/);
 });
 
 test("define accepts a function", () => {

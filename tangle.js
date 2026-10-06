@@ -1156,6 +1156,9 @@ class TVega extends TangleElement {
       if (value !== undefined) p.value = value;
     }
     if (spec.width === undefined && !MULTI_VIEW.some((k) => k in spec)) spec.width = "container";
+    // Fit axes and legend inside the page width, and lay out again when data
+    // arrives: a named data source is still empty on the first render.
+    spec.autosize ??= { type: spec.width === "container" ? "fit-x" : "pad", contains: "padding", resize: true };
 
     this._target.classList.remove("is-loading");
     this._target.textContent = "";

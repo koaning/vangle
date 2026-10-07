@@ -33,6 +33,11 @@ t-scope {
   display: contents;
 }
 
+/* A floating panel. Until tangle.js runs, its contents show in place. */
+t-panel {
+  display: block;
+}
+
 /* Draggable numbers, in prose and in formulas ----------------------------- */
 
 t-num,

@@ -25,6 +25,7 @@
 - [`<t-math>`](docs/t-math.md): a KaTeX formula with draggable `\tangle{}` parameters and live `\val{}` results.
 - [`<t-vega>`](docs/t-vega.md): a Vega-Lite chart (JSON spec in a `<script type="application/json">`, or `src`). Spec params and named data sources with a variable's name are linked to it; Vega loads from jsDelivr only on pages that use it.
 - [`<t-scope>`](docs/t-scope.md): gives part of the page its own set of variables.
+- [`<t-panel>`](docs/t-panel.md): floats its contents (typically controls) in a draggable, minimizable panel fixed to a corner of the viewport. The children keep their scope.
 
 ## Gallery
 

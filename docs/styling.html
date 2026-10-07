@@ -34,6 +34,7 @@
 <li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
 <li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
 <li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
+<li><a href="t-panel.html"><code>&lt;t-panel&gt;</code></a></li>
 </ul>
 <h4>Gallery</h4>
 <ul>
@@ -94,6 +95,7 @@ so it's easy to fit to your blog's look.</p>
 <tr><td><code>.tangle-editor</code></td><td>The typing field. <code>.is-invalid</code> while it holds something unparseable.</td></tr>
 <tr><td><code>t-out.is-error</code></td><td>An output whose expression threw.</td></tr>
 <tr><td><code>.tangle-math-error</code></td><td>The message shown in place of a formula that doesn't parse.</td></tr>
+<tr><td><code>t-panel::part(header)</code>, <code>::part(label)</code>, <code>::part(toggle)</code>, <code>::part(body)</code></td><td>The pieces of a floating panel. <code>t-panel[collapsed]</code> while it's minimized. See <a href="t-panel.html#styling"><code>&lt;t-panel&gt;</code></a>.</td></tr>
 <tr><td><code>.tangle-vega</code></td><td>A Vega chart. <code>.is-loading</code> until Vega has loaded; <code>.tangle-vega-error</code> replaces it on failure. See <a href="t-vega.html#how-vega-loads"><code>&lt;t-vega&gt;</code></a>.</td></tr>
 </tbody>
 </table>

@@ -1,0 +1,120 @@
+<!doctype html>
+<!-- Generated from t-panel.md by site/build.js. Edit the Markdown, then run `make docs`. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>&lt;t-panel&gt; · vangle docs</title>
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+<link rel="alternate" type="text/markdown" href="t-panel.md">
+<link rel="stylesheet" href="../tangle.css">
+<link rel="stylesheet" href="../site/site.css">
+<script type="module" src="../tangle.js"></script>
+</head>
+<body class="docs">
+<nav class="docs-nav">
+<div class="docs-nav-top">
+<a class="brand" href="../index.html">vangle</a>
+<button class="theme-toggle" type="button" data-theme-toggle aria-label="Dark mode"></button>
+</div>
+<h4>Guide</h4>
+<ul>
+<li><a href="index.html">Getting started</a></li>
+<li><a href="expressions.html">Expressions &amp; formats</a></li>
+<li><a href="charts.html">Updating a chart</a></li>
+<li><a href="blogging.html">Using it on a blog</a></li>
+</ul>
+<h4>Elements</h4>
+<ul>
+<li><a href="t-num.html"><code>&lt;t-num&gt;</code></a></li>
+<li><a href="t-var.html"><code>&lt;t-var&gt;</code></a></li>
+<li><a href="t-let.html"><code>&lt;t-let&gt;</code></a></li>
+<li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
+<li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
+<li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
+<li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
+<li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
+<li><a href="t-panel.html" aria-current="page"><code>&lt;t-panel&gt;</code></a></li>
+</ul>
+<h4>Gallery</h4>
+<ul>
+<li><a href="gallery-matrix.html">Matrix transformations</a></li>
+</ul>
+<h4>Reference</h4>
+<ul>
+<li><a href="javascript.html">JavaScript API</a></li>
+<li><a href="styling.html">Styling</a></li>
+</ul>
+</nav>
+<main>
+<h1><code>&lt;t-panel&gt;</code></h1>
+<p class="lede">Floats its contents in a panel that stays in view while the page scrolls. Put a post's
+controls in one, and they follow the reader through the prose and formulas they drive.</p>
+<p>The panel in the bottom-right corner of this page comes from the example below. Drag it by its
+header, minimize it with <kbd>−</kbd>, and scroll: the numbers in it keep updating the text.</p>
+<t-scope class="example" data-show-source="open">
+  <t-panel label="Savings" corner="bottom-right">
+    <p>Save <t-num name="monthly" min="0" max="2000" step="25" format="$%d">300</t-num> a month<br>
+      at <t-num name="rate" min="0" max="12" step="0.1" format="%.1f%%">5</t-num> a year<br>
+      for <t-num name="years" min="1" max="40">20</t-num> years.</p>
+  </t-panel>
+  <t-let name="r" expr="rate / 100 / 12"></t-let>
+  <t-let name="n" expr="years * 12"></t-let>
+  <t-let name="total" expr="r ? monthly * ((1 + r) ** n - 1) / r : monthly * n"></t-let>
+  <p>After <t-out expr="years"></t-out> years you'll have <t-out expr="total" format="$%,d"></t-out>,
+    of which <t-out expr="monthly * n" format="$%,d"></t-out> is what you put in and
+    <t-out expr="total - monthly * n" format="$%,d"></t-out> is interest.</p>
+</t-scope>
+<h2>Attributes</h2>
+<table>
+<thead><tr><th>Attribute</th><th>Default</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>corner</code></td><td><code>bottom-right</code></td><td>Where the panel starts: <code>top-left</code>, <code>top-right</code>, <code>bottom-left</code> or <code>bottom-right</code>. It sits 16px from the edges of the viewport.</td></tr>
+<tr><td><code>label</code></td><td></td><td>A caption on the header, which stays visible when the panel is minimized. Also the panel's accessible name. Long labels are cut off with an ellipsis.</td></tr>
+<tr><td><code>width</code></td><td>fits the content</td><td>The width in pixels. Set it to reflow long text.</td></tr>
+<tr><td><code>collapsed</code></td><td></td><td>Start minimized, showing only the header.</td></tr>
+</tbody>
+</table>
+<p>The panel is never dismissed, only minimized, so its contents are always one click away.
+Minimizing keeps the panel's width, so the header stays a readable bar.</p>
+<h2>Behavior</h2>
+<ul>
+<li><strong>Drag the header</strong> to move the panel. It's kept fully on screen, also when the window is resized.</li>
+<li><strong>The button on the header</strong> minimizes and expands the panel, with a short folding animation
+(none if the reader prefers reduced motion). From JavaScript, set the <code>collapsed</code> property or
+attribute.</li>
+<li><strong>The contents keep their scope.</strong> The panel doesn't move its children anywhere, so a
+<code>&lt;t-panel&gt;</code> inside a <code>&lt;t-scope&gt;</code> uses that scope's variables, like the example above.</li>
+<li><strong>Without JavaScript</strong>, the contents show in place, as ordinary content.</li>
+<li><strong>It's <code>position: fixed</code>.</strong> An ancestor with a <code>transform</code>, <code>filter</code> or <code>contain</code> creates a new
+containing block, which pins the panel to that ancestor instead of the viewport. Put the
+<code>&lt;t-panel&gt;</code> outside such elements.</li>
+<li>The panel is at <code>z-index: 1000</code>. Override it with <code>t-panel { z-index: … }</code>.</li>
+</ul>
+<h2 id="styling">Styling</h2>
+<p>The panel uses <code>--tangle-surface</code> for its background, so it follows the theme. Its pieces are
+exposed as <a href="https://developer.mozilla.org/en-US/docs/Web/CSS/::part">CSS shadow parts</a>:</p>
+<table>
+<thead><tr><th>Selector</th><th>Matches</th></tr></thead>
+<tbody>
+<tr><td><code>t-panel</code></td><td>The panel itself: border, background, shadow, <code>z-index</code>.</td></tr>
+<tr><td><code>t-panel::part(header)</code></td><td>The draggable header bar.</td></tr>
+<tr><td><code>t-panel::part(label)</code></td><td>The caption on the header.</td></tr>
+<tr><td><code>t-panel::part(toggle)</code></td><td>The minimize button.</td></tr>
+<tr><td><code>t-panel::part(body)</code></td><td>The box around the contents, with its padding.</td></tr>
+<tr><td><code>t-panel[collapsed]</code></td><td>A minimized panel.</td></tr>
+</tbody>
+</table>
+<pre><code class="language-css">t-panel {
+  border-radius: 0;
+  box-shadow: none;
+}
+t-panel::part(header) {
+  background: var(--tangle-accent);
+  color: white;
+}</code></pre>
+<div class="pager"><a class="prev" href="t-scope.html"><small>Previous</small><code>&lt;t-scope&gt;</code></a><a class="next" href="gallery-matrix.html"><small>Next</small>Matrix transformations</a></div>
+</main>
+<script src="../site/site.js"></script>
+</body>
+</html>

@@ -9,15 +9,16 @@ high. So the winner tends to overpay. That's the winner's curse.
 
 <div class="example curse" data-show-source>
   <t-var name="seed" value="1"></t-var>
-  <p>The bucket is worth <t-num name="V" min="50" max="500" step="10" format="$%d">100</t-num>.
+  <p>The bucket is worth <t-num name="V" min="100" max="500" step="10" format="$%d">100</t-num>.
     Each of <t-num name="n" min="2" max="100">8</t-num> bidders guesses it with an error of about
-    <t-num name="sigma" min="0" max="60" format="$%d">20</t-num>, either way. The
+    <t-num name="sigma" min="0" max="30" format="$%d">20</t-num>, either way. The
     <span class="winner">winner</span> bid <t-out expr="top" format="$%d"></t-out>, so they
     <t-out expr="top >= V ? `overpaid by $${Math.round(top - V)}` : `got it $${Math.round(V - top)} below its value`"></t-out>.</p>
   <t-let name="bids" expr="guesses(V, sigma, n, seed)"></t-let>
   <t-let name="top" expr="Math.max(...bids)"></t-let>
-  <!-- The charts span 3 noise-widths below the true value to 4 above, so they zoom with sigma. -->
-  <t-let name="range" expr="[V - 3 * Math.max(sigma, 5), V + 4 * Math.max(sigma, 5)]"></t-let>
+  <!-- The charts span 3 noise-widths below the true value to 4 above, so they zoom with sigma.
+       The bucket is worth at least $100 and the noise is at most $30, so that never goes below $0. -->
+  <t-let name="range" expr="[Math.max(0, V - 3 * Math.max(sigma, 5)), V + 4 * Math.max(sigma, 5)]"></t-let>
   <t-obsplot>
     <script type="text/plain">
     {
@@ -62,11 +63,15 @@ high. So the winner tends to overpay. That's the winner's curse.
   // A standard normal number, by the Box–Muller transform.
   const normal = (rand) => Math.sqrt(-2 * Math.log(1 - rand())) * Math.cos(2 * Math.PI * rand());
 
-  // The n guesses in auction number `run`: the true value plus noise. Each auction has its own
-  // stream of random numbers, so one more bidder keeps the other guesses.
+  // A bid is the true value plus noise, and never below $0. With the bucket worth at least $100
+  // and the noise at most $30, that's more than 3 noise-widths away, so it almost never matters.
+  const bid = (V, sigma, z) => Math.max(0, V + sigma * z);
+
+  // The n guesses in auction number `run`. Each auction has its own stream of random numbers,
+  // so one more bidder keeps the other guesses.
   function guesses(V, sigma, n, seed, run = 0) {
     const rand = random(seed * 100003 + run);
-    return Array.from({ length: n }, () => V + sigma * normal(rand));
+    return Array.from({ length: n }, () => bid(V, sigma, normal(rand)));
   }
 
   // The winning bid of each of `runs` auctions: the same guesses, without building the arrays.
@@ -76,25 +81,25 @@ high. So the winner tends to overpay. That's the winner's curse.
       const rand = random(seed * 100003 + run);
       let top = -Infinity;
       for (let i = 0; i < n; i++) top = Math.max(top, normal(rand));
-      wins[run] = V + sigma * top;
+      wins[run] = bid(V, sigma, top);
     }
     return wins;
   }
 
   // The average overpayment for every crowd size from 2 to `most` bidders, in one pass. Auction
   // `run` starts with the same guesses for any n, so its winner with one more bidder is the
-  // larger of its winner so far and one more guess. The true value cancels out.
-  function overpayments(sigma, most, runs, seed) {
+  // larger of its winner so far and one more guess.
+  function overpayments(V, sigma, most, runs, seed) {
     const totals = new Array(most + 1).fill(0);
     for (let run = 0; run < runs; run++) {
       const rand = random(seed * 100003 + run);
       let top = -Infinity;
       for (let n = 1; n <= most; n++) {
         top = Math.max(top, normal(rand));
-        totals[n] += top;
+        totals[n] += bid(V, sigma, top);
       }
     }
-    return totals.slice(2).map((total, i) => ({ n: i + 2, overpay: sigma * total / runs }));
+    return totals.slice(2).map((total, i) => ({ n: i + 2, overpay: total / runs - V }));
   }
 
   // How many σ the largest of n standard normal guesses lands above the mean, by Blom's
@@ -173,7 +178,7 @@ the crowd.
     winner overpays by <t-out expr="naive[n - 2].overpay" format="$%.1f"></t-out> on average.
     With 2 bidders it's <t-out expr="naive[0].overpay" format="$%.1f"></t-out>, and with 100
     it's <t-out expr="naive.at(-1).overpay" format="$%.1f"></t-out>.</p>
-  <t-let name="naive" expr="overpayments(sigma, 100, runs, seed)"></t-let>
+  <t-let name="naive" expr="overpayments(V, sigma, 100, runs, seed)"></t-let>
   <t-obsplot>
     <script type="text/plain">
     {
@@ -206,7 +211,7 @@ around the true value *V*, the highest one is on average
     \qquad a_n \approx \Phi^{-1}\!\left(\frac{n - 0.375}{n + 0.25}\right) = \val[%.2f]{topGap(n)}
   </t-math>
   <p>So bid your guess minus your noise times <i>a<sub>n</sub></i>. If you think the noise is
-    <t-num name="sighat" min="0" max="60" format="$%d">20</t-num> (it's really
+    <t-num name="sighat" min="0" max="45" format="$%d">20</t-num> (it's really
     <t-num name="sigma"></t-num>), shave
     <t-out expr="sighat * topGap(n)" format="$%d"></t-out> off your guess. Then the winner of an
     auction with <t-num name="n"></t-num> bidders

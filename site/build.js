@@ -40,7 +40,6 @@ export const NAV = [
     ["gallery-matrix", "Matrix transformations"],
     ["gallery-amdahl", "Amdahl's law"],
     ["gallery-winners-curse", "The winner's curse"],
-    ["gallery-mcnuggets", "McNugget numbers"],
   ]],
   ["Reference", [
     ["javascript", "JavaScript API"],

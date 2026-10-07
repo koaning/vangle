@@ -1,7 +1,7 @@
 // Builds docs/*.html from docs/*.md. Run it with `make docs`.
 //
-// The Markdown is the source of truth: it's what LLMs read (see llms.txt), and
-// the generated HTML is committed so the site needs no build to serve.
+// The Markdown is the source of truth: it's what LLMs read (see llms.txt). The
+// generated HTML is gitignored; the Pages workflow builds and publishes it.
 //
 // The converter covers the subset the docs use, with CommonMark's rules for
 // raw HTML so live examples pass through untouched:
@@ -21,6 +21,7 @@ export const NAV = [
     ["index", "Getting started"],
     ["expressions", "Expressions &amp; formats"],
     ["charts", "Updating a chart"],
+    ["custom-elements", "Your own elements"],
     ["blogging", "Using it on a blog"],
   ]],
   ["Elements", [
@@ -34,7 +35,9 @@ export const NAV = [
     ["t-tag", "<code>&lt;t-tag&gt;</code>"],
     ["t-math", "<code>&lt;t-math&gt;</code>"],
     ["t-vega", "<code>&lt;t-vega&gt;</code>"],
+    ["t-obsplot", "<code>&lt;t-obsplot&gt;</code>"],
     ["t-scope", "<code>&lt;t-scope&gt;</code>"],
+    ["t-panel", "<code>&lt;t-panel&gt;</code>"],
   ]],
   ["Gallery", [
     ["gallery-matrix", "Matrix transformations"],

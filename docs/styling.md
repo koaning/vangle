@@ -14,7 +14,7 @@ so it's easy to fit to your blog's look.
 | `--tangle-muted` | `55%` | Strength of the punctuation in a [`<t-call>`](t-call.md) or [`<t-tag>`](t-tag.md). |
 | `--tangle-code-tag`, `--tangle-code-attr`, `--tangle-code-string` | `#6f5cbd`, `#b45b1b`, `#147a68` (dark: `#b9a8ff`, `#ffad66`, `#5ed5bd`) | Syntax highlighting in `<t-call>` and `<t-tag>`: tag names, attribute and argument names, and strings. Values the reader can change use the accent color. |
 | `--tangle-color` | | Set per element from a variable's `color` attribute. |
-| `--tangle-chart-grid`, `--tangle-chart-text`, `--tangle-chart-font` | `12%`, `60%`, `12px` system font | Strength of chart gridlines and labels, and their font. See [`<t-vega>`](t-vega.md#theme). |
+| `--tangle-chart-grid`, `--tangle-chart-text`, `--tangle-chart-font` | `12%`, `60%`, `12px` system font | Strength of chart gridlines and labels, and their font. See [`<t-vega>`](t-vega.md#theme) and [`<t-obsplot>`](t-obsplot.md#theme). |
 
 Set them on `:root` to restyle the whole site, or on any container to restyle part of a page:
 
@@ -49,6 +49,7 @@ The stylesheet behind that example:
 | `.t-tag-flag` | A boolean attribute in a `<t-tag>`, which toggles it. `.is-off` while the attribute is off. |
 | `.t-tag-preview` | The live element below a `<t-tag>`'s code. |
 | `t-math [data-tangle-param]` | A `\tangle{}` inside a formula. |
+| `[data-tangle-param]` | Anything draggable: a `<t-num>`, a `\tangle{}`, or [your own element](custom-elements.md#draggable). |
 | `t-math .tangle-val` | A `\val{}` inside a formula. Unstyled by default. |
 | `.is-hot` | Every number bound to the variable under the pointer. |
 | `.is-active` | Every number bound to the variable being dragged or edited. |
@@ -57,7 +58,9 @@ The stylesheet behind that example:
 | `.tangle-editor` | The typing field. `.is-invalid` while it holds something unparseable. |
 | `t-out.is-error` | An output whose expression threw. |
 | `.tangle-math-error` | The message shown in place of a formula that doesn't parse. |
+| `t-panel::part(header)`, `::part(label)`, `::part(toggle)`, `::part(body)` | The pieces of a floating panel. `t-panel[collapsed]` while it's minimized. See [`<t-panel>`](t-panel.md#styling). |
 | `.tangle-vega` | A Vega chart. `.is-loading` until Vega has loaded; `.tangle-vega-error` replaces it on failure. See [`<t-vega>`](t-vega.md#how-vega-loads). |
+| `.tangle-obsplot` | An Observable Plot chart. `.is-loading` until Plot has loaded; `.tangle-obsplot-error` replaces it when loading fails or the expression throws. See [`<t-obsplot>`](t-obsplot.md). |
 
 ### Recipes
 

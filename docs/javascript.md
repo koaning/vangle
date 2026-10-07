@@ -74,14 +74,14 @@ An effect finds its dependencies by running, so you never list them. If an `if` 
 [Updating a chart](charts.md) builds a bigger example, and covers canvas and chart
 libraries.
 
-## Importing
+## Importing {#importing}
 
 Import from the **same URL** as your `<script type="module">` tag. The
 browser loads a module once per URL, so `/tangle.js` and `/tangle.js?v=2` would be
 two separate copies with separate variables.
 
 ```js
-import { scopeOf, registerFunction, registerFormat, tangleCall, configure } from "/tangle.js";
+import { scopeOf, registerFunction, registerFormat, tangleCall, configure, TangleElement } from "/tangle.js";
 ```
 
 ## Scopes {#scopes}
@@ -113,6 +113,22 @@ scope.set("years", 12);
 await Promise.resolve();
 // outputs, formulas and effects are now up to date
 ```
+
+## Your own elements {#elements}
+
+`TangleElement` is the base class of the built-in elements. Extend it to write your own:
+
+```js
+// <t-stars expr="rating"></t-stars>
+customElements.define("t-stars", class extends TangleElement {
+  connectedCallback() {
+    this.watch((s) => (this.textContent = "★".repeat(s.eval(this.getAttribute("expr")))));
+  }
+});
+```
+
+It adds `this.scope`, `this.watch(fn)`, `this.declare(name, initial)` and
+`this.makeDraggable(name)`. See [Your own elements](custom-elements.md) for examples.
 
 ## Signals
 
@@ -149,11 +165,13 @@ stop();
 ## Configuration {#configuration}
 
 `configure(options)` changes global defaults. Call it in the same module that imports
-`tangle.js`, before the first formula loads KaTeX or the first [`<t-vega>`](t-vega.md) loads Vega.
+`tangle.js`, before the first formula loads KaTeX, the first [`<t-vega>`](t-vega.md) loads Vega, or the first
+[`<t-obsplot>`](t-obsplot.md) loads Plot.
 
 | Option | Default | Description |
 |---|---|---|
 | `katexUrl` | jsDelivr, KaTeX 0.19.0 | The KaTeX ES module to import. |
 | `katexCssUrl` | jsDelivr, KaTeX 0.19.0 | The KaTeX stylesheet, added if the page has none. |
 | `vegaUrl`, `vegaLiteUrl`, `vegaEmbedUrl` | jsDelivr: Vega 6.4.0, Vega-Lite 6.4.3, vega-embed 7.3.0 | The three Vega scripts, loaded in order. Each is skipped if its global (`vega`, `vegaLite`, `vegaEmbed`) already exists. |
+| `d3Url`, `plotUrl` | jsDelivr: d3 7.9.0, Observable Plot 0.6.17 | The two Plot scripts, loaded in order. Each is skipped if its global (`d3`, `Plot`) already exists. |
 | `pixelsPerStep` | `5` | The default drag sensitivity. |

@@ -24,7 +24,7 @@ To skip copying the files, load them from [jsDelivr](https://www.jsdelivr.com/),
 
 If you import from `tangle.js` in your own module (to register functions, or for the JavaScript API), use the same URL as the `<script>` tag. A different URL loads a second copy with its own variables.
 
-Serve the repo locally (`python3 -m http.server`) and open:
+Run `make docs`, serve the repo locally (`make serve`) and open:
 
 - `index.html` for the demos.
 - `docs/index.html` for the documentation: a page per element with live examples, guides on expressions and formats, blogging (Markdown, KaTeX, CSP), the JavaScript API and styling, and a gallery of complete examples.
@@ -44,7 +44,11 @@ Serve the repo locally (`python3 -m http.server`) and open:
 | `<t-tag tag="progress">…</t-tag>` | Shows an HTML tag whose attributes are `<t-num>`, `<t-choice>` and `<t-text>` children, with the live element below it. Handy for documenting an element. |
 | `<t-math display>…</t-math>` | A KaTeX formula with live markers (see below). Omit `display` for inline math. |
 | `<t-vega>…</t-vega>` | A Vega-Lite chart, with its spec in a `<script type="application/json">` or `src`. Vega loads only if the page has one. See [Vega](#vega). |
+| `<t-obsplot>…</t-obsplot>` | An Observable Plot chart, written as a JavaScript expression in a `<script type="text/plain">` or `src`. Plot loads only if the page has one. See [Observable Plot](#observable-plot). |
 | `<t-scope>…</t-scope>` | Gives its contents their own variables. Without one, everything shares a page-wide scope. |
+| `<t-panel corner label width collapsed>…</t-panel>` | Floats its contents in a draggable panel that stays in view while the page scrolls, so controls can follow the reader. |
+
+To write your own, extend `TangleElement`. See `docs/custom-elements.md`.
 
 Declaration order doesn't matter: you can use a variable before the element that declares it.
 
@@ -111,6 +115,25 @@ For charts, `<t-vega>` renders a [Vega-Lite](https://vega.github.io/vega-lite/) 
 - Colors and fonts come from the surrounding CSS (`currentColor`, `--tangle-accent`, `--tangle-chart-*`), and charts re-render when the theme changes.
 - Vega 6.4.0, Vega-Lite 6.4.3 and vega-embed 7.3.0 (about 830 KB minified) load from jsDelivr only when the page has a `<t-vega>`. An existing `window.vega`/`vegaLite`/`vegaEmbed` is reused, or set other URLs with `configure({ vegaUrl, vegaLiteUrl, vegaEmbedUrl })`.
 
+## Observable Plot
+
+`<t-obsplot>` renders an [Observable Plot](https://observablehq.com/plot/) chart. Plot is a JavaScript API, so the chart is an expression over the variables, with `Plot` and `d3` in reach:
+
+```html
+<p>A wave of <t-num name="freq" min="0.5" max="4" step="0.5">2</t-num> Hz.</p>
+<t-obsplot>
+  <script type="text/plain">
+  { height: 200,
+    marks: [Plot.line(d3.range(0, 3, 0.01), { x: (t) => t, y: (t) => Math.sin(2 * Math.PI * freq * t) })] }
+  </script>
+</t-obsplot>
+```
+
+- The expression gives Plot options, an array of marks, or a chart made with `Plot.plot`. Every variable it reads (also inside channel functions) is tracked, and the chart redraws when one changes.
+- `name="x"` sets the variable `x` to the datum under Plot's pointer (`tip`, `Plot.pointer`), or `null`.
+- The width follows the element, the font comes from `--tangle-chart-font`, and Plot's `currentColor` follows the theme.
+- d3 7.9.0 and Plot 0.6.17 (about 490 KB minified) load from jsDelivr only when the page has a `<t-obsplot>`. An existing `window.d3`/`Plot` is reused, or set other URLs with `configure({ d3Url, plotUrl })`.
+
 ## Expressions
 
 Expressions (`expr`, `\val{…}`) are plain JavaScript evaluated against the scope. A name in an expression is one of:
@@ -149,28 +172,29 @@ scope.eval("a * 2");
 
 Lower-level primitives are exported too: `signal`, `computed`, `effect`, `untracked`.
 
-### KaTeX and Vega sources
+### KaTeX, Vega and Plot sources
 
 By default KaTeX 0.19.0 comes from jsdelivr. To use a different copy:
 
 - If `window.katex` exists (your blog loads KaTeX itself), it is used.
 - Otherwise, call `configure({ katexUrl, katexCssUrl })` in the same module that imports `tangle.js`.
 - Or set `window.TangleConfig = { katexUrl, katexCssUrl }` before the module loads.
-- Vega works the same way, with `window.vega`, `window.vegaLite` and `window.vegaEmbed`, and the options `vegaUrl`, `vegaLiteUrl` and `vegaEmbedUrl`.
+- Vega works the same way, with `window.vega`, `window.vegaLite` and `window.vegaEmbed`, and the options `vegaUrl`, `vegaLiteUrl` and `vegaEmbedUrl`. So does Plot, with `window.d3` and `window.Plot`, and the options `d3Url` and `plotUrl`.
 
 ## Development
 
 ```sh
 make           # rebuild the docs, then run the tests
 make test      # node --test: signals, formats, expressions, TeX parsing, docs build
-make docs      # regenerate docs/*.html from docs/*.md
-make serve     # serve the site at http://localhost:8000
-make pr        # rebuild and test, push the branch and open a pull request
+make docs      # generate docs/*.html from docs/*.md
+make site      # assemble the published site in _site/
+make serve     # serve the repo at http://localhost:8000 (run make docs first)
+make pr        # test, push the branch and open a pull request
 ```
 
-CI runs `make test` on every push to main and on pull requests.
+CI runs `make test` on every push to main and on pull requests. On main, the Pages workflow also runs `make site` and publishes `_site/` to GitHub Pages.
 
-The docs are written in Markdown (`docs/*.md`), and `site/build.js` turns them into the HTML pages, which are committed. Edit the Markdown, not the HTML. A test fails if the two are out of sync, and `make pr` refuses to push if the docs build left uncommitted changes. Live examples are raw HTML blocks in the Markdown, so the HTML in the docs is the HTML a reader would copy. `llms.txt` is written by hand; update it when a page is added.
+The docs are written in Markdown (`docs/*.md`), and `site/build.js` turns them into the HTML pages. The HTML is generated, not committed (it's gitignored). Live examples are raw HTML blocks in the Markdown, so the HTML in the docs is the HTML a reader would copy. `llms.txt` is written by hand; update it when a page is added.
 
 ## Credits
 

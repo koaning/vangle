@@ -23,6 +23,9 @@
 - [`<t-let>`](docs/t-let.md): a named value computed from other variables.
 - [`<t-out>`](docs/t-out.md): shows the live result of an expression in the text.
 - [`<t-choice>`](docs/t-choice.md): a word the reader clicks to cycle through options, or a toggle.
+- [`<t-text>`](docs/t-text.md): a piece of text the reader clicks to rewrite; its variable holds a string.
+- [`<t-call>`](docs/t-call.md): shows `<t-num>`, `<t-choice>` and `<t-text>` children as the arguments of a function call, `fn(a=1, b='x')`, with the return value as a variable. `tangleCall(fn, options)` builds one from a JavaScript function's parameter defaults.
+- [`<t-tag>`](docs/t-tag.md): shows an HTML tag, `<input type="range" max="10">`, whose attributes are `<t-num>`, `<t-choice>` and `<t-text>` children, with the live element rendered below it. Useful for documenting an element's attributes.
 - [`<t-math>`](docs/t-math.md): a KaTeX formula with draggable `\tangle{}` parameters and live `\val{}` results.
 - [`<t-vega>`](docs/t-vega.md): a Vega-Lite chart (JSON spec in a `<script type="application/json">`, or `src`). Spec params and named data sources with a variable's name are linked to it; Vega loads from jsDelivr only on pages that use it.
 - [`<t-obsplot>`](docs/t-obsplot.md): an Observable Plot chart, written as a JavaScript expression (Plot options or an array of marks) in a `<script type="text/plain">`, or `src`. It can use `Plot`, `d3` and the variables, and redraws when a variable it read changes. `name="x"` puts the datum under Plot's pointer into `x`. d3 and Plot load from jsDelivr only on pages that use it.
@@ -37,5 +40,5 @@ Complete small documents that combine the elements with a script.
 
 ## Reference
 
-- [JavaScript API](docs/javascript.md): `scopeOf`, scope methods, effects, `TangleElement`, signals, `registerFunction`, `registerFormat` and `configure`.
+- [JavaScript API](docs/javascript.md): `scopeOf`, scope methods, effects, `TangleElement`, signals, `registerFunction`, `registerFormat`, `tangleCall` and `configure`.
 - [Styling](docs/styling.md): CSS custom properties, selectors and states, recipes and dark mode.

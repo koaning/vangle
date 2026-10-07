@@ -24,6 +24,20 @@ as in `<t-num name="price" value="1000" format="$%,d"></t-num>`.
 | `label` | the name | The accessible name screen readers announce. |
 | `pixels-per-step` | `5` | How far the pointer must travel to change the value by one step. Raise it for finer control. |
 
+Try them out: change the attributes in the code, then drag the number below it. This uses
+[`<t-tag>`](t-tag.md).
+
+<t-scope class="example">
+  <t-tag tag='t-num name="w"'>
+    <t-num name="min" max="10">0</t-num>
+    <t-num name="max" min="1" max="100">20</t-num>
+    <t-choice name="step" options="1, 0.5, 0.1, 5">1</t-choice>
+    <t-choice name="format" options="%s, %.1f m, $%d">%s</t-choice>
+    <t-num name="pps" attr="pixels-per-step" min="1" max="30">5</t-num>
+    4
+  </t-tag>
+</t-scope>
+
 ## Interaction
 
 | Input | Effect |

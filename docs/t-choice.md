@@ -21,7 +21,8 @@ A word the reader clicks to cycle through a list of options. With two options, i
 ## Labels and values
 
 The label is what the reader sees. The value is what expressions get. Values that look like numbers
-become numbers, so `per week:52` gives the variable the number `52`. Without a
+become numbers, so `per week:52` gives the variable the number `52`, and `true` and `false` become
+booleans. Without a
 `:value`, the label is the value, and expressions compare against the text:
 
 <t-scope class="example" data-show-source="open">
@@ -33,7 +34,8 @@ become numbers, so `per week:52` gives the variable the number `52`. Without a
 
 ## Toggles
 
-A two-option choice with `0` and `1` as values works as a switch:
+A two-option choice with `0` and `1` as values works as a switch. Options named `true` and `false`
+become real booleans, so `options="true, false"` works too:
 
 <t-scope class="example" data-show-source="open">
   <p>Shipping is <t-out expr="express ? 25 : 5" format="$%d"></t-out> with

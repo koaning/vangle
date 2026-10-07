@@ -5,6 +5,10 @@
   --tangle-soft: 14%; /* strength of the hover/drag highlight */
   --tangle-surface: #fff;
   --tangle-error: #c9382b;
+  --tangle-muted: 55%; /* strength of the punctuation in <t-call> and <t-tag> */
+  --tangle-code-tag: #6f5cbd;
+  --tangle-code-attr: #b45b1b;
+  --tangle-code-string: #147a68;
   --tangle-chart-grid: 12%; /* strength of the gridlines */
   --tangle-chart-text: 60%; /* strength of the tick and axis labels */
   --tangle-chart-font: 12px ui-sans-serif, system-ui, sans-serif;
@@ -14,6 +18,9 @@
   :root:not([data-theme="light"]) {
     --tangle-accent: #75a7ff;
     --tangle-surface: #22201d;
+    --tangle-code-tag: #b9a8ff;
+    --tangle-code-attr: #ffad66;
+    --tangle-code-string: #5ed5bd;
   }
 }
 
@@ -21,6 +28,9 @@
 :root.dark {
   --tangle-accent: #75a7ff;
   --tangle-surface: #22201d;
+  --tangle-code-tag: #b9a8ff;
+  --tangle-code-attr: #ffad66;
+  --tangle-code-string: #5ed5bd;
 }
 
 t-var,
@@ -122,6 +132,130 @@ t-choice:focus-visible {
   background: color-mix(in srgb, var(--tangle-color, var(--tangle-accent)) var(--tangle-soft), transparent);
 }
 
+/* Editable text ----------------------------------------------------------- */
+
+t-text {
+  color: var(--tangle-color, var(--tangle-accent));
+  border-bottom: 1px dotted currentColor;
+  cursor: text;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 0.18em;
+  outline: none;
+}
+
+t-text:empty {
+  padding-inline: 0.6em;
+}
+
+t-text:hover,
+t-text:focus-visible {
+  background: color-mix(in srgb, var(--tangle-color, var(--tangle-accent)) var(--tangle-soft), transparent);
+}
+
+/* Function calls ---------------------------------------------------------- */
+
+t-call {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
+  white-space: pre;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+t-call[display] {
+  display: block;
+  box-sizing: border-box;
+  width: fit-content;
+  margin: 1rem 0;
+  padding: 0.7em 1em;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 8px;
+  background: var(--tangle-surface);
+  line-height: 1.8;
+}
+
+/* Syntax highlighting, shared with <t-tag>. Values the reader can change keep the accent color. */
+.t-code-punct {
+  color: color-mix(in srgb, currentColor var(--tangle-muted), transparent);
+}
+
+.t-code-tag {
+  color: var(--tangle-code-tag);
+}
+
+.t-code-attr {
+  color: var(--tangle-code-attr);
+}
+
+.t-code-string {
+  color: var(--tangle-code-string);
+}
+
+/* In code, strings get quotes and the color is enough of a hint. */
+t-call t-text::before,
+t-call t-text::after,
+t-call t-choice[data-type="string"]::before,
+t-call t-choice[data-type="string"]::after {
+  content: "'";
+  color: var(--tangle-code-string);
+}
+
+t-call t-num,
+t-call t-choice,
+t-call t-text {
+  border-bottom: 0;
+}
+
+/* HTML tags --------------------------------------------------------------- */
+
+t-tag {
+  display: block;
+  margin: 1rem 0;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 8px;
+  background: var(--tangle-surface);
+  padding: 0.7em 1em 0;
+  white-space: pre;
+}
+
+/* The code is everything but the preview, which keeps the page's own font. */
+t-tag > :not(.t-tag-preview) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.t-tag-flag {
+  color: var(--tangle-accent);
+  cursor: pointer;
+  border-radius: 0.18em;
+  outline: none;
+}
+
+.t-tag-flag:hover,
+.t-tag-flag:focus-visible {
+  background: color-mix(in srgb, var(--tangle-accent) var(--tangle-soft), transparent);
+}
+
+.t-tag-flag.is-off {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+t-tag t-num,
+t-tag t-choice,
+t-tag t-text {
+  border-bottom: 0;
+}
+
+.t-tag-preview {
+  margin: 0.7em -1em 0;
+  padding: 1em;
+  border-top: 1px dashed color-mix(in srgb, currentColor 15%, transparent);
+  white-space: normal;
+}
+
 /* Outputs ----------------------------------------------------------------- */
 
 t-out {
@@ -182,6 +316,11 @@ t-math .katex-html [data-tangle-param] {
   text-align: center;
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--tangle-c) 18%, transparent), 0 6px 20px rgb(0 0 0 / 0.15);
+}
+
+.tangle-editor.is-text {
+  width: 12em;
+  text-align: left;
 }
 
 .tangle-editor.is-invalid {

@@ -11,6 +11,8 @@ so it's easy to fit to your blog's look.
 | `--tangle-soft` | `14%` | Strength of the hover and drag highlight. |
 | `--tangle-surface` | `#fff` (dark: `#22201d`) | Background of the typing field and text of the "drag" hint. |
 | `--tangle-error` | `#c9382b` | Broken outputs and formula errors. |
+| `--tangle-muted` | `55%` | Strength of the punctuation in a [`<t-call>`](t-call.md) or [`<t-tag>`](t-tag.md). |
+| `--tangle-code-tag`, `--tangle-code-attr`, `--tangle-code-string` | `#6f5cbd`, `#b45b1b`, `#147a68` (dark: `#b9a8ff`, `#ffad66`, `#5ed5bd`) | Syntax highlighting in `<t-call>` and `<t-tag>`: tag names, attribute and argument names, and strings. Values the reader can change use the accent color. |
 | `--tangle-color` | | Set per element from a variable's `color` attribute. |
 | `--tangle-chart-grid`, `--tangle-chart-text`, `--tangle-chart-font` | `12%`, `60%`, `12px` system font | Strength of chart gridlines and labels, and their font. See [`<t-vega>`](t-vega.md#theme) and [`<t-obsplot>`](t-obsplot.md#theme). |
 
@@ -41,7 +43,11 @@ The stylesheet behind that example:
 
 | Selector | Matches |
 |---|---|
-| `t-num`, `t-choice`, `t-out` | The elements themselves. |
+| `t-num`, `t-choice`, `t-text`, `t-out`, `t-call`, `t-tag` | The elements themselves. |
+| `.t-call-key`, `.t-call-sep`, `.t-call-open`, `.t-call-close` | The parts a `<t-call>` adds: `name=`, the commas, `fn(` and `)`. `t-call.is-multiline` while it wraps one argument per line. `<t-tag>` has the same parts as `.t-tag-*`. |
+| `.t-code-punct`, `.t-code-tag`, `.t-code-attr`, `.t-code-string`, `.t-code-fn` | The syntax-highlighting tokens inside those parts. |
+| `.t-tag-flag` | A boolean attribute in a `<t-tag>`, which toggles it. `.is-off` while the attribute is off. |
+| `.t-tag-preview` | The live element below a `<t-tag>`'s code. |
 | `t-math [data-tangle-param]` | A `\tangle{}` inside a formula. |
 | `[data-tangle-param]` | Anything draggable: a `<t-num>`, a `\tangle{}`, or [your own element](custom-elements.md#draggable). |
 | `t-math .tangle-val` | A `\val{}` inside a formula. Unstyled by default. |

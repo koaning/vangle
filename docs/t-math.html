@@ -35,6 +35,10 @@
 <li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
 <li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
 </ul>
+<h4>Gallery</h4>
+<ul>
+<li><a href="gallery-matrix.html">Matrix transformations</a></li>
+</ul>
 <h4>Reference</h4>
 <ul>
 <li><a href="javascript.html">JavaScript API</a></li>
@@ -85,6 +89,37 @@ symbol, and the number appears only while they drag or edit it:</p>
   <p>A pendulum of length <t-num name="L" min="0.1" max="5" step="0.1" format="%.1f m">1</t-num> swings with period
     <t-math>T = 2\pi\sqrt{L/g} = \val[%.2f]{2 * Math.PI * Math.sqrt(L / 9.81)}\,\text{s}</t-math>.</p>
 </t-scope>
+<h2 id="matrices">Matrices</h2>
+<p>A matrix is ordinary TeX with a marker in each cell. Declare one variable per entry, and the
+reader can drag any of them:</p>
+<t-scope class="example" data-show-source="open">
+  <t-var name="a" value="2" min="-5" max="5"></t-var>
+  <t-var name="b" value="1" min="-5" max="5"></t-var>
+  <t-var name="c" value="-1" min="-5" max="5"></t-var>
+  <t-var name="d" value="3" min="-5" max="5"></t-var>
+  <t-var name="x" value="1" min="-5" max="5" color="#b45b1b #ffad66"></t-var>
+  <t-var name="y" value="2" min="-5" max="5" color="#b45b1b #ffad66"></t-var>
+  <t-math display>
+    \begin{pmatrix} \tangle{a} &amp; \tangle{b} \\ \tangle{c} &amp; \tangle{d} \end{pmatrix}
+    \begin{pmatrix} \tangle{x} \\ \tangle{y} \end{pmatrix}
+    = \begin{pmatrix} \val{a * x + b * y} \\ \val{c * x + d * y} \end{pmatrix}
+    \qquad
+    \begin{vmatrix} \tangle{a} &amp; \tangle{b} \\ \tangle{c} &amp; \tangle{d} \end{vmatrix}
+    = \val{a * d - b * c}
+  </t-math>
+</t-scope>
+<ul>
+<li>Columns are separated by <code>&amp;amp;</code> (the <code>&amp;</code> written for HTML), and rows by <code>\\</code>.</li>
+<li><code>pmatrix</code> uses round brackets, <code>bmatrix</code> square ones and <code>vmatrix</code> bars, for a determinant.</li>
+<li>A variable can appear in more than one cell. Put the same name in both off-diagonal cells
+and the matrix stays symmetric while the reader drags:
+<code>\begin{pmatrix} 1 &amp;amp; \tangle{r} \\ \tangle{r} &amp;amp; 1 \end{pmatrix}</code>.</li>
+<li>To work with the whole matrix in expressions or a <a href="charts.html">chart script</a>, collect the
+entries with a <a href="t-let.html"><code>&lt;t-let&gt;</code></a>: <code>&lt;t-let name="A" expr="[[a, b], [c, d]]"&gt;&lt;/t-let&gt;</code>
+makes <code>A[0][1]</code> the same as <code>b</code>.</li>
+</ul>
+<p>The <a href="gallery-matrix.html">matrix transformations</a> page in the gallery builds on this, and draws
+what a matrix does to the plane.</p>
 <h2>Attributes</h2>
 <table>
 <thead><tr><th>Attribute</th><th>Description</th></tr></thead>

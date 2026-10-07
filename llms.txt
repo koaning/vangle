@@ -26,6 +26,12 @@
 - [`<t-vega>`](docs/t-vega.md): a Vega-Lite chart (JSON spec in a `<script type="application/json">`, or `src`). Spec params and named data sources with a variable's name are linked to it; Vega loads from jsDelivr only on pages that use it.
 - [`<t-scope>`](docs/t-scope.md): gives part of the page its own set of variables.
 
+## Gallery
+
+Complete small documents that combine the elements with a script.
+
+- [Matrix transformations](docs/gallery-matrix.md): a 2×2 matrix in `<t-math>` whose entries are draggable, drawn as a warped plane. Dragging the basis arrows sets the variables, and preset buttons animate between matrices.
+
 ## Reference
 
 - [JavaScript API](docs/javascript.md): `scopeOf`, scope methods, effects, signals, `registerFunction`, `registerFormat` and `configure`.

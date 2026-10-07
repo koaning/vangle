@@ -33,6 +33,9 @@ export const NAV = [
     ["t-vega", "<code>&lt;t-vega&gt;</code>"],
     ["t-scope", "<code>&lt;t-scope&gt;</code>"],
   ]],
+  ["Gallery", [
+    ["gallery-matrix", "Matrix transformations"],
+  ]],
   ["Reference", [
     ["javascript", "JavaScript API"],
     ["styling", "Styling"],

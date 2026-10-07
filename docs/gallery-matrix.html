@@ -1,0 +1,254 @@
+<!doctype html>
+<!-- Generated from gallery-matrix.md by site/build.js. Edit the Markdown, then run `make docs`. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Matrix transformations · vangle docs</title>
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+<link rel="alternate" type="text/markdown" href="gallery-matrix.md">
+<link rel="stylesheet" href="../tangle.css">
+<link rel="stylesheet" href="../site/site.css">
+<script type="module" src="../tangle.js"></script>
+</head>
+<body class="docs">
+<nav class="docs-nav">
+<div class="docs-nav-top">
+<a class="brand" href="../index.html">vangle</a>
+<button class="theme-toggle" type="button" data-theme-toggle aria-label="Dark mode"></button>
+</div>
+<h4>Guide</h4>
+<ul>
+<li><a href="index.html">Getting started</a></li>
+<li><a href="expressions.html">Expressions &amp; formats</a></li>
+<li><a href="charts.html">Updating a chart</a></li>
+<li><a href="blogging.html">Using it on a blog</a></li>
+</ul>
+<h4>Elements</h4>
+<ul>
+<li><a href="t-num.html"><code>&lt;t-num&gt;</code></a></li>
+<li><a href="t-var.html"><code>&lt;t-var&gt;</code></a></li>
+<li><a href="t-let.html"><code>&lt;t-let&gt;</code></a></li>
+<li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
+<li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
+<li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
+<li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
+<li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
+</ul>
+<h4>Gallery</h4>
+<ul>
+<li><a href="gallery-matrix.html" aria-current="page">Matrix transformations</a></li>
+</ul>
+<h4>Reference</h4>
+<ul>
+<li><a href="javascript.html">JavaScript API</a></li>
+<li><a href="styling.html">Styling</a></li>
+</ul>
+</nav>
+<main>
+<h1>Matrix transformations</h1>
+<p class="lede">A 2×2 matrix moves every point of the plane, and its two columns say where the arrows
+<span class="i-hat">î</span> and <span class="j-hat">ĵ</span> end up. Everything else follows
+from those two arrows: the grid warps with them, and the unit square becomes the shaded shape.
+Drag the numbers in the matrix or the tips of the arrows, or pick a preset.</p>
+<div class="example matrix-demo" data-show-source>
+  <t-scope id="matrix">
+    <t-var name="a" value="1" min="-2" max="2" step="0.1" color="#246bce #75a7ff"></t-var>
+    <t-var name="c" value="0.5" min="-2" max="2" step="0.1" color="#246bce #75a7ff"></t-var>
+    <t-var name="b" value="-0.5" min="-2" max="2" step="0.1" color="#b45b1b #ffad66"></t-var>
+    <t-var name="d" value="1" min="-2" max="2" step="0.1" color="#b45b1b #ffad66"></t-var>
+    <t-let name="det" expr="a * d - b * c"></t-let>
+    <t-math display>
+      \begin{pmatrix} \tangle{a} &amp; \tangle{b} \\ \tangle{c} &amp; \tangle{d} \end{pmatrix}
+      \qquad \det = \val[%.2f]{det} \qquad \text{area} = \val[%.2f]{Math.abs(det)}
+    </t-math>
+    <div class="presets">
+      <button type="button" data-matrix="1 0 0 1">Identity</button>
+      <button type="button" data-matrix="0 -1 1 0">Rotate 90°</button>
+      <button type="button" data-matrix="1 1 0 1">Shear</button>
+      <button type="button" data-matrix="1.5 0 0 0.5">Stretch</button>
+      <button type="button" data-matrix="-1 0 0 1">Mirror</button>
+      <button type="button" data-matrix="1 2 0.5 1">Flatten</button>
+    </div>
+    <svg viewBox="-300 -170 600 340" role="img" aria-label="The plane, warped by the matrix">
+      <defs>
+        <radialGradient id="matrix-fade"><stop offset="0.55" stop-color="white"></stop><stop offset="1" stop-color="black"></stop></radialGradient>
+        <mask id="matrix-edges"><rect x="-300" y="-170" width="600" height="340" fill="url(#matrix-fade)"></rect></mask>
+      </defs>
+      <g mask="url(#matrix-edges)">
+        <g class="paper"></g>
+        <path class="warp i"></path>
+        <path class="warp j"></path>
+      </g>
+      <rect class="unit" x="0" y="-56" width="56" height="56"></rect>
+      <polygon class="image"></polygon>
+      <g class="arrow i"><line></line><polygon></polygon><text>î</text><circle class="handle" r="18"></circle></g>
+      <g class="arrow j"><line></line><polygon></polygon><text>ĵ</text><circle class="handle" r="18"></circle></g>
+    </svg>
+  </t-scope>
+</div>
+<script type="module" data-show-source>
+  import { scopeOf } from "../tangle.js";
+
+  const root = document.querySelector("#matrix");
+  const scope = scopeOf(root);
+  const svg = root.querySelector("svg");
+  const unit = 56; // pixels per unit, with y pointing up
+  const px = (x, y) => [x * unit, -y * unit]; // an [x, y] pair prints as "x,y" in SVG attributes
+
+  // The paper grid never changes, so draw it once. The axes are a little darker.
+  const lines = [];
+  for (let x = -5; x <= 5; x++) lines.push(`<line class="${x ? "" : "axis"}" x1="${x * unit}" x2="${x * unit}" y1="-170" y2="170"/>`);
+  for (let y = -3; y <= 3; y++) lines.push(`<line class="${y ? "" : "axis"}" x1="-300" x2="300" y1="${y * unit}" y2="${y * unit}"/>`);
+  svg.querySelector(".paper").innerHTML = lines.join("");
+
+  const [warpI, warpJ] = svg.querySelectorAll(".warp");
+  const image = svg.querySelector(".image");
+  const arrows = [...svg.querySelectorAll(".arrow")].map((g, i) => ({
+    g, x: ["a", "b"][i], y: ["c", "d"][i],
+    line: g.querySelector("line"), head: g.querySelector("polygon"),
+    label: g.querySelector("text"), handle: g.querySelector(".handle"),
+  }));
+
+  // Draws an arrow from the origin to (x, y), in pixels: a line, a head and a label past the tip.
+  function drawArrow({ line, head, label, handle }, x, y) {
+    const length = Math.hypot(x, y);
+    const [ux, uy] = length ? [x / length, y / length] : [1, 0];
+    const size = Math.min(14, length); // a short arrow gets a smaller head
+    const [bx, by] = [x - ux * size, y - uy * size];
+    line.setAttribute("x2", bx);
+    line.setAttribute("y2", by);
+    head.setAttribute("points", `${x},${y} ${bx - uy * size * 0.45},${by + ux * size * 0.45} ${bx + uy * size * 0.45},${by - ux * size * 0.45}`);
+    label.setAttribute("x", x + ux * 20);
+    label.setAttribute("y", y + uy * 20);
+    handle.setAttribute("cx", x);
+    handle.setAttribute("cy", y);
+  }
+
+  // Redraws the plane whenever a, b, c or d changes (and so det, which is computed from them).
+  scope.effect((s) => {
+    const [a, b, c, d] = ["a", "b", "c", "d"].map((name) => s.get(name));
+    const map = (x, y) => px(a * x + b * y, c * x + d * y);
+
+    // The image of every grid line. Lines that were vertical now run along ĵ, the others along î.
+    const along = (from, to) => `M${from}L${to}`;
+    const n = 12;
+    const vertical = [], horizontal = [];
+    for (let k = -n; k <= n; k++) {
+      vertical.push(along(map(k, -n), map(k, n)));
+      horizontal.push(along(map(-n, k), map(n, k)));
+    }
+    warpJ.setAttribute("d", vertical.join(""));
+    warpI.setAttribute("d", horizontal.join(""));
+
+    image.setAttribute("points", [map(0, 0), map(1, 0), map(1, 1), map(0, 1)].join(" "));
+    svg.classList.toggle("is-flipped", s.get("det") < 0);
+
+    drawArrow(arrows[0], ...map(1, 0));
+    drawArrow(arrows[1], ...map(0, 1));
+  });
+
+  // Dragging an arrow's tip sets its column of the matrix. set() doesn't apply min, max or
+  // step, so the values are rounded and clamped here.
+  const fit = (v) => Math.min(2, Math.max(-2, Math.round(v * 10) / 10));
+  for (const { g, x, y, handle } of arrows) {
+    handle.addEventListener("pointerdown", (event) => {
+      stopTween();
+      handle.setPointerCapture(event.pointerId);
+      g.classList.add("is-dragging");
+      const move = (event) => {
+        const p = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
+        scope.setValues({ [x]: fit(p.x / unit), [y]: fit(-p.y / unit) });
+      };
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("lostpointercapture", () => {
+        handle.removeEventListener("pointermove", move);
+        g.classList.remove("is-dragging");
+      }, { once: true });
+    });
+  }
+
+  // A preset glides to its matrix: every frame sets the four variables a little further along.
+  let frame = null;
+  const stopTween = () => cancelAnimationFrame(frame);
+  for (const button of root.querySelectorAll("[data-matrix]")) {
+    button.addEventListener("click", () => {
+      stopTween();
+      const names = ["a", "b", "c", "d"];
+      const from = names.map((name) => scope.peek(name));
+      const to = button.dataset.matrix.split(" ").map(Number);
+      const start = performance.now();
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / 600);
+        const ease = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+        scope.setValues(Object.fromEntries(names.map((name, i) => [name, from[i] + (to[i] - from[i]) * ease])));
+        if (t < 1) frame = requestAnimationFrame(step);
+      };
+      frame = requestAnimationFrame(step);
+    });
+  }
+  // Dragging a number in the formula takes over from a running preset.
+  root.querySelector("t-math").addEventListener("pointerdown", stopTween);
+</script>
+<style data-show-source>
+  .matrix-demo { --i: light-dark(#246bce, #75a7ff); --j: light-dark(#b45b1b, #ffad66); }
+  .i-hat { color: light-dark(#246bce, #75a7ff); font-style: italic; }
+  .j-hat { color: light-dark(#b45b1b, #ffad66); font-style: italic; }
+
+  .matrix-demo .presets { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem; margin: 0.25rem 0 1rem; }
+  .matrix-demo .presets button { margin: 0; }
+  .matrix-demo svg { display: block; width: 100%; height: auto; }
+
+  .matrix-demo .paper line { stroke: currentColor; stroke-opacity: 0.07; }
+  .matrix-demo .paper .axis { stroke-opacity: 0.25; }
+  .matrix-demo .warp { fill: none; stroke-width: 1.25; stroke-opacity: 0.35; }
+  .matrix-demo .warp.i { stroke: var(--i); }
+  .matrix-demo .warp.j { stroke: var(--j); }
+
+  .matrix-demo .unit { fill: none; stroke: currentColor; stroke-opacity: 0.45; stroke-dasharray: 3 4; }
+  .matrix-demo .image { fill: var(--i); fill-opacity: 0.16; stroke: currentColor; stroke-opacity: 0.5; stroke-linejoin: round; }
+  .matrix-demo .is-flipped .image { fill: var(--tangle-error); }
+
+  .matrix-demo .arrow line { stroke-width: 3.5; stroke-linecap: round; }
+  .matrix-demo .arrow.i { stroke: var(--i); fill: var(--i); }
+  .matrix-demo .arrow.j { stroke: var(--j); fill: var(--j); }
+  .matrix-demo .arrow text { stroke: none; font: italic 600 20px Georgia, serif; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+  .matrix-demo .handle { stroke: none; fill-opacity: 0; cursor: grab; touch-action: none; transition: fill-opacity 120ms; }
+  .matrix-demo .handle:hover, .matrix-demo .is-dragging .handle { fill-opacity: 0.18; }
+  .matrix-demo .is-dragging .handle { cursor: grabbing; }
+</style>
+<h2>Things to try</h2>
+<ul>
+<li><strong>Flatten the square.</strong> Make the determinant 0, for example by dragging
+<span class="j-hat">ĵ</span> onto the line through <span class="i-hat">î</span>. The whole
+plane collapses onto that line.</li>
+<li><strong>Flip it.</strong> Drag <span class="i-hat">î</span> past <span class="j-hat">ĵ</span>, and the
+determinant turns negative. The square comes out mirrored, so the shading changes color.</li>
+<li><strong>Read the area.</strong> The area of the shaded shape is the size of the determinant, and every
+square of the grid is scaled by the same amount.</li>
+<li><strong>Rotate.</strong> With <code>a = d</code> and <code>b = -c</code>, the matrix rotates and scales without
+distorting anything. The squares of the warped grid stay square.</li>
+</ul>
+<h2>How it's built</h2>
+<ul>
+<li><strong>Four variables, one formula.</strong> Each matrix entry is a <a href="t-var.html"><code>&lt;t-var&gt;</code></a>, and the
+matrix is a <a href="t-math.html#matrices"><code>&lt;t-math&gt;</code></a> with a <code>\tangle{}</code> in each cell. The colors
+come from the variables, so the first column is <span class="i-hat">blue</span> and the
+second <span class="j-hat">orange</span>, everywhere they appear. A <a href="t-let.html"><code>&lt;t-let&gt;</code></a>
+computes <code>det</code> once, for the formula and for the script, which turns the shading red when
+it's negative.</li>
+<li><strong>One effect draws it all.</strong> The effect reads <code>a</code>, <code>b</code>, <code>c</code>, <code>d</code> and <code>det</code>, and redraws the
+warped grid, the shape and the arrows whenever one changes. The paper grid never changes,
+so it's drawn once, before the effect. See <a href="charts.html">Updating a chart</a>.</li>
+<li><strong>The arrows set variables.</strong> Dragging a tip converts the pointer to plane coordinates and
+calls <code>scope.setValues</code>. Then the formula, the determinant and the drawing all update.</li>
+<li><strong>Presets are animations.</strong> A button sets the four variables on every animation frame,
+easing from the current matrix to the preset's. Nothing else knows it's an animation: it's
+just values changing.</li>
+</ul>
+<p>Open the source panels above for the full markup, script and styles.</p>
+<div class="pager"><a class="prev" href="t-scope.html"><small>Previous</small><code>&lt;t-scope&gt;</code></a><a class="next" href="javascript.html"><small>Next</small>JavaScript API</a></div>
+</main>
+<script src="../site/site.js"></script>
+</body>
+</html>

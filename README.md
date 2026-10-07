@@ -27,7 +27,7 @@ If you import from `tangle.js` in your own module (to register functions, or for
 Serve the repo locally (`python3 -m http.server`) and open:
 
 - `index.html` for the demos.
-- `docs/index.html` for the documentation: a page per element with live examples, plus guides on expressions and formats, blogging (Markdown, KaTeX, CSP), the JavaScript API, and styling.
+- `docs/index.html` for the documentation: a page per element with live examples, guides on expressions and formats, blogging (Markdown, KaTeX, CSP), the JavaScript API and styling, and a gallery of complete examples.
 - `llms.txt` for LLMs. It links to the Markdown source of each docs page.
 
 ## Elements

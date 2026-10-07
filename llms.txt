@@ -34,6 +34,9 @@
 Complete small documents that combine the elements with a script.
 
 - [Matrix transformations](docs/gallery-matrix.md): a 2×2 matrix in `<t-math>` whose entries are draggable, drawn as a warped plane. Dragging the basis arrows sets the variables, and preset buttons animate between matrices.
+- [Amdahl's law](docs/gallery-amdahl.md): speedup against cores for two programs with draggable serial fractions, built from markup alone: `<t-num>`, `<t-let>`, a `<t-math>` formula and a `<t-obsplot>` chart.
+- [The winner's curse](docs/gallery-winners-curse.md): simulated auctions where the highest guess overpays. Sections share page-wide variables, a script registers seeded random functions for the expressions, and `<t-obsplot>` charts show one auction, 2,000 auctions, and the cure of shaving your bid.
+- [McNugget numbers](docs/gallery-mcnuggets.md): which totals boxes of 6, 9 and 20 can make. A registered function searches the totals, a `scope.effect` colors a grid, and pointing at a cell sets a variable. A second scope checks the two-box formula `pq − p − q`.
 
 ## Reference
 

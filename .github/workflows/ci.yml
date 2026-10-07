@@ -13,5 +13,4 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Includes a check that docs/*.html is up to date with docs/*.md.
       - run: make test

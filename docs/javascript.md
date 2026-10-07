@@ -142,11 +142,13 @@ stop();
 ## Configuration {#configuration}
 
 `configure(options)` changes global defaults. Call it in the same module that imports
-`tangle.js`, before the first formula loads KaTeX or the first [`<t-vega>`](t-vega.md) loads Vega.
+`tangle.js`, before the first formula loads KaTeX, the first [`<t-vega>`](t-vega.md) loads Vega, or the first
+[`<t-obsplot>`](t-obsplot.md) loads Plot.
 
 | Option | Default | Description |
 |---|---|---|
 | `katexUrl` | jsDelivr, KaTeX 0.19.0 | The KaTeX ES module to import. |
 | `katexCssUrl` | jsDelivr, KaTeX 0.19.0 | The KaTeX stylesheet, added if the page has none. |
 | `vegaUrl`, `vegaLiteUrl`, `vegaEmbedUrl` | jsDelivr: Vega 6.4.0, Vega-Lite 6.4.3, vega-embed 7.3.0 | The three Vega scripts, loaded in order. Each is skipped if its global (`vega`, `vegaLite`, `vegaEmbed`) already exists. |
+| `d3Url`, `plotUrl` | jsDelivr: d3 7.9.0, Observable Plot 0.6.17 | The two Plot scripts, loaded in order. Each is skipped if its global (`d3`, `Plot`) already exists. |
 | `pixelsPerStep` | `5` | The default drag sensitivity. |

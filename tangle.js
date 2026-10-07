@@ -8,7 +8,7 @@
 //   you consume <t-out expr="cookies * 50"></t-out> calories.
 //
 // Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>;
-// likewise Vega, only if it has a <t-vega>.
+// likewise Vega, only if it has a <t-vega>, and Observable Plot for <t-obsplot>.
 // MIT license.
 
 // ---------------------------------------------------------------------------
@@ -463,24 +463,26 @@ export function toTex(value, fmt, step) {
 }
 
 // ---------------------------------------------------------------------------
-// Lazy loading: KaTeX for <t-math>, Vega for <t-vega>. Each loads only if the
-// page has such an element, and a copy the page already loaded is reused.
+// Lazy loading: KaTeX for <t-math>, Vega for <t-vega>, Plot for <t-obsplot>. Each
+// loads only if the page has such an element, and a copy the page already loaded is reused.
 // ---------------------------------------------------------------------------
 
 const KATEX_VERSION = "0.19.0";
-const VEGA_URL = "https://cdn.jsdelivr.net/npm/";
+const CDN = "https://cdn.jsdelivr.net/npm/";
 const config = {
   katexUrl: `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.mjs`,
   katexCssUrl: `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.css`,
-  vegaUrl: `${VEGA_URL}vega@6.4.0/build/vega.min.js`,
-  vegaLiteUrl: `${VEGA_URL}vega-lite@6.4.3/build/vega-lite.min.js`,
-  vegaEmbedUrl: `${VEGA_URL}vega-embed@7.3.0/build/vega-embed.min.js`,
+  vegaUrl: `${CDN}vega@6.4.0/build/vega.min.js`,
+  vegaLiteUrl: `${CDN}vega-lite@6.4.3/build/vega-lite.min.js`,
+  vegaEmbedUrl: `${CDN}vega-embed@7.3.0/build/vega-embed.min.js`,
+  d3Url: `${CDN}d3@7.9.0/dist/d3.min.js`,
+  plotUrl: `${CDN}@observablehq/plot@0.6.17/dist/plot.umd.min.js`,
   pixelsPerStep: 5,
 };
 
 /**
- * Override defaults: { katexUrl, katexCssUrl, vegaUrl, vegaLiteUrl, vegaEmbedUrl, pixelsPerStep }.
- * Call before KaTeX or Vega loads.
+ * Override defaults: { katexUrl, katexCssUrl, vegaUrl, vegaLiteUrl, vegaEmbedUrl, d3Url,
+ * plotUrl, pixelsPerStep }. Call before KaTeX, Vega or Plot loads.
  */
 export function configure(options) {
   Object.assign(config, options);
@@ -524,6 +526,18 @@ function loadVega() {
     if (!globalThis.vegaLite) await loadScript(config.vegaLiteUrl);
     if (!globalThis.vegaEmbed) await loadScript(config.vegaEmbedUrl);
     return globalThis.vegaEmbed;
+  })());
+}
+
+// Plot's UMD build needs d3 as a global, so d3 loads first. Returns { Plot, d3 }.
+let plotPromise = null;
+function loadPlot() {
+  return (plotPromise ??= (async () => {
+    await null; // let a same-module configure() call run first
+    if (globalThis.TangleConfig) Object.assign(config, globalThis.TangleConfig);
+    if (!globalThis.d3) await loadScript(config.d3Url);
+    if (!globalThis.Plot) await loadScript(config.plotUrl);
+    return { Plot: globalThis.Plot, d3: globalThis.d3 };
   })());
 }
 
@@ -1261,6 +1275,111 @@ class TVega extends TangleElement {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Observable Plot: <t-obsplot> evaluates a JavaScript expression against the
+// scope, with Plot and d3 in reach, and redraws whenever a variable it read changes.
+// ---------------------------------------------------------------------------
+
+/** Evaluate `expr` against `scope`, with the names in `extra` (e.g. { Plot, d3 }) taking precedence. */
+export function evalWith(scope, expr, extra) {
+  const target = new Proxy(Object.create(null), {
+    has: (_, key) => key in extra || Reflect.has(scope.proxy, key),
+    get: (_, key) => (typeof key === "string" && key in extra ? extra[key] : scope.proxy[key]),
+  });
+  return compile(expr)(target);
+}
+
+/**
+ * Plot options from what a <t-obsplot> expression returned: an array of marks,
+ * an options object, or an element it already made (returned as is). The
+ * defaults (width, font) give way to the author's own options.
+ */
+export function plotOptions(result, { width, font } = {}) {
+  if (typeof Node !== "undefined" && result instanceof Node) return result;
+  const options = Array.isArray(result) ? { marks: result } : { ...result };
+  options.width ??= width;
+  options.style = typeof options.style === "string" ? options.style : { overflow: "visible", ...font, ...options.style };
+  return options;
+}
+
+/** The font from --tangle-chart-font, as Plot style properties. */
+function plotFont(el) {
+  const font = getComputedStyle(el).getPropertyValue("--tangle-chart-font").match(/([\d.]+)px\s+(.+)$/);
+  return font ? { fontSize: `${font[1]}px`, fontFamily: font[2] } : {};
+}
+
+// <t-obsplot><script type="text/plain">{ marks: [Plot.dot(rows, { x: "a", y: "b" })] }</script></t-obsplot>
+// or <t-obsplot src="chart.js">. With name="x", the datum under the pointer goes into x.
+class TObsplot extends TangleElement {
+  connectedCallback() {
+    this._source ??= this.hasAttribute("src")
+      ? fetch(this.getAttribute("src")).then((r) => {
+          if (!r.ok) throw new Error(`${this.getAttribute("src")}: ${r.status}`);
+          return r.text();
+        })
+      : Promise.resolve(this.querySelector("script")?.textContent ?? this.textContent);
+    if (!this._target) {
+      this._target = document.createElement("div");
+      this._target.className = "tangle-obsplot is-loading";
+      this._target.textContent = "Loading chart…";
+      this.append(this._target);
+    }
+    const token = (this._token = {});
+    Promise.all([loadPlot(), this._source]).then(
+      ([libs, expr]) => {
+        if (this._token === token && this.isConnected) this.start(libs, expr);
+      },
+      (error) => {
+        if (this._token === token) this.showError(error);
+      },
+    );
+  }
+
+  disconnectedCallback() {
+    this._token = null;
+    this._resize?.disconnect();
+    super.disconnectedCallback();
+  }
+
+  start(libs, expr) {
+    const scope = scopeOf(this);
+    const name = this.getAttribute("name");
+    // Plot needs a width in pixels: follow the element's.
+    const width = new Signal(this.clientWidth || 640);
+    this._resize = new ResizeObserver(() => {
+      if (this.clientWidth) width.value = this.clientWidth;
+    });
+    this._resize.observe(this);
+    this.watch(() => {
+      let figure;
+      try {
+        // Inside the effect, so every variable the expression (or a channel function) reads is tracked.
+        const options = plotOptions(evalWith(scope, expr, libs), { width: width.value, font: plotFont(this) });
+        figure = options instanceof Node ? options : libs.Plot.plot(options);
+      } catch (error) {
+        this.showError(error);
+        return;
+      }
+      this._error?.remove();
+      this._target.className = "tangle-obsplot";
+      this._target.replaceChildren(figure);
+      if (!this._target.isConnected) this.append(this._target);
+      if (name) {
+        // Chart → variable: the datum under Plot's pointer (tip, pointer, crosshair), or null.
+        untracked(() => scope.set(name, figure.value ?? null));
+        figure.addEventListener("input", () => scope.set(name, figure.value ?? null));
+      }
+    });
+  }
+
+  showError(error) {
+    this._target.remove();
+    this._error ??= Object.assign(document.createElement("div"), { className: "tangle-obsplot-error" });
+    this._error.textContent = `t-obsplot: ${error.message}`;
+    this.append(this._error);
+  }
+}
+
 if (typeof window !== "undefined" && window.customElements) {
   document.addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointermove", onPointerMove);
@@ -1284,6 +1403,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-choice": TChoice,
     "t-math": TMath,
     "t-vega": TVega,
+    "t-obsplot": TObsplot,
   };
   for (const [tag, cls] of Object.entries(elements)) {
     if (!customElements.get(tag)) customElements.define(tag, cls);

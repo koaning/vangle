@@ -1,6 +1,7 @@
 # Updating a chart
 
-For most charts, use [`<t-vega>`](t-vega.md), which draws a Vega-Lite spec and needs no script.
+For most charts, use [`<t-vega>`](t-vega.md), which draws a Vega-Lite spec, or
+[`<t-obsplot>`](t-obsplot.md), which draws an Observable Plot chart. Neither needs a script.
 For any other chart, a few lines of JavaScript do it: the variables stay in the HTML, and a script
 reads them and draws.
 

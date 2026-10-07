@@ -33,6 +33,7 @@
 <li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
 <li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
 <li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
+<li><a href="t-obsplot.html"><code>&lt;t-obsplot&gt;</code></a></li>
 <li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
 </ul>
 <h4>Gallery</h4>
@@ -58,7 +59,7 @@ so it's easy to fit to your blog's look.</p>
 <tr><td><code>--tangle-surface</code></td><td><code>#fff</code> (dark: <code>#22201d</code>)</td><td>Background of the typing field and text of the "drag" hint.</td></tr>
 <tr><td><code>--tangle-error</code></td><td><code>#c9382b</code></td><td>Broken outputs and formula errors.</td></tr>
 <tr><td><code>--tangle-color</code></td><td></td><td>Set per element from a variable's <code>color</code> attribute.</td></tr>
-<tr><td><code>--tangle-chart-grid</code>, <code>--tangle-chart-text</code>, <code>--tangle-chart-font</code></td><td><code>12%</code>, <code>60%</code>, <code>12px</code> system font</td><td>Strength of chart gridlines and labels, and their font. See <a href="t-vega.html#theme"><code>&lt;t-vega&gt;</code></a>.</td></tr>
+<tr><td><code>--tangle-chart-grid</code>, <code>--tangle-chart-text</code>, <code>--tangle-chart-font</code></td><td><code>12%</code>, <code>60%</code>, <code>12px</code> system font</td><td>Strength of chart gridlines and labels, and their font. See <a href="t-vega.html#theme"><code>&lt;t-vega&gt;</code></a> and <a href="t-obsplot.html#theme"><code>&lt;t-obsplot&gt;</code></a>.</td></tr>
 </tbody>
 </table>
 <p>Set them on <code>:root</code> to restyle the whole site, or on any container to restyle part of a page:</p>
@@ -95,6 +96,7 @@ so it's easy to fit to your blog's look.</p>
 <tr><td><code>t-out.is-error</code></td><td>An output whose expression threw.</td></tr>
 <tr><td><code>.tangle-math-error</code></td><td>The message shown in place of a formula that doesn't parse.</td></tr>
 <tr><td><code>.tangle-vega</code></td><td>A Vega chart. <code>.is-loading</code> until Vega has loaded; <code>.tangle-vega-error</code> replaces it on failure. See <a href="t-vega.html#how-vega-loads"><code>&lt;t-vega&gt;</code></a>.</td></tr>
+<tr><td><code>.tangle-obsplot</code></td><td>An Observable Plot chart. <code>.is-loading</code> until Plot has loaded; <code>.tangle-obsplot-error</code> replaces it when loading fails or the expression throws. See <a href="t-obsplot.html"><code>&lt;t-obsplot&gt;</code></a>.</td></tr>
 </tbody>
 </table>
 <h3>Recipes</h3>

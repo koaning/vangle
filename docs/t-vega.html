@@ -33,6 +33,7 @@
 <li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
 <li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
 <li><a href="t-vega.html" aria-current="page"><code>&lt;t-vega&gt;</code></a></li>
+<li><a href="t-obsplot.html"><code>&lt;t-obsplot&gt;</code></a></li>
 <li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
 </ul>
 <h4>Gallery</h4>
@@ -170,7 +171,7 @@ bars and the rest of the chart aren't rebuilt.</li>
 together, and the chart redraws once.</li>
 <li><strong>A theme change</strong> re-renders the whole chart, since every color changes.</li>
 </ul>
-<h2>Theme</h2>
+<h2 id="theme">Theme</h2>
 <p>Unless the spec says otherwise, the chart takes its look from the CSS around it:</p>
 <ul>
 <li>text, axes and gridlines from the text color (<code>currentColor</code>),</li>
@@ -189,7 +190,7 @@ for data colors, as in <code>"config": { "range": { "category": { "scheme": "tab
 <tr><td><code>renderer</code></td><td><code>svg</code></td><td><code>svg</code>, or <code>canvas</code>, which is faster for many thousands of points.</td></tr>
 </tbody>
 </table>
-<h2>How Vega loads</h2>
+<h2 id="how-vega-loads">How Vega loads</h2>
 <p>The first <code>&lt;t-vega&gt;</code> on a page loads three scripts from jsDelivr, in order: Vega 6.4.0,
 Vega-Lite 6.4.3 and vega-embed 7.3.0. That's about 830 KB of minified JavaScript (less over the
 network, because it's compressed), which is why it isn't part of <code>tangle.js</code>. Pages without a
@@ -205,7 +206,7 @@ Content-Security-Policy needs <code>'unsafe-eval'</code> for both.</li>
 </ul>
 <p>Until Vega has loaded, the element shows "Loading chart…" (<code>.tangle-vega.is-loading</code>). A failure
 to load Vega or to parse the spec shows a message in its place (<code>.tangle-vega-error</code>).</p>
-<div class="pager"><a class="prev" href="t-math.html"><small>Previous</small><code>&lt;t-math&gt;</code></a><a class="next" href="t-scope.html"><small>Next</small><code>&lt;t-scope&gt;</code></a></div>
+<div class="pager"><a class="prev" href="t-math.html"><small>Previous</small><code>&lt;t-math&gt;</code></a><a class="next" href="t-obsplot.html"><small>Next</small><code>&lt;t-obsplot&gt;</code></a></div>
 </main>
 <script src="../site/site.js"></script>
 </body>

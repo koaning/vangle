@@ -33,6 +33,7 @@
 <li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
 <li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
 <li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
+<li><a href="t-obsplot.html"><code>&lt;t-obsplot&gt;</code></a></li>
 <li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
 </ul>
 <h4>Gallery</h4>
@@ -163,13 +164,15 @@ stop();</code></pre>
 </table>
 <h2 id="configuration">Configuration</h2>
 <p><code>configure(options)</code> changes global defaults. Call it in the same module that imports
-<code>tangle.js</code>, before the first formula loads KaTeX or the first <a href="t-vega.html"><code>&lt;t-vega&gt;</code></a> loads Vega.</p>
+<code>tangle.js</code>, before the first formula loads KaTeX, the first <a href="t-vega.html"><code>&lt;t-vega&gt;</code></a> loads Vega, or the first
+<a href="t-obsplot.html"><code>&lt;t-obsplot&gt;</code></a> loads Plot.</p>
 <table>
 <thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
 <tbody>
 <tr><td><code>katexUrl</code></td><td>jsDelivr, KaTeX 0.19.0</td><td>The KaTeX ES module to import.</td></tr>
 <tr><td><code>katexCssUrl</code></td><td>jsDelivr, KaTeX 0.19.0</td><td>The KaTeX stylesheet, added if the page has none.</td></tr>
 <tr><td><code>vegaUrl</code>, <code>vegaLiteUrl</code>, <code>vegaEmbedUrl</code></td><td>jsDelivr: Vega 6.4.0, Vega-Lite 6.4.3, vega-embed 7.3.0</td><td>The three Vega scripts, loaded in order. Each is skipped if its global (<code>vega</code>, <code>vegaLite</code>, <code>vegaEmbed</code>) already exists.</td></tr>
+<tr><td><code>d3Url</code>, <code>plotUrl</code></td><td>jsDelivr: d3 7.9.0, Observable Plot 0.6.17</td><td>The two Plot scripts, loaded in order. Each is skipped if its global (<code>d3</code>, <code>Plot</code>) already exists.</td></tr>
 <tr><td><code>pixelsPerStep</code></td><td><code>5</code></td><td>The default drag sensitivity.</td></tr>
 </tbody>
 </table>

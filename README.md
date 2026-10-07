@@ -38,7 +38,10 @@ Serve the repo locally (`python3 -m http.server`) and open:
 | `<t-var name="x" value min max step color format>` | Declares a variable invisibly, for example one used only in formulas. |
 | `<t-let name="y" expr="x * 2">` | A named computed value. Other expressions and formulas can use it. |
 | `<t-out expr="x * 2" format="%.1f">` | Shows the result of an expression. |
-| `<t-choice name="n" options="yearly:1, monthly:12">monthly</t-choice>` | Click to cycle through options. Each option is `label` or `label:value`, and numeric values become numbers. Two options make a toggle. |
+| `<t-choice name="n" options="yearly:1, monthly:12">monthly</t-choice>` | Click to cycle through options. Each option is `label` or `label:value`, numeric values become numbers, and `true`/`false` become booleans. Two options make a toggle. |
+| `<t-text name="who">reader</t-text>` | Click to rewrite a piece of text. The variable holds a string. |
+| `<t-call fn="f" name="y">…</t-call>` | Shows its `<t-num>`, `<t-choice>` and `<t-text>` children as a call, `f(a=1, b='x')`. With `name`, the return value becomes a variable. `tangleCall(fn)` builds one from a JS function. |
+| `<t-tag tag="progress">…</t-tag>` | Shows an HTML tag whose attributes are `<t-num>`, `<t-choice>` and `<t-text>` children, with the live element below it. Handy for documenting an element. |
 | `<t-math display>…</t-math>` | A KaTeX formula with live markers (see below). Omit `display` for inline math. |
 | `<t-vega>…</t-vega>` | A Vega-Lite chart, with its spec in a `<script type="application/json">` or `src`. Vega loads only if the page has one. See [Vega](#vega). |
 | `<t-scope>…</t-scope>` | Gives its contents their own variables. Without one, everything shares a page-wide scope. |

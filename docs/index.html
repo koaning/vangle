@@ -31,6 +31,9 @@
 <li><a href="t-let.html"><code>&lt;t-let&gt;</code></a></li>
 <li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
 <li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
+<li><a href="t-text.html"><code>&lt;t-text&gt;</code></a></li>
+<li><a href="t-call.html"><code>&lt;t-call&gt;</code></a></li>
+<li><a href="t-tag.html"><code>&lt;t-tag&gt;</code></a></li>
 <li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
 <li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
 <li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
@@ -77,9 +80,10 @@ draggable number. Its text, <code>3</code>, is the starting value.</li>
 <h3>Variables</h3>
 <p>Every value in the document is a named <em>variable</em>. A variable is declared by
 <a href="t-num.html"><code>&lt;t-num&gt;</code></a>,
-<a href="t-var.html"><code>&lt;t-var&gt;</code></a> or
-<a href="t-choice.html"><code>&lt;t-choice&gt;</code></a> (values the reader can change), or by
-<a href="t-let.html"><code>&lt;t-let&gt;</code></a> (values computed from other variables).
+<a href="t-var.html"><code>&lt;t-var&gt;</code></a>,
+<a href="t-choice.html"><code>&lt;t-choice&gt;</code></a> or
+<a href="t-text.html"><code>&lt;t-text&gt;</code></a> (values the reader can change), or by
+<a href="t-let.html"><code>&lt;t-let&gt;</code></a> and <a href="t-call.html"><code>&lt;t-call&gt;</code></a> (values computed from other variables).
 Names follow JavaScript identifier rules: <code>rate</code>, <code>x2</code>, <code>total_cost</code>.</p>
 <h3>Reactivity</h3>
 <p>Expressions are plain JavaScript (see <a href="expressions.html">Expressions &amp; formats</a>).
@@ -107,6 +111,9 @@ RSS readers and no-JS browsers still get a readable sentence.</p>
 <tr><td><a href="t-let.html"><code>&lt;t-let&gt;</code></a></td><td>A named value computed from other variables.</td></tr>
 <tr><td><a href="t-out.html"><code>&lt;t-out&gt;</code></a></td><td>Showing the live result of an expression in the text.</td></tr>
 <tr><td><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></td><td>A word the reader clicks to cycle through options, or a toggle.</td></tr>
+<tr><td><a href="t-text.html"><code>&lt;t-text&gt;</code></a></td><td>A piece of text the reader clicks to rewrite.</td></tr>
+<tr><td><a href="t-call.html"><code>&lt;t-call&gt;</code></a></td><td>A function call whose arguments the reader can change, with the result as a variable.</td></tr>
+<tr><td><a href="t-tag.html"><code>&lt;t-tag&gt;</code></a></td><td>An HTML tag whose attributes the reader can change, with the live element below it.</td></tr>
 <tr><td><a href="t-math.html"><code>&lt;t-math&gt;</code></a></td><td>A KaTeX formula with draggable parameters and live results.</td></tr>
 <tr><td><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></td><td>Giving part of the page its own variables.</td></tr>
 </tbody>

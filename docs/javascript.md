@@ -81,7 +81,7 @@ browser loads a module once per URL, so `/tangle.js` and `/tangle.js?v=2` would 
 two separate copies with separate variables.
 
 ```js
-import { scopeOf, registerFunction, registerFormat, configure } from "/tangle.js";
+import { scopeOf, registerFunction, registerFormat, tangleCall, configure } from "/tangle.js";
 ```
 
 ## Scopes {#scopes}
@@ -138,6 +138,13 @@ stop();
 | `registerFormat(name, fn)` | Adds a named format. `fn(value)` returns a string. |
 | `formatValue(value, format, step)` | Formats a value the way the elements do. |
 | `formats` | The registry of named formats, as a plain object. |
+
+## Function calls
+
+| Export | Description |
+|---|---|
+| `tangleCall(fn, { name, params })` | Builds a [`<t-call>`](t-call.md#tanglecall) with one argument per parameter of `fn`, typed by its default. |
+| `parseParams(fn)` | Reads a function's parameters and evaluates their defaults: `[{ name, value, hasDefault }]`. |
 
 ## Configuration {#configuration}
 

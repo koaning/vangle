@@ -13,6 +13,7 @@ import {
   snap,
   vegaBindings,
   diffRows,
+  parseParams,
 } from "../tangle.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve));
@@ -153,6 +154,31 @@ test("toTex escapes formatted values for KaTeX", () => {
   assert.equal(toTex(-2), "-2");
   assert.equal(toTex("complex"), String.raw`\text{complex}`);
   assert.equal(toTex(5, "%d km"), String.raw`\text{5 km}`);
+});
+
+test("parseParams reads names and literal defaults from any function form", () => {
+  const simple = (fn) => parseParams(fn).map(({ name, value }) => [name, value]);
+  function train(lr = 0.01, epochs = 10, opt = "adam", shuffle = true) {}
+  assert.deepEqual(simple(train), [["lr", 0.01], ["epochs", 10], ["opt", "adam"], ["shuffle", true]]);
+  assert.deepEqual(simple((a = -1, b = `x`) => a), [["a", -1], ["b", "x"]]);
+  assert.deepEqual(simple(async (a = 2) => a), [["a", 2]]);
+  assert.deepEqual(simple({ method(a = 3) {} }.method), [["a", 3]]);
+  assert.deepEqual(simple((x) => x), [["x", undefined]]);
+  assert.deepEqual(simple(function () {}), []);
+  assert.deepEqual(parseParams(function (a, b = 1) {})[0], { name: "a", value: undefined, hasDefault: false });
+});
+
+test("parseParams handles commas, brackets and comments inside defaults", () => {
+  const names = (fn) => parseParams(fn).map((p) => [p.name, p.value]);
+  assert.deepEqual(names((s = "a, (b)", t = 'it\'s)', n = Math.max(1, 2)) => s), [["s", "a, (b)"], ["t", "it's)"], ["n", 2]]);
+  assert.deepEqual(names((a = 1 /* , */, b = 2,) => a), [["a", 1], ["b", 2]]);
+});
+
+test("parseParams rejects what it can't turn into an argument", () => {
+  assert.throws(() => parseParams((...rest) => rest), /Rest parameter/);
+  assert.throws(() => parseParams(({ a }) => a), /Destructured/);
+  assert.throws(() => parseParams((a = [1, 2]) => a), /number, string or boolean/);
+  assert.throws(() => parseParams((a = 1, b = a * 2) => b), /default of "b"/);
 });
 
 test("vegaBindings finds top-level params and named data anywhere", () => {

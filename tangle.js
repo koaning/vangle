@@ -463,6 +463,69 @@ export function toTex(value, fmt, step) {
 }
 
 // ---------------------------------------------------------------------------
+// Function signatures: what tangleCall() reads from a JavaScript function.
+// ---------------------------------------------------------------------------
+
+/** Split a parameter list on top-level commas, from the "(" at `open` to its ")". */
+function splitParams(src, open) {
+  const parts = [];
+  let depth = 0;
+  let last = open + 1;
+  for (let i = open + 1; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '"' || ch === "'" || ch === "`") {
+      for (i++; i < src.length && src[i] !== ch; i++) if (src[i] === "\\") i++;
+    } else if (ch === "/" && src[i + 1] === "/") {
+      i = src.indexOf("\n", i);
+      if (i < 0) break;
+    } else if (ch === "/" && src[i + 1] === "*") {
+      i = src.indexOf("*/", i) + 1;
+      if (i <= 0) break;
+    } else if ("([{".includes(ch)) {
+      depth++;
+    } else if (")]}".includes(ch) && depth-- === 0) {
+      parts.push(src.slice(last, i));
+      return parts.map((p) => p.trim()).filter(Boolean);
+    } else if (ch === "," && depth === 0) {
+      parts.push(src.slice(last, i));
+      last = i + 1;
+    }
+  }
+  throw new Error("Unbalanced parameter list");
+}
+
+/**
+ * Read a function's parameters and evaluate their defaults:
+ * `function f(a = 1, b = "x", c)` gives `[{ name: "a", value: 1, hasDefault: true }, …]`.
+ * Defaults must evaluate to a number, string or boolean on their own.
+ */
+export function parseParams(fn) {
+  const src = Function.prototype.toString.call(fn);
+  const bare = /^\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/.exec(src);
+  const open = src.indexOf("(");
+  if (!bare && open < 0) throw new Error("Can't find the parameter list");
+  const parts = bare ? [bare[1]] : splitParams(src, open);
+  return parts.map((part) => {
+    if (part.startsWith("...")) throw new Error(`Rest parameter "${part}" isn't supported`);
+    if (/^[[{]/.test(part)) throw new Error(`Destructured parameter "${part}" isn't supported`);
+    const m = /^([A-Za-z_$][\w$]*)\s*(?:=([\s\S]*))?$/.exec(part);
+    if (!m) throw new Error(`Can't read parameter "${part}"`);
+    const [, name, expr] = m;
+    if (expr === undefined) return { name, value: undefined, hasDefault: false };
+    let value;
+    try {
+      value = new Function(`return (${expr}\n);`)();
+    } catch (error) {
+      throw new Error(`Can't evaluate the default of "${name}": ${error.message}`);
+    }
+    if (!["number", "string", "boolean"].includes(typeof value)) {
+      throw new Error(`The default of "${name}" must be a number, string or boolean`);
+    }
+    return { name, value, hasDefault: true };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Lazy loading: KaTeX for <t-math>, Vega for <t-vega>. Each loads only if the
 // page has such an element, and a copy the page already loaded is reused.
 // ---------------------------------------------------------------------------
@@ -667,23 +730,26 @@ function onKeyDown(event) {
 
 // Click without dragging (or press Enter) to type a value. Accepts numbers
 // ("1,250") or expressions over the scope ("2 * Math.PI", "cookies + 1").
-function openEditor(el) {
+// A <t-text> opens it in text mode, which keeps whatever is typed.
+function openEditor(el, { text = false } = {}) {
   closeEditor(false);
-  const { scope, name } = paramOf(el);
+  const scope = scopeOf(el);
+  const name = text ? el.getAttribute("name") : el.dataset.tangleParam;
   const meta = scope.slot(name).meta.peek();
   const value = scope.peek(name);
   const input = document.createElement("input");
   input.type = "text";
-  input.inputMode = "decimal";
-  input.className = "tangle-editor";
+  input.inputMode = text ? "text" : "decimal";
+  input.className = text ? "tangle-editor is-text" : "tangle-editor";
   input.setAttribute("aria-label", `Set ${meta.label ?? name}`);
-  input.value = typeof value === "number" ? formatValue(value, null, meta.step) : "";
+  if (text) input.value = value == null ? "" : String(value);
+  else input.value = typeof value === "number" ? formatValue(value, null, meta.step) : "";
   if (meta.color) input.style.setProperty("--tangle-color", meta.color);
   const rect = el.getBoundingClientRect();
   input.style.left = `${rect.left + window.scrollX + rect.width / 2}px`;
   input.style.top = `${rect.bottom + window.scrollY + 6}px`;
   document.body.append(input);
-  editor = { input, scope, name, meta, where: occurrence(el) };
+  editor = { input, scope, name, meta, text, where: occurrence(el) };
   active.value = keyOf(scope, name);
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -702,7 +768,9 @@ function openEditor(el) {
 function closeEditor(commit, { strict = false } = {}) {
   if (!editor) return;
   const ed = editor;
-  if (commit) {
+  if (commit && ed.text) {
+    ed.scope.set(ed.name, ed.input.value);
+  } else if (commit) {
     const text = ed.input.value.trim();
     let next = Number(text.replace(/,/g, ""));
     if (text === "" || !Number.isFinite(next)) {
@@ -857,16 +925,21 @@ class TOut extends TangleElement {
 }
 
 // <t-choice name="n" options="yearly:1, monthly:12, daily:365">monthly</t-choice>
-// Click to cycle. Options are "label" or "label:value"; numeric values become numbers.
+// Click to cycle. Options are "label" or "label:value"; numeric values become numbers,
+// and true and false become booleans.
+// From JavaScript, set `el.options = [{ label, value }, …]` before adding it to the page.
 class TChoice extends TangleElement {
   connectedCallback() {
     const name = validName(this);
     if (!name) return;
     const scope = scopeOf(this);
-    const options = (this.getAttribute("options") ?? "").split(",").map((raw) => {
-      const [label, value = label] = raw.split(":").map((s) => s.trim());
-      return { label, value: value !== "" && Number.isFinite(Number(value)) ? Number(value) : value };
-    });
+    const options =
+      this.options ??
+      (this.getAttribute("options") ?? "").split(",").map((raw) => {
+        const [label, value = label] = raw.split(":").map((s) => s.trim());
+        if (value === "true" || value === "false") return { label, value: value === "true" };
+        return { label, value: value !== "" && Number.isFinite(Number(value)) ? Number(value) : value };
+      });
     if (!options.length || !options[0].label) {
       console.error('tangle: <t-choice> needs options="a, b, c"', this);
       return;
@@ -895,8 +968,10 @@ class TChoice extends TangleElement {
     this.addEventListener("keydown", this._onKey);
     this.watch(() => {
       const meta = scope.meta(name);
-      const option = options[indexOf(scope.get(name))];
-      this.textContent = option ? option.label : formatValue(scope.get(name));
+      const value = scope.get(name);
+      const option = options[indexOf(value)];
+      this.textContent = option ? option.label : formatValue(value);
+      this.dataset.type = typeof value;
       this.setAttribute("aria-label", `${meta.label ?? name}: ${this.textContent}. Click to change.`);
       if (meta.color) this.style.setProperty("--tangle-color", meta.color);
     });
@@ -905,6 +980,264 @@ class TChoice extends TangleElement {
     super.disconnectedCallback();
     this.removeEventListener("click", this._onClick);
     this.removeEventListener("keydown", this._onKey);
+  }
+}
+
+// <t-text name="title">Hello</t-text>
+// An editable string. Click (or press Enter) to type a new one.
+class TText extends TangleElement {
+  connectedCallback() {
+    const name = validName(this);
+    if (!name) return;
+    const scope = scopeOf(this);
+    this._initial ??= this.getAttribute("value") ?? this.textContent.trim();
+    declare(this, scope, name, this._initial);
+    this.tabIndex = 0;
+    this.setAttribute("role", "button");
+    this._onClick ??= () => openEditor(this, { text: true });
+    this._onKey ??= (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      openEditor(this, { text: true });
+    };
+    this.addEventListener("click", this._onClick);
+    this.addEventListener("keydown", this._onKey);
+    this.watch(() => {
+      const meta = scope.meta(name);
+      this.textContent = formatValue(scope.get(name), this.getAttribute("format") ?? meta.format);
+      this.setAttribute("aria-label", `${meta.label ?? name}: ${this.textContent}. Click to edit.`);
+      if (meta.color) this.style.setProperty("--tangle-color", meta.color);
+    });
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.removeEventListener("click", this._onClick);
+    this.removeEventListener("keydown", this._onKey);
+  }
+}
+
+// Code is a list of tokens: plain strings, or [kind, text] pairs that become
+// <span class="t-code-{kind}"> for syntax highlighting.
+function fillCode(el, tokens) {
+  el.replaceChildren(
+    ...tokens.map((token) => {
+      if (typeof token === "string") return token;
+      const span = document.createElement("span");
+      span.className = `t-code-${token[0]}`;
+      span.textContent = token[1];
+      return span;
+    }),
+  );
+}
+
+// Shared by <t-call> and <t-tag>: shows the named children as code, adding the
+// punctuation around them without moving them. The code stays on one line if it
+// fits, and otherwise puts one argument per line, the way Black formats Python.
+// Subclasses describe the punctuation, as tokens, in syntax(multiline).
+class CodeElement extends TangleElement {
+  connectedCallback() {
+    if (!this._args) this.build();
+    if (typeof ResizeObserver !== "undefined") {
+      // Watch the container too: a wrapped call doesn't grow when there's room again.
+      let box = this.parentElement;
+      while (box && getComputedStyle(box).display === "contents") box = box.parentElement;
+      this._resize ??= new ResizeObserver(() => this.layout());
+      this._resize.observe(this);
+      if (box) this._resize.observe(box);
+    }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._resize?.disconnect();
+  }
+
+  build() {
+    this._els = [...this.children].filter((el) => el.hasAttribute("name"));
+    this._args = this._els.map((el) => el.getAttribute("name"));
+    this._text = "";
+    for (const node of [...this.childNodes]) {
+      if (node.nodeType !== 3) continue;
+      this._text += node.textContent;
+      node.remove();
+    }
+    this._text = this._text.trim();
+    const span = (part) => {
+      const el = document.createElement("span");
+      el.className = `${this.localName}-${part}`;
+      return el;
+    };
+    this._open = span("open");
+    this._close = span("close");
+    this._keys = this._els.map((el) => {
+      const key = span("key");
+      el.before(key);
+      return key;
+    });
+    this._seps = this._els.map((el) => {
+      const sep = span("sep");
+      el.after(sep);
+      return sep;
+    });
+    this.prepend(this._open);
+    this.append(this._close);
+    this.layout();
+  }
+
+  layout() {
+    if (!this._open) return;
+    const set = (multiline) => {
+      const syntax = this.syntax(multiline);
+      this.classList.toggle("is-multiline", multiline);
+      fillCode(this._open, syntax.open);
+      fillCode(this._close, syntax.close);
+      this._els.forEach((_, i) => {
+        fillCode(this._keys[i], syntax.key(i));
+        fillCode(this._seps[i], syntax.sep(i));
+      });
+    };
+    set(false);
+    if (this._els.length && this.clientWidth > 0 && this.scrollWidth > this.clientWidth + 1) set(true);
+  }
+}
+
+// <t-call fn="train" name="loss"><t-num name="lr" step="0.01">0.1</t-num>…</t-call>
+// Shows its children as the arguments of a call: train(lr=0.1, …). With a name,
+// the call's result becomes a variable. `fn` names a registered function (or is
+// any expression that gives one); tangleCall() builds a <t-call> from a JS function.
+class TCall extends CodeElement {
+  connectedCallback() {
+    const expr = this.getAttribute("fn");
+    this._label = expr ?? this.fn?.name ?? "f";
+    super.connectedCallback();
+    if (this.hasAttribute("name") && validName(this)) {
+      const args = this._args;
+      scopeOf(this).define(this.getAttribute("name"), (s) => {
+        const fn = this.fn ?? (expr ? s.eval(expr) : undefined);
+        if (typeof fn !== "function") throw new Error(`${expr ?? "fn"} is not a function`);
+        return fn(...args.map((arg) => s.get(arg)));
+      });
+    }
+  }
+
+  syntax(multiline) {
+    const last = this._els.length - 1;
+    const indent = multiline ? "\n    " : "";
+    return {
+      open: [["fn", this._label], ["punct", "("], indent],
+      key: (i) => [["attr", this._args[i]], ["punct", "="]],
+      sep: (i) => (i === last ? [] : [["punct", ","], multiline ? indent : " "]),
+      close: multiline ? [["punct", ","], "\n", ["punct", ")"]] : [["punct", ")"]],
+    };
+  }
+}
+
+const VOID_TAGS = new Set([
+  "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr",
+]);
+
+// <t-tag tag='input type="range"'><t-num name="max">10</t-num>…</t-tag>
+// Shows an HTML tag whose attributes the reader can change, with the live element
+// below it. `tag` is the tag name plus any fixed attributes. Each named child is an
+// attribute (`attr` overrides the name shown); a child marked `content`, or loose
+// text, is what goes between the tags. A true/false value is a boolean attribute.
+class TTag extends CodeElement {
+  connectedCallback() {
+    if (!this._tag) {
+      const template = document.createElement("template");
+      template.innerHTML = `<${this.getAttribute("tag") || "div"}>`;
+      const el = template.content.firstElementChild;
+      this._tag = {
+        name: el?.localName ?? "div",
+        attrs: el ? [...el.attributes].map((a) => [a.name, a.value]) : [],
+      };
+    }
+    super.connectedCallback();
+    const scope = scopeOf(this);
+    if (!this._preview) {
+      this._flags = this._els.map((el, i) => (el.localName === "t-choice" ? this.flag(el, i, scope) : null));
+      this._preview = document.createElement("div");
+      this._preview.className = "t-tag-preview";
+      this.append(this._preview);
+    }
+    this.watch(() => this.render(scope));
+  }
+
+  attrName(i) {
+    return this._els[i].getAttribute("attr") ?? this._args[i];
+  }
+
+  // A boolean attribute shows as its bare name, which toggles it.
+  flag(el, i, scope) {
+    const flag = document.createElement("span");
+    flag.className = "t-tag-flag";
+    flag.hidden = true;
+    flag.tabIndex = 0;
+    flag.setAttribute("role", "switch");
+    const toggle = () => scope.set(this._args[i], !scope.peek(this._args[i]));
+    flag.addEventListener("click", toggle);
+    flag.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      toggle();
+    });
+    el.before(flag);
+    return flag;
+  }
+
+  render(scope) {
+    const { name, attrs } = this._tag;
+    const el = document.createElement(name);
+    for (const [key, value] of attrs) el.setAttribute(key, value);
+    let text = this._text;
+    let relayout = false;
+    this._els.forEach((arg, i) => {
+      const value = scope.get(this._args[i]);
+      const meta = scope.meta(this._args[i]);
+      const shown =
+        typeof value === "number"
+          ? formatValue(value, arg.getAttribute("format") ?? meta.format, meta.step)
+          : value == null ? "" : String(value);
+      const isBool = typeof value === "boolean" && i !== this._content && this._flags[i] !== null;
+      relayout ||= isBool !== this._bool[i];
+      this._bool[i] = isBool;
+      const flag = this._flags[i];
+      if (flag) untracked(() => {
+        arg.hidden = isBool;
+        flag.hidden = !isBool;
+        flag.textContent = this.attrName(i);
+        flag.classList.toggle("is-off", value === false);
+        flag.setAttribute("aria-checked", String(value === true));
+      });
+      if (i === this._content) text = shown;
+      else if (isBool) el.toggleAttribute(this.attrName(i), value);
+      else if (value !== undefined) el.setAttribute(this.attrName(i), shown);
+    });
+    if (text && !VOID_TAGS.has(name)) el.textContent = text;
+    untracked(() => {
+      this._preview.replaceChildren(el);
+      if (relayout) this.layout();
+    });
+  }
+
+  syntax(multiline) {
+    const { name, attrs } = this._tag;
+    const space = multiline ? "\n    " : " ";
+    const attr = (key, value) =>
+      value === "" ? [["attr", key]] : [["attr", key], ["punct", "="], ["string", `"${value}"`]];
+    const end = [multiline ? "\n" : "", ["punct", ">"]];
+    const close = VOID_TAGS.has(name) ? [] : [["punct", "</"], ["tag", name], ["punct", ">"]];
+    this._content ??= this._els.findIndex((el) => el.hasAttribute("content"));
+    this._bool ??= this._els.map(() => false);
+    return {
+      open: [["punct", "<"], ["tag", name], ...attrs.flatMap(([key, value]) => [space, ...attr(key, value)])],
+      key: (i) =>
+        i === this._content ? end
+        : this._bool[i] ? [space]
+        : [space, ["attr", this.attrName(i)], ["punct", "="], ["string", '"']],
+      sep: (i) => (i === this._content || this._bool[i] ? [] : [["string", '"']]),
+      close: this._content >= 0 ? close : [...end, this._text, ...close],
+    };
   }
 }
 
@@ -1261,6 +1594,56 @@ class TVega extends TangleElement {
   }
 }
 
+// ---------------------------------------------------------------------------
+// tangleCall: a <t-call> built from a JavaScript function's parameters.
+// ---------------------------------------------------------------------------
+
+const CALL_ATTRS = {
+  min: "min", max: "max", format: "format", color: "color", label: "label", pixelsPerStep: "pixels-per-step",
+};
+
+/**
+ * Build a <t-call> with one argument per parameter of `fn`. Each default sets
+ * the starting value and the kind of argument: numbers drag, booleans toggle,
+ * strings are editable text. `params` adds settings per parameter:
+ * `{ min, max, step, format, color, label, pixelsPerStep, options, value }`,
+ * where `options` (values, or `{ label, value }` objects) makes it a choice.
+ * Add the result to the page; it joins the scope it lands in.
+ */
+export function tangleCall(fn, { name, params = {} } = {}) {
+  const call = document.createElement("t-call");
+  call.fn = fn;
+  call.setAttribute("fn", fn.name || "f");
+  if (name) call.setAttribute("name", name);
+  for (const param of parseParams(fn)) {
+    const opts = params[param.name] ?? {};
+    const value = opts.value ?? param.value;
+    if (value === undefined) {
+      throw new Error(`tangleCall: "${param.name}" needs a default, or params.${param.name}.value`);
+    }
+    let el;
+    if (opts.options || typeof value === "boolean") {
+      el = document.createElement("t-choice");
+      el.options = (opts.options ?? [true, false]).map((o) =>
+        o !== null && typeof o === "object" ? o : { label: String(o), value: o },
+      );
+    } else if (typeof value === "number") {
+      el = document.createElement("t-num");
+      const step = Number.isInteger(value) ? 1 : 10 ** -Math.min(10, decimals(value));
+      el.setAttribute("step", opts.step ?? step);
+    } else {
+      el = document.createElement("t-text");
+    }
+    el.setAttribute("name", param.name);
+    el.setAttribute("value", String(value));
+    for (const [key, attr] of Object.entries(CALL_ATTRS)) {
+      if (opts[key] != null) el.setAttribute(attr, opts[key]);
+    }
+    call.append(el);
+  }
+  return call;
+}
+
 if (typeof window !== "undefined" && window.customElements) {
   document.addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointermove", onPointerMove);
@@ -1282,6 +1665,9 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-let": TLet,
     "t-out": TOut,
     "t-choice": TChoice,
+    "t-text": TText,
+    "t-call": TCall,
+    "t-tag": TTag,
     "t-math": TMath,
     "t-vega": TVega,
   };

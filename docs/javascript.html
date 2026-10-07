@@ -31,6 +31,9 @@
 <li><a href="t-let.html"><code>&lt;t-let&gt;</code></a></li>
 <li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
 <li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
+<li><a href="t-text.html"><code>&lt;t-text&gt;</code></a></li>
+<li><a href="t-call.html"><code>&lt;t-call&gt;</code></a></li>
+<li><a href="t-tag.html"><code>&lt;t-tag&gt;</code></a></li>
 <li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
 <li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
 <li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
@@ -114,7 +117,7 @@ libraries.</p>
 <p>Import from the <strong>same URL</strong> as your <code>&lt;script type="module"&gt;</code> tag. The
 browser loads a module once per URL, so <code>/tangle.js</code> and <code>/tangle.js?v=2</code> would be
 two separate copies with separate variables.</p>
-<pre><code class="language-js">import { scopeOf, registerFunction, registerFormat, configure } from "/tangle.js";</code></pre>
+<pre><code class="language-js">import { scopeOf, registerFunction, registerFormat, tangleCall, configure } from "/tangle.js";</code></pre>
 <h2 id="scopes">Scopes</h2>
 <p><code>scopeOf(element)</code> returns the scope an element belongs to: its nearest
 <a href="t-scope.html"><code>&lt;t-scope&gt;</code></a>, or the page-wide scope. Call
@@ -159,6 +162,14 @@ stop();</code></pre>
 <tr><td><code>registerFormat(name, fn)</code></td><td>Adds a named format. <code>fn(value)</code> returns a string.</td></tr>
 <tr><td><code>formatValue(value, format, step)</code></td><td>Formats a value the way the elements do.</td></tr>
 <tr><td><code>formats</code></td><td>The registry of named formats, as a plain object.</td></tr>
+</tbody>
+</table>
+<h2>Function calls</h2>
+<table>
+<thead><tr><th>Export</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>tangleCall(fn, { name, params })</code></td><td>Builds a <a href="t-call.html#tanglecall"><code>&lt;t-call&gt;</code></a> with one argument per parameter of <code>fn</code>, typed by its default.</td></tr>
+<tr><td><code>parseParams(fn)</code></td><td>Reads a function's parameters and evaluates their defaults: <code>[{ name, value, hasDefault }]</code>.</td></tr>
 </tbody>
 </table>
 <h2 id="configuration">Configuration</h2>

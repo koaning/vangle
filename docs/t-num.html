@@ -31,6 +31,9 @@
 <li><a href="t-let.html"><code>&lt;t-let&gt;</code></a></li>
 <li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
 <li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
+<li><a href="t-text.html"><code>&lt;t-text&gt;</code></a></li>
+<li><a href="t-call.html"><code>&lt;t-call&gt;</code></a></li>
+<li><a href="t-tag.html"><code>&lt;t-tag&gt;</code></a></li>
 <li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
 <li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
 <li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
@@ -69,6 +72,18 @@ as in <code>&lt;t-num name="price" value="1000" format="$%,d"&gt;&lt;/t-num&gt;<
 <tr><td><code>pixels-per-step</code></td><td><code>5</code></td><td>How far the pointer must travel to change the value by one step. Raise it for finer control.</td></tr>
 </tbody>
 </table>
+<p>Try them out: change the attributes in the code, then drag the number below it. This uses
+<a href="t-tag.html"><code>&lt;t-tag&gt;</code></a>.</p>
+<t-scope class="example">
+  <t-tag tag='t-num name="w"'>
+    <t-num name="min" max="10">0</t-num>
+    <t-num name="max" min="1" max="100">20</t-num>
+    <t-choice name="step" options="1, 0.5, 0.1, 5">1</t-choice>
+    <t-choice name="format" options="%s, %.1f m, $%d">%s</t-choice>
+    <t-num name="pps" attr="pixels-per-step" min="1" max="30">5</t-num>
+    4
+  </t-tag>
+</t-scope>
 <h2>Interaction</h2>
 <table>
 <thead><tr><th>Input</th><th>Effect</th></tr></thead>

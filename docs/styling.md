@@ -43,6 +43,7 @@ The stylesheet behind that example:
 |---|---|
 | `t-num`, `t-choice`, `t-out` | The elements themselves. |
 | `t-math [data-tangle-param]` | A `\tangle{}` inside a formula. |
+| `[data-tangle-param]` | Anything draggable: a `<t-num>`, a `\tangle{}`, or [your own element](custom-elements.md#draggable). |
 | `t-math .tangle-val` | A `\val{}` inside a formula. Unstyled by default. |
 | `.is-hot` | Every number bound to the variable under the pointer. |
 | `.is-active` | Every number bound to the variable being dragged or edited. |

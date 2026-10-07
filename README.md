@@ -43,6 +43,8 @@ Run `make docs`, serve the repo locally (`make serve`) and open:
 | `<t-vega>…</t-vega>` | A Vega-Lite chart, with its spec in a `<script type="application/json">` or `src`. Vega loads only if the page has one. See [Vega](#vega). |
 | `<t-scope>…</t-scope>` | Gives its contents their own variables. Without one, everything shares a page-wide scope. |
 
+To write your own, extend `TangleElement`. See `docs/custom-elements.md`.
+
 Declaration order doesn't matter: you can use a variable before the element that declares it.
 
 ### Attributes for numbers (`t-num`, `t-var`)

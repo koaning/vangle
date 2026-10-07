@@ -52,6 +52,7 @@ The stylesheet behind that example:
 | `.tangle-editor` | The typing field. `.is-invalid` while it holds something unparseable. |
 | `t-out.is-error` | An output whose expression threw. |
 | `.tangle-math-error` | The message shown in place of a formula that doesn't parse. |
+| `t-panel::part(header)`, `::part(label)`, `::part(toggle)`, `::part(body)` | The pieces of a floating panel. `t-panel[collapsed]` while it's minimized. See [`<t-panel>`](t-panel.md#styling). |
 | `.tangle-vega` | A Vega chart. `.is-loading` until Vega has loaded; `.tangle-vega-error` replaces it on failure. See [`<t-vega>`](t-vega.md#how-vega-loads). |
 
 ### Recipes

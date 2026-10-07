@@ -51,6 +51,40 @@ Without `display`, the formula sits in the line of text:
     <t-math>T = 2\pi\sqrt{L/g} = \val[%.2f]{2 * Math.PI * Math.sqrt(L / 9.81)}\,\text{s}</t-math>.</p>
 </t-scope>
 
+## Matrices {#matrices}
+
+A matrix is ordinary TeX with a marker in each cell. Declare one variable per entry, and the
+reader can drag any of them:
+
+<t-scope class="example" data-show-source="open">
+  <t-var name="a" value="2" min="-5" max="5"></t-var>
+  <t-var name="b" value="1" min="-5" max="5"></t-var>
+  <t-var name="c" value="-1" min="-5" max="5"></t-var>
+  <t-var name="d" value="3" min="-5" max="5"></t-var>
+  <t-var name="x" value="1" min="-5" max="5" color="#b45b1b #ffad66"></t-var>
+  <t-var name="y" value="2" min="-5" max="5" color="#b45b1b #ffad66"></t-var>
+  <t-math display>
+    \begin{pmatrix} \tangle{a} &amp; \tangle{b} \\ \tangle{c} &amp; \tangle{d} \end{pmatrix}
+    \begin{pmatrix} \tangle{x} \\ \tangle{y} \end{pmatrix}
+    = \begin{pmatrix} \val{a * x + b * y} \\ \val{c * x + d * y} \end{pmatrix}
+    \qquad
+    \begin{vmatrix} \tangle{a} &amp; \tangle{b} \\ \tangle{c} &amp; \tangle{d} \end{vmatrix}
+    = \val{a * d - b * c}
+  </t-math>
+</t-scope>
+
+- Columns are separated by `&amp;` (the `&` written for HTML), and rows by `\\`.
+- `pmatrix` uses round brackets, `bmatrix` square ones and `vmatrix` bars, for a determinant.
+- A variable can appear in more than one cell. Put the same name in both off-diagonal cells
+  and the matrix stays symmetric while the reader drags:
+  `\begin{pmatrix} 1 &amp; \tangle{r} \\ \tangle{r} &amp; 1 \end{pmatrix}`.
+- To work with the whole matrix in expressions or a [chart script](charts.md), collect the
+  entries with a [`<t-let>`](t-let.md): `<t-let name="A" expr="[[a, b], [c, d]]"></t-let>`
+  makes `A[0][1]` the same as `b`.
+
+The [matrix transformations](gallery-matrix.md) page in the gallery builds on this, and draws
+what a matrix does to the plane.
+
 ## Attributes
 
 | Attribute | Description |

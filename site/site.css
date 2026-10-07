@@ -100,7 +100,10 @@ td:first-child { white-space: nowrap; }
   border: 1px solid var(--line);
   border-radius: 10px;
 }
-.example + details.source { margin-bottom: 1.4rem; }
+/* An example's source panels (markup, script, stylesheet) stack tightly, and the
+   gap to the next paragraph comes after the last one. */
+.example ~ details.source { margin-bottom: 1.4rem; }
+.example ~ details.source:has(+ [data-show-source]) { margin-bottom: 0; }
 .example button {
   margin-bottom: 1rem;
   padding: 0.25rem 0.8rem;
@@ -112,7 +115,7 @@ td:first-child { white-space: nowrap; }
   cursor: pointer;
 }
 .example button:hover { border-color: var(--muted); }
-.example + details.source pre { margin-top: 0.4rem; }
+details.source pre { margin-top: 0.4rem; }
 
 .callout {
   margin: 1.2rem 0;

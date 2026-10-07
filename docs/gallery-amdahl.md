@@ -2,33 +2,32 @@
 
 Twice the cores rarely means twice the speed. Most programs have some work that can't be split:
 steps that wait for each other, or a sync where every core has to agree. Extra cores only speed up
-the rest. Drag the numbers to see how much that serial part costs.
+the rest. A program that spends a fraction *s* of its time on serial work runs
+1 / (*s* + (1 − *s*) / *N*) times faster on *N* cores. Drag the numbers to see how much that
+serial part costs.
 
 <t-scope class="example amdahl" data-show-source>
-  <p>Program <span class="a">A</span> spends
-    <t-num name="sa" min="0" max="50" step="0.5" format="%.1f%%" color="#246bce #75a7ff">1</t-num>
-    of its time syncing, and program <span class="b">B</span> spends
-    <t-num name="sb" min="0" max="50" step="0.5" format="%.1f%%" color="#b45b1b #ffad66">5</t-num>.
-    On <t-num name="cores" min="1" max="1024" pixels-per-step="1" format="%,d">16</t-num> cores,
-    A runs <t-out expr="speedA" format="%.1f×"></t-out> faster and B
-    <t-out expr="speedB" format="%.1f×"></t-out>. However many cores you add, A never gets past
-    <t-out expr="100 / sa" format="%.0f×"></t-out> and B never past
-    <t-out expr="100 / sb" format="%.0f×"></t-out>.</p>
+  <p>On <t-num name="cores" min="1" max="1024" pixels-per-step="1" format="%,d">16</t-num> cores:</p>
+  <ul>
+    <li>Program <span class="a">A</span> spends
+      <t-num name="sa" min="0" max="50" step="0.5" format="%.1f%%" color="#246bce #75a7ff">1</t-num>
+      of its time syncing. It runs <t-out expr="speedA" format="%.1f×"></t-out> faster, and never
+      more than <t-out expr="100 / sa" format="%.0f×"></t-out>.</li>
+    <li>Program <span class="b">B</span> spends
+      <t-num name="sb" min="0" max="50" step="0.5" format="%.1f%%" color="#b45b1b #ffad66">5</t-num>
+      of its time syncing. It runs <t-out expr="speedB" format="%.1f×"></t-out> faster, and never
+      more than <t-out expr="100 / sb" format="%.0f×"></t-out>.</li>
+  </ul>
   <t-let name="speedA" expr="1 / (sa / 100 + (1 - sa / 100) / cores)"></t-let>
   <t-let name="speedB" expr="1 / (sb / 100 + (1 - sb / 100) / cores)"></t-let>
-  <t-math display>
-    S_A = \frac{1}{\tangle{sa} + \dfrac{1 - \tangle{sa}}{\tangle{cores}}} = \val[%.1f]{speedA}\mathord{\times}
-  </t-math>
-  <t-math display>
-    S_B = \frac{1}{\tangle{sb} + \dfrac{1 - \tangle{sb}}{\tangle{cores}}} = \val[%.1f]{speedB}\mathord{\times}
-  </t-math>
   <t-obsplot>
     <script type="text/plain">
     {
       height: 300,
       marginRight: 40,
-      x: { type: "log", domain: [1, 1024], label: "Cores", ticks: [1, 4, 16, 64, 256, 1024], tickFormat: "," },
-      y: { domain: [0, Math.min(1024, 1.15 * Math.max(100 / sa, 100 / sb, cores))], grid: true, label: "Speedup", clamp: true },
+      marginBottom: 40,
+      x: { type: "log", domain: [1, 1024], label: "Cores", labelAnchor: "center", labelArrow: "none", ticks: [1, 4, 16, 64, 256, 1024], tickFormat: "," },
+      y: { domain: [0, Math.min(1024, 1.15 * Math.max(100 / sa, 100 / sb))], grid: true, label: "Speedup", clamp: true },
       marks: [
         // Perfect scaling, for reference: N cores, N times faster.
         Plot.line([1, 1024], { x: (n) => n, y: (n) => n, stroke: "currentColor", strokeOpacity: 0.3, strokeDasharray: "4 4", clip: true }),
@@ -71,12 +70,11 @@ the rest. Drag the numbers to see how much that serial part costs.
 
 - **No script.** Everything on this page is markup: two [`<t-num>`](t-num.md)s for the serial
   fractions, one for the cores, and a [`<t-let>`](t-let.md) per program for its speedup.
-- **The formula is a view.** The [`<t-math>`](t-math.md) formulas use the same variables with
-  `\tangle{}`, so dragging inside the formula moves the numbers in the text and the chart.
-  The colors come from the `color` attribute of each `<t-num>`.
+  The colors come from the `color` attribute of each `<t-num>`, and the chart uses the same two.
 - **The chart is an expression.** The [`<t-obsplot>`](t-obsplot.md) reads `sa`, `sb` and
-  `cores`, so it redraws when any of them changes. The y-axis grows to fit the ceilings, and
-  the curves, ceilings and dots for A and B are made by one `flatMap`.
+  `cores`, so it redraws when any of them changes. The y-axis fits the ceilings, not the cores,
+  so dragging the cores only moves the dots. The curves, ceilings and dots for A and B are made
+  by one `flatMap`.
 - **Wide ranges.** `cores` goes from 1 to 1,024, so its `pixels-per-step` is 1. Hold
   **Shift** with the arrow keys to step by 10.
 

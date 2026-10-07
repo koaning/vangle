@@ -10,26 +10,34 @@ high. So the winner tends to overpay. That's the winner's curse.
 <div class="example curse" data-show-source>
   <t-var name="seed" value="1"></t-var>
   <p>The bucket is worth <t-num name="V" min="50" max="500" step="10" format="$%d">100</t-num>.
-    Each of <t-num name="n" min="2" max="30">8</t-num> bidders guesses it with an error of about
+    Each of <t-num name="n" min="2" max="100">8</t-num> bidders guesses it with an error of about
     <t-num name="sigma" min="0" max="60" format="$%d">20</t-num>, either way. The
     <span class="winner">winner</span> bid <t-out expr="top" format="$%d"></t-out>, so they
     <t-out expr="top >= V ? `overpaid by $${Math.round(top - V)}` : `got it $${Math.round(V - top)} below its value`"></t-out>.</p>
   <t-let name="bids" expr="guesses(V, sigma, n, seed)"></t-let>
   <t-let name="top" expr="Math.max(...bids)"></t-let>
+  <!-- The charts span 3 noise-widths below the true value to 4 above, so they zoom with sigma. -->
+  <t-let name="range" expr="[V - 3 * Math.max(sigma, 5), V + 4 * Math.max(sigma, 5)]"></t-let>
   <t-obsplot>
     <script type="text/plain">
     {
-      height: 150,
-      x: { domain: [V - 150, V + 150], label: "Bid ($)" },
+      height: 160,
+      marginTop: 24,
+      marginBottom: 40,
+      x: { domain: range, label: "Bid ($)", labelAnchor: "center", labelArrow: "none" },
+      y: { axis: null, domain: [0, 1] },
       marks: [
         Plot.ruleX([V], { strokeWidth: 2 }),
-        Plot.text([V], { x: (v) => v, text: () => "true value", frameAnchor: "top", dx: 6, textAnchor: "start" }),
-        Plot.dotX(bids, Plot.dodgeY({
-          x: (b) => b,
-          r: 6,
-          fill: (b) => (b === top ? "var(--winner)" : "var(--tangle-accent)"),
+        Plot.text([V], { x: (v) => v, text: () => "true value", frameAnchor: "top", dy: -14 }),
+        // Each bid gets a fixed height of its own (golden-ratio steps), and the winner is drawn last.
+        Plot.dot(bids.map((bid, i) => ({ bid, y: 0.05 + 0.9 * ((i * 0.618034) % 1), winner: i === bids.indexOf(top) }))
+          .sort((p, q) => p.winner - q.winner), {
+          x: "bid",
+          y: "y",
+          r: n > 40 ? 4 : 6,
+          fill: (d) => (d.winner ? "var(--winner)" : "var(--tangle-accent)"),
           fillOpacity: 0.8
-        }))
+        })
       ]
     }
     </script>
@@ -73,6 +81,22 @@ high. So the winner tends to overpay. That's the winner's curse.
     return wins;
   }
 
+  // The average overpayment for every crowd size from 2 to `most` bidders, in one pass. Auction
+  // `run` starts with the same guesses for any n, so its winner with one more bidder is the
+  // larger of its winner so far and one more guess. The true value cancels out.
+  function overpayments(sigma, most, runs, seed) {
+    const totals = new Array(most + 1).fill(0);
+    for (let run = 0; run < runs; run++) {
+      const rand = random(seed * 100003 + run);
+      let top = -Infinity;
+      for (let n = 1; n <= most; n++) {
+        top = Math.max(top, normal(rand));
+        totals[n] += top;
+      }
+    }
+    return totals.slice(2).map((total, i) => ({ n: i + 2, overpay: sigma * total / runs }));
+  }
+
   // How many σ the largest of n standard normal guesses lands above the mean, by Blom's
   // approximation a_n ≈ Φ⁻¹((n − 0.375) / (n + 0.25)). Φ⁻¹ uses Winitzki's formula for erf⁻¹.
   function topGap(n) {
@@ -83,6 +107,7 @@ high. So the winner tends to overpay. That's the winner's curse.
 
   registerFunction("guesses", guesses);
   registerFunction("auctions", auctions);
+  registerFunction("overpayments", overpayments);
   registerFunction("topGap", topGap);
   registerFunction("mean", (xs) => xs.reduce((sum, x) => sum + x, 0) / xs.length);
 
@@ -101,25 +126,28 @@ few times. Now and then the winner gets a bargain, but not often.
 
 ## Repeat it
 
-One auction is an anecdote. Here are 2,000 of them, with the same bucket, the same bidders and
-the same amount of noise.
+One auction is an anecdote. Here are a few thousand of them, with the same bucket, the same
+bidders and the same amount of noise.
 
 <div class="example curse" data-show-source>
-  <p>Across 2,000 auctions the winner paid <t-out expr="mean(wins)" format="$%d"></t-out> on
+  <p>Across <t-num name="runs" min="100" max="10000" step="100" format="%,d">2000</t-num>
+    auctions, each with <t-num name="n"></t-num> bidders and an error of
+    <t-num name="sigma"></t-num>, the winner paid <t-out expr="mean(wins)" format="$%d"></t-out> on
     average, <t-out expr="mean(wins) - V" format="$%d"></t-out> more than the bucket is worth.
     Only <t-out expr="wins.filter((w) => w < V).length / wins.length" format="percent"></t-out>
     of the winners paid less than it's worth.</p>
-  <t-let name="wins" expr="auctions(V, sigma, n, 2000, seed)"></t-let>
+  <t-let name="wins" expr="auctions(V, sigma, n, runs, seed)"></t-let>
   <t-obsplot>
     <script type="text/plain">
     {
       height: 240,
-      x: { domain: [V - 150, V + 150], label: "Winning bid ($)" },
+      marginBottom: 40,
+      x: { domain: range, label: "Winning bid ($)", labelAnchor: "center", labelArrow: "none" },
       y: { grid: true, label: "Auctions" },
       marks: [
         Plot.rectY(wins, Plot.binX({ y: "count" }, {
           x: (w) => w,
-          thresholds: d3.range(V - 150, V + 151, 5),
+          thresholds: d3.range(range[0], range[1], (range[1] - range[0]) / 70),
           fill: "var(--tangle-accent)",
           fillOpacity: 0.7
         })),
@@ -132,8 +160,8 @@ the same amount of noise.
   </t-obsplot>
 </div>
 
-The solid line is the true value, and the dashed one the average winning bid. Drag the noise and
-the number of bidders above, and watch the gap between them.
+The solid line is the true value, and the dashed one the average winning bid. Drag the bidders and
+the noise, and watch the gap between them.
 
 ## More bidders, worse curse
 
@@ -143,17 +171,15 @@ the crowd.
 <div class="example curse" data-show-source>
   <p>With <t-num name="n"></t-num> bidders and an error of <t-num name="sigma"></t-num>, the
     winner overpays by <t-out expr="naive[n - 2].overpay" format="$%.1f"></t-out> on average.
-    With 2 bidders it's <t-out expr="naive[0].overpay" format="$%.1f"></t-out>, and with 30
+    With 2 bidders it's <t-out expr="naive[0].overpay" format="$%.1f"></t-out>, and with 100
     it's <t-out expr="naive.at(-1).overpay" format="$%.1f"></t-out>.</p>
-  <t-let name="naive" expr="Array.from({ length: 29 }, (_, i) => i + 2).map((k) => ({
-    n: k,
-    overpay: mean(auctions(V, sigma, k, 2000, seed)) - V
-  }))"></t-let>
+  <t-let name="naive" expr="overpayments(sigma, 100, runs, seed)"></t-let>
   <t-obsplot>
     <script type="text/plain">
     {
       height: 240,
-      x: { domain: [2, 30], label: "Bidders" },
+      marginBottom: 40,
+      x: { domain: [2, 100], label: "Bidders", labelAnchor: "center", labelArrow: "none" },
       y: { grid: true, label: "Average overpayment ($)" },
       marks: [
         Plot.ruleY([0]),
@@ -192,7 +218,8 @@ around the true value *V*, the highest one is on average
     {
       height: 240,
       marginRight: 80,
-      x: { domain: [2, 30], label: "Bidders" },
+      marginBottom: 40,
+      x: { domain: [2, 100], label: "Bidders", labelAnchor: "center", labelArrow: "none" },
       y: { grid: true, label: "Average overpayment ($)" },
       marks: [
         Plot.ruleY([0]),
@@ -219,7 +246,10 @@ The approximation for *a<sub>n</sub>* is
 - **Take the noise away.** With an error of $0, everyone bids the true value, and nobody
   overpays.
 - **Rerun.** Click **Another auction** in the first section. All four sections draw from the
-  same seed, so they all change. The single auction jumps around, while the 2,000 barely move.
+  same seed, so they all change. The single auction jumps around, while the thousands barely
+  move. With only 100 auctions, the histogram and the curves get noisy.
+- **Pack the room.** Drag the bidders up to 100. The winner's guess comes from far out in the
+  tail, and the dots crowd against the right of the chart.
 
 ## How it's built
 
@@ -228,13 +258,17 @@ The approximation for *a<sub>n</sub>* is
   `sigma` and `V` are declared once, by the [`<t-num>`](t-num.md)s in the first section. Later
   sections show them again with an empty `<t-num name="n">`, which is a second view of the same
   variable.
-- **The script registers four functions.** `guesses`, `auctions`, `topGap` and `mean` are
+- **The script registers five functions.** `guesses`, `auctions`, `overpayments`, `topGap` and
+  `mean` are
   [registered](expressions.md#functions) so the expressions can call them. The
   [`<t-let>`](t-let.md)s and charts don't need to wait: an expression that ran before
   registration runs again once the function exists.
 - **Seeded randomness.** Every auction draws from `seed`, so dragging a number reruns the same
   auctions with new settings instead of new random ones. That's why the curves are smooth.
   The button just adds one to `seed`.
+- **One pass for every crowd size.** Auction number `run` always starts with the same guesses,
+  so `overpayments` deals out 100 guesses per auction and keeps a running maximum. That's the
+  winner for 2 bidders, then 3, and so on up to 100, without rerunning anything.
 - **The cure costs nothing to compute.** Shaving every bid by the same amount lowers the
   winning bid by that amount, so `cured` is `naive` minus the discount. Dragging `sighat`
   doesn't rerun a single auction.

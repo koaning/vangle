@@ -21,6 +21,7 @@ export const NAV = [
     ["index", "Getting started"],
     ["expressions", "Expressions &amp; formats"],
     ["charts", "Updating a chart"],
+    ["custom-elements", "Your own elements"],
     ["blogging", "Using it on a blog"],
   ]],
   ["Elements", [

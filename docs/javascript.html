@@ -22,6 +22,7 @@
 <li><a href="index.html">Getting started</a></li>
 <li><a href="expressions.html">Expressions &amp; formats</a></li>
 <li><a href="charts.html">Updating a chart</a></li>
+<li><a href="custom-elements.html">Your own elements</a></li>
 <li><a href="blogging.html">Using it on a blog</a></li>
 </ul>
 <h4>Elements</h4>
@@ -106,11 +107,11 @@ scope.effect((s) =&gt; console.log(s.get("years")));</code></pre>
 <code>s.get</code>, that variable isn't watched until a later run reads it.
 <a href="charts.html">Updating a chart</a> builds a bigger example, and covers canvas and chart
 libraries.</p>
-<h2>Importing</h2>
+<h2 id="importing">Importing</h2>
 <p>Import from the <strong>same URL</strong> as your <code>&lt;script type="module"&gt;</code> tag. The
 browser loads a module once per URL, so <code>/tangle.js</code> and <code>/tangle.js?v=2</code> would be
 two separate copies with separate variables.</p>
-<pre><code class="language-js">import { scopeOf, registerFunction, registerFormat, configure } from "/tangle.js";</code></pre>
+<pre><code class="language-js">import { scopeOf, registerFunction, registerFormat, configure, TangleElement } from "/tangle.js";</code></pre>
 <h2 id="scopes">Scopes</h2>
 <p><code>scopeOf(element)</code> returns the scope an element belongs to: its nearest
 <a href="t-scope.html"><code>&lt;t-scope&gt;</code></a>, or the page-wide scope. Call
@@ -136,6 +137,16 @@ wait a microtask first:</p>
 <pre><code class="language-js">scope.set("years", 12);
 await Promise.resolve();
 // outputs, formulas and effects are now up to date</code></pre>
+<h2 id="elements">Your own elements</h2>
+<p><code>TangleElement</code> is the base class of the built-in elements. Extend it to write your own:</p>
+<pre><code class="language-js">// &lt;t-stars expr="rating"&gt;&lt;/t-stars&gt;
+customElements.define("t-stars", class extends TangleElement {
+  connectedCallback() {
+    this.watch((s) =&gt; (this.textContent = "★".repeat(s.eval(this.getAttribute("expr")))));
+  }
+});</code></pre>
+<p>It adds <code>this.scope</code>, <code>this.watch(fn)</code>, <code>this.declare(name, initial)</code> and
+<code>this.makeDraggable(name)</code>. See <a href="custom-elements.html">Your own elements</a> for examples.</p>
 <h2>Signals</h2>
 <p>The reactive core is exported too, for state that doesn't belong in a scope:</p>
 <pre><code class="language-js">import { signal, computed, effect, untracked } from "/tangle.js";

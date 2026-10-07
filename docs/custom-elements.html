@@ -1,0 +1,180 @@
+<!doctype html>
+<!-- Generated from custom-elements.md by site/build.js. Edit the Markdown, then run `make docs`. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your own elements · vangle docs</title>
+<script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
+<link rel="alternate" type="text/markdown" href="custom-elements.md">
+<link rel="stylesheet" href="../tangle.css">
+<link rel="stylesheet" href="../site/site.css">
+<script type="module" src="../tangle.js"></script>
+</head>
+<body class="docs">
+<nav class="docs-nav">
+<div class="docs-nav-top">
+<a class="brand" href="../index.html">vangle</a>
+<button class="theme-toggle" type="button" data-theme-toggle aria-label="Dark mode"></button>
+</div>
+<h4>Guide</h4>
+<ul>
+<li><a href="index.html">Getting started</a></li>
+<li><a href="expressions.html">Expressions &amp; formats</a></li>
+<li><a href="charts.html">Updating a chart</a></li>
+<li><a href="custom-elements.html" aria-current="page">Your own elements</a></li>
+<li><a href="blogging.html">Using it on a blog</a></li>
+</ul>
+<h4>Elements</h4>
+<ul>
+<li><a href="t-num.html"><code>&lt;t-num&gt;</code></a></li>
+<li><a href="t-var.html"><code>&lt;t-var&gt;</code></a></li>
+<li><a href="t-let.html"><code>&lt;t-let&gt;</code></a></li>
+<li><a href="t-out.html"><code>&lt;t-out&gt;</code></a></li>
+<li><a href="t-choice.html"><code>&lt;t-choice&gt;</code></a></li>
+<li><a href="t-math.html"><code>&lt;t-math&gt;</code></a></li>
+<li><a href="t-vega.html"><code>&lt;t-vega&gt;</code></a></li>
+<li><a href="t-scope.html"><code>&lt;t-scope&gt;</code></a></li>
+</ul>
+<h4>Reference</h4>
+<ul>
+<li><a href="javascript.html">JavaScript API</a></li>
+<li><a href="styling.html">Styling</a></li>
+</ul>
+</nav>
+<main>
+<h1>Your own elements</h1>
+<p class="lede">When the built-in elements don't fit, write your own. Extend <code>TangleElement</code>, the class the
+built-in elements extend, and register it with <code>customElements.define</code>. Your element then works
+with the same variables, scopes and expressions as <code>&lt;t-num&gt;</code> and <code>&lt;t-out&gt;</code>.</p>
+<h2 id="bar">A bar that shows a value</h2>
+<p>The smallest element reads variables and draws. Here, <code>&lt;t-bar&gt;</code> fills up to the value of its
+<code>expr</code>, from 0 to 1:</p>
+<t-scope class="example" data-show-source="open">
+  <p>Saving <t-num name="monthly" min="0" max="1000" step="10" format="$%d">250</t-num> a month
+    towards <t-num name="goal" min="500" max="20000" step="100" format="$%,d">6000</t-num>, after a
+    year you're <t-bar expr="12 * monthly / goal"></t-bar>
+    <t-out expr="12 * monthly / goal" format="percent"></t-out> of the way there.</p>
+</t-scope>
+<script type="module" data-show-source="open">
+  import { TangleElement } from "../tangle.js";
+
+  // <t-bar expr="done / total"></t-bar>
+  customElements.define("t-bar", class extends TangleElement {
+    connectedCallback() {
+      const fill = document.createElement("span");
+      this.replaceChildren(fill);
+      // Runs now, and again whenever a variable in the expression changes.
+      this.watch((s) => {
+        const value = s.eval(this.getAttribute("expr"));
+        fill.style.width = `${Math.min(1, Math.max(0, value)) * 100}%`;
+      });
+    }
+  });
+</script>
+<style data-show-source>
+  t-bar {
+    display: inline-block; width: 6em; height: 0.6em; vertical-align: middle;
+    border-radius: 1em; overflow: hidden;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+  t-bar span { display: block; height: 100%; background: var(--tangle-accent); }
+</style>
+<p><code>this.watch(fn)</code> is the same as <a href="javascript.html#scopes"><code>scope.effect(fn)</code></a>: <code>fn</code> gets the
+element's scope, and <code>s.get</code> and <code>s.eval</code> subscribe to what they read. The difference is that
+it stops when the element leaves the page.</p>
+<h2 id="slider">A slider that sets a variable</h2>
+<p>An element can declare a variable and set it. <code>&lt;t-slider&gt;</code> wraps a range input. It's bound to the
+same <code>speed</code> as the <code>&lt;t-num&gt;</code>, so moving either one moves the other:</p>
+<t-scope class="example" data-show-source="open">
+  <p>Driving at <t-num name="speed" format="%d km/h"></t-num>
+    <t-slider name="speed" value="90" min="30" max="130" step="5"></t-slider>
+    you cover 100 km in <t-out expr="100 / speed * 60" format="%d minutes"></t-out>.</p>
+</t-scope>
+<script type="module" data-show-source="open">
+  import { TangleElement } from "../tangle.js";
+
+  // <t-slider name="speed" value="90" min="30" max="130" step="5"></t-slider>
+  customElements.define("t-slider", class extends TangleElement {
+    connectedCallback() {
+      const name = this.getAttribute("name");
+      // Reads min, max, step, color, label and format, like <t-var>.
+      this.declare(name, Number(this.getAttribute("value")));
+      const input = document.createElement("input");
+      input.type = "range";
+      input.addEventListener("input", () => this.scope.set(name, Number(input.value)));
+      this.replaceChildren(input);
+      this.watch((s) => {
+        const { min = 0, max = 100, step = 1, label } = s.meta(name);
+        Object.assign(input, { min, max, step, value: s.get(name) });
+        input.setAttribute("aria-label", label ?? name);
+      });
+    }
+  });
+</script>
+<p><code>this.declare(name, initial)</code> sets the variable's settings from the element's attributes, and
+its value if nothing has set it yet. <code>s.meta(name)</code> reads those settings back, whichever element
+declared them.</p>
+<h2 id="draggable">A draggable of your own</h2>
+<p><code>this.makeDraggable(name)</code> makes an element behave like a <code>&lt;t-num&gt;</code>: the reader can
+<a href="t-num.html">drag it, click to type, or use the arrow keys</a>, hovering highlights every other
+place the variable appears, and screen readers announce it as a slider. You only decide how it
+looks:</p>
+<t-scope class="example" data-show-source="open">
+  <p><t-dots name="cups" min="0" max="8">3</t-dots>
+    <t-num name="cups"></t-num> cups of coffee a day is about
+    <t-out expr="cups * 95" format="%d mg"></t-out> of caffeine.</p>
+</t-scope>
+<script type="module" data-show-source="open">
+  import { TangleElement } from "../tangle.js";
+
+  // <t-dots name="cups" min="0" max="8">3</t-dots>
+  customElements.define("t-dots", class extends TangleElement {
+    connectedCallback() {
+      const name = this.getAttribute("name");
+      // The text is replaced below, so keep the first one in case the element moves.
+      this._initial ??= Number(this.textContent);
+      this.declare(name, this._initial);
+      this.makeDraggable(name);
+      this.watch((s) => {
+        const n = s.get(name), { max } = s.meta(name);
+        this.textContent = "●".repeat(n) + "○".repeat(max - n);
+        this.setAttribute("aria-valuetext", `${n} of ${max}`);
+      });
+    }
+  });
+</script>
+<style data-show-source>
+  t-dots { letter-spacing: 0.1em; white-space: nowrap; }
+</style>
+<p>A draggable gets the same color, hover and focus styles as a <code>&lt;t-num&gt;</code>, from
+<code>[data-tangle-param]</code> in <code>tangle.css</code>. Its <code>color</code> attribute works too. See
+<a href="styling.html">Styling</a>.</p>
+<h2 id="reference">Reference</h2>
+<table>
+<thead><tr><th>Member</th><th>Description</th></tr></thead>
+<tbody>
+<tr><td><code>this.scope</code></td><td>The element's <a href="javascript.html#scopes">scope</a>: its nearest <code>&lt;t-scope&gt;</code>, or the page-wide one.</td></tr>
+<tr><td><code>this.watch(fn)</code></td><td>Runs <code>fn(scope)</code> now, and again whenever a variable it read changes. Stops when the element is removed.</td></tr>
+<tr><td><code>this.declare(name, initial)</code></td><td>Declares <code>name</code> from the <code>min</code>, <code>max</code>, <code>step</code>, <code>color</code>, <code>label</code> and <code>format</code> attributes, and sets it to <code>initial</code> unless something already did.</td></tr>
+<tr><td><code>this.makeDraggable(name, target)</code></td><td>Lets the reader drag, type or arrow-key <code>name</code> on <code>target</code>, which defaults to the element itself.</td></tr>
+</tbody>
+</table>
+<p>A few things to keep in mind:</p>
+<ul>
+<li><strong>Put setup in <code>connectedCallback</code>.</strong> It runs when the element is added to the page, and again
+if it's moved. <code>watch</code> effects stop when it's removed. If you override <code>disconnectedCallback</code>,
+call <code>super.disconnectedCallback()</code>.</li>
+<li><strong>Pick a name that won't clash.</strong> Any name with a hyphen works. A future version may add more
+<code>t-</code> elements, so a prefix of your own, like <code>my-bar</code>, is safest.</li>
+<li><strong>Import from the same URL</strong> as the <code>&lt;script&gt;</code> tag that loads <code>tangle.js</code>, or your element gets
+a separate copy with separate variables. See <a href="javascript.html#importing">Importing</a>.</li>
+<li><strong>Define elements in one file.</strong> On a blog, put them in a module such as <code>elements.js</code> and load
+it on every page, after <code>tangle.js</code>. Elements already in the page upgrade when they're defined,
+so it doesn't matter whether the script runs before or after the content.</li>
+</ul>
+<div class="pager"><a class="prev" href="charts.html"><small>Previous</small>Updating a chart</a><a class="next" href="blogging.html"><small>Next</small>Using it on a blog</a></div>
+</main>
+<script src="../site/site.js"></script>
+</body>
+</html>

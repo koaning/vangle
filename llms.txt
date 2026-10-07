@@ -13,6 +13,7 @@
 - [Getting started](docs/index.md): install, a first reactive paragraph, and how variables, reactivity and scopes work.
 - [Expressions & formats](docs/expressions.md): what names an expression can use, registering functions, conditional text, and printf-style and named formats.
 - [Updating a chart](docs/charts.md): for charts `<t-vega>` doesn't cover: drawing an SVG chart with fixed scales from the variables with `scopeOf(...).effect`, canvas and chart libraries, and setting variables from a click in the chart.
+- [Your own elements](docs/custom-elements.md): writing custom elements by extending `TangleElement`: `watch` effects that stop on disconnect, `declare` from attributes, and `makeDraggable` for a widget that drags like `<t-num>`. Examples: a bar, a range slider, a row of draggable dots.
 - [Using it on a blog](docs/blogging.md): layouts, raw-HTML settings for Markdown generators, KaTeX setup, CSP and feeds.
 
 ## Elements
@@ -34,5 +35,5 @@ Complete small documents that combine the elements with a script.
 
 ## Reference
 
-- [JavaScript API](docs/javascript.md): `scopeOf`, scope methods, effects, signals, `registerFunction`, `registerFormat` and `configure`.
+- [JavaScript API](docs/javascript.md): `scopeOf`, scope methods, effects, `TangleElement`, signals, `registerFunction`, `registerFormat` and `configure`.
 - [Styling](docs/styling.md): CSS custom properties, selectors and states, recipes and dark mode.

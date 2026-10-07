@@ -33,10 +33,10 @@ t-scope {
   display: contents;
 }
 
-/* Draggable numbers, in prose and in formulas ----------------------------- */
+/* Draggable numbers, in prose, in formulas and in your own elements ------- */
 
 t-num,
-t-math [data-tangle-param] {
+:where([data-tangle-param]) {
   --tangle-c: var(--tangle-color, var(--tangle-accent));
   color: var(--tangle-c);
   cursor: ew-resize;
@@ -58,15 +58,15 @@ t-num {
 t-num.is-hot,
 t-num.is-active,
 t-num:focus-visible,
-t-math [data-tangle-param].is-hot,
-t-math [data-tangle-param].is-active,
-t-math [data-tangle-param]:focus-visible {
+:where([data-tangle-param]).is-hot,
+:where([data-tangle-param]).is-active,
+:where([data-tangle-param]):focus-visible {
   background: color-mix(in srgb, var(--tangle-c) var(--tangle-soft), transparent);
   box-shadow: 0 0 0 0.12em color-mix(in srgb, var(--tangle-c) var(--tangle-soft), transparent);
 }
 
 t-num:focus-visible,
-t-math [data-tangle-param]:focus-visible {
+:where([data-tangle-param]):focus-visible {
   box-shadow: 0 0 0 0.14em color-mix(in srgb, var(--tangle-c) 45%, transparent);
 }
 

@@ -211,6 +211,7 @@ export function page(name, md) {
 <title>${title} · vangle docs</title>
 <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="alternate" type="text/markdown" href="${name}.md">
+<link rel="icon" href="../site/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../tangle.css">
 <link rel="stylesheet" href="../site/site.css">
 <script type="module" src="../tangle.js"></script>

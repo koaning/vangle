@@ -12,7 +12,7 @@ site: docs
 	rm -rf _site && mkdir -p _site/docs _site/site
 	cp index.html tangle.js tangle.css llms.txt _site/
 	cp docs/*.html docs/*.md _site/docs/
-	cp site/site.css site/site.js _site/site/
+	cp site/site.css site/site.js site/favicon.svg _site/site/
 
 test:
 	node --test

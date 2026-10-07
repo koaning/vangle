@@ -138,7 +138,7 @@ changes in the smallest form it can:
   together, and the chart redraws once.
 - **A theme change** re-renders the whole chart, since every color changes.
 
-## Theme
+## Theme {#theme}
 
 Unless the spec says otherwise, the chart takes its look from the CSS around it:
 
@@ -158,7 +158,7 @@ for data colors, as in `"config": { "range": { "category": { "scheme": "tableau1
 | `src` | | A URL to load the spec from, instead of the `<script>` inside. |
 | `renderer` | `svg` | `svg`, or `canvas`, which is faster for many thousands of points. |
 
-## How Vega loads
+## How Vega loads {#how-vega-loads}
 
 The first `<t-vega>` on a page loads three scripts from jsDelivr, in order: Vega 6.4.0,
 Vega-Lite 6.4.3 and vega-embed 7.3.0. That's about 830 KB of minified JavaScript (less over the

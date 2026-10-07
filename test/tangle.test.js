@@ -13,6 +13,8 @@ import {
   snap,
   vegaBindings,
   diffRows,
+  evalWith,
+  plotOptions,
   TangleElement,
   scopeOf,
 } from "../tangle.js";
@@ -206,6 +208,36 @@ test("diffRows modifies rows in place, and only adds or removes the difference",
   const [plain, none] = diffRows(vega, next, [1, 2]);
   assert.deepEqual(plain.log.remove, ["all"]);
   assert.equal(none, null);
+});
+
+test("evalWith puts extra names ahead of scope variables, and still tracks the rest", async () => {
+  const scope = new Scope();
+  scope.set("k", 2);
+  scope.set("Plot", "shadowed");
+  const Plot = { dot: (data, options) => ({ data, options }) };
+  const seen = [];
+  effect(() => seen.push(evalWith(scope, "Plot.dot([k], { r: Math.max(k, 3) })", { Plot })));
+  assert.deepEqual(seen[0], { data: [2], options: { r: 3 } });
+  scope.set("k", 5);
+  await tick();
+  assert.deepEqual(seen[1], { data: [5], options: { r: 5 } });
+});
+
+test("plotOptions fills in width and font, and the author's options win", () => {
+  const font = { fontSize: "12px", fontFamily: "serif" };
+  assert.deepEqual(plotOptions(["mark"], { width: 500, font }), {
+    marks: ["mark"],
+    width: 500,
+    style: { overflow: "visible", fontSize: "12px", fontFamily: "serif" },
+  });
+  const own = { width: 300, height: 200, style: { fontSize: "14px" } };
+  assert.deepEqual(plotOptions(own, { width: 500, font }), {
+    width: 300,
+    height: 200,
+    style: { overflow: "visible", fontSize: "14px", fontFamily: "serif" },
+  });
+  assert.equal(own.style.fontFamily, undefined); // the author's object isn't changed
+  assert.equal(plotOptions({ style: "color: red" }, { font }).style, "color: red");
 });
 
 test("TangleElement: watch gets the scope and stops on disconnect, declare reads attributes", async () => {

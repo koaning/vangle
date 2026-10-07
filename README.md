@@ -41,6 +41,7 @@ Run `make docs`, serve the repo locally (`make serve`) and open:
 | `<t-choice name="n" options="yearly:1, monthly:12">monthly</t-choice>` | Click to cycle through options. Each option is `label` or `label:value`, and numeric values become numbers. Two options make a toggle. |
 | `<t-math display>…</t-math>` | A KaTeX formula with live markers (see below). Omit `display` for inline math. |
 | `<t-vega>…</t-vega>` | A Vega-Lite chart, with its spec in a `<script type="application/json">` or `src`. Vega loads only if the page has one. See [Vega](#vega). |
+| `<t-obsplot>…</t-obsplot>` | An Observable Plot chart, written as a JavaScript expression in a `<script type="text/plain">` or `src`. Plot loads only if the page has one. See [Observable Plot](#observable-plot). |
 | `<t-scope>…</t-scope>` | Gives its contents their own variables. Without one, everything shares a page-wide scope. |
 | `<t-panel corner label width collapsed>…</t-panel>` | Floats its contents in a draggable panel that stays in view while the page scrolls, so controls can follow the reader. |
 
@@ -111,6 +112,25 @@ For charts, `<t-vega>` renders a [Vega-Lite](https://vega.github.io/vega-lite/) 
 - Colors and fonts come from the surrounding CSS (`currentColor`, `--tangle-accent`, `--tangle-chart-*`), and charts re-render when the theme changes.
 - Vega 6.4.0, Vega-Lite 6.4.3 and vega-embed 7.3.0 (about 830 KB minified) load from jsDelivr only when the page has a `<t-vega>`. An existing `window.vega`/`vegaLite`/`vegaEmbed` is reused, or set other URLs with `configure({ vegaUrl, vegaLiteUrl, vegaEmbedUrl })`.
 
+## Observable Plot
+
+`<t-obsplot>` renders an [Observable Plot](https://observablehq.com/plot/) chart. Plot is a JavaScript API, so the chart is an expression over the variables, with `Plot` and `d3` in reach:
+
+```html
+<p>A wave of <t-num name="freq" min="0.5" max="4" step="0.5">2</t-num> Hz.</p>
+<t-obsplot>
+  <script type="text/plain">
+  { height: 200,
+    marks: [Plot.line(d3.range(0, 3, 0.01), { x: (t) => t, y: (t) => Math.sin(2 * Math.PI * freq * t) })] }
+  </script>
+</t-obsplot>
+```
+
+- The expression gives Plot options, an array of marks, or a chart made with `Plot.plot`. Every variable it reads (also inside channel functions) is tracked, and the chart redraws when one changes.
+- `name="x"` sets the variable `x` to the datum under Plot's pointer (`tip`, `Plot.pointer`), or `null`.
+- The width follows the element, the font comes from `--tangle-chart-font`, and Plot's `currentColor` follows the theme.
+- d3 7.9.0 and Plot 0.6.17 (about 490 KB minified) load from jsDelivr only when the page has a `<t-obsplot>`. An existing `window.d3`/`Plot` is reused, or set other URLs with `configure({ d3Url, plotUrl })`.
+
 ## Expressions
 
 Expressions (`expr`, `\val{…}`) are plain JavaScript evaluated against the scope. A name in an expression is one of:
@@ -149,14 +169,14 @@ scope.eval("a * 2");
 
 Lower-level primitives are exported too: `signal`, `computed`, `effect`, `untracked`.
 
-### KaTeX and Vega sources
+### KaTeX, Vega and Plot sources
 
 By default KaTeX 0.19.0 comes from jsdelivr. To use a different copy:
 
 - If `window.katex` exists (your blog loads KaTeX itself), it is used.
 - Otherwise, call `configure({ katexUrl, katexCssUrl })` in the same module that imports `tangle.js`.
 - Or set `window.TangleConfig = { katexUrl, katexCssUrl }` before the module loads.
-- Vega works the same way, with `window.vega`, `window.vegaLite` and `window.vegaEmbed`, and the options `vegaUrl`, `vegaLiteUrl` and `vegaEmbedUrl`.
+- Vega works the same way, with `window.vega`, `window.vegaLite` and `window.vegaEmbed`, and the options `vegaUrl`, `vegaLiteUrl` and `vegaEmbedUrl`. So does Plot, with `window.d3` and `window.Plot`, and the options `d3Url` and `plotUrl`.
 
 ## Development
 

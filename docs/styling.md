@@ -43,6 +43,7 @@ The stylesheet behind that example:
 |---|---|
 | `t-num`, `t-choice`, `t-out` | The elements themselves. |
 | `t-math [data-tangle-param]` | A `\tangle{}` inside a formula. |
+| `[data-tangle-param]` | Anything draggable: a `<t-num>`, a `\tangle{}`, or [your own element](custom-elements.md#draggable). |
 | `t-math .tangle-val` | A `\val{}` inside a formula. Unstyled by default. |
 | `.is-hot` | Every number bound to the variable under the pointer. |
 | `.is-active` | Every number bound to the variable being dragged or edited. |
@@ -51,6 +52,7 @@ The stylesheet behind that example:
 | `.tangle-editor` | The typing field. `.is-invalid` while it holds something unparseable. |
 | `t-out.is-error` | An output whose expression threw. |
 | `.tangle-math-error` | The message shown in place of a formula that doesn't parse. |
+| `t-panel::part(header)`, `::part(label)`, `::part(toggle)`, `::part(body)` | The pieces of a floating panel. `t-panel[collapsed]` while it's minimized. See [`<t-panel>`](t-panel.md#styling). |
 | `.tangle-vega` | A Vega chart. `.is-loading` until Vega has loaded; `.tangle-vega-error` replaces it on failure. See [`<t-vega>`](t-vega.md#how-vega-loads). |
 | `.tangle-obsplot` | An Observable Plot chart. `.is-loading` until Plot has loaded; `.tangle-obsplot-error` replaces it when loading fails or the expression throws. See [`<t-obsplot>`](t-obsplot.md). |
 

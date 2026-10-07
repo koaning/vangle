@@ -24,7 +24,7 @@ To skip copying the files, load them from [jsDelivr](https://www.jsdelivr.com/),
 
 If you import from `tangle.js` in your own module (to register functions, or for the JavaScript API), use the same URL as the `<script>` tag. A different URL loads a second copy with its own variables.
 
-Serve the repo locally (`python3 -m http.server`) and open:
+Run `make docs`, serve the repo locally (`make serve`) and open:
 
 - `index.html` for the demos.
 - `docs/index.html` for the documentation: a page per element with live examples, guides on expressions and formats, blogging (Markdown, KaTeX, CSP), the JavaScript API and styling, and a gallery of complete examples.
@@ -43,6 +43,9 @@ Serve the repo locally (`python3 -m http.server`) and open:
 | `<t-vega>…</t-vega>` | A Vega-Lite chart, with its spec in a `<script type="application/json">` or `src`. Vega loads only if the page has one. See [Vega](#vega). |
 | `<t-obsplot>…</t-obsplot>` | An Observable Plot chart, written as a JavaScript expression in a `<script type="text/plain">` or `src`. Plot loads only if the page has one. See [Observable Plot](#observable-plot). |
 | `<t-scope>…</t-scope>` | Gives its contents their own variables. Without one, everything shares a page-wide scope. |
+| `<t-panel corner label width collapsed>…</t-panel>` | Floats its contents in a draggable panel that stays in view while the page scrolls, so controls can follow the reader. |
+
+To write your own, extend `TangleElement`. See `docs/custom-elements.md`.
 
 Declaration order doesn't matter: you can use a variable before the element that declares it.
 
@@ -180,14 +183,15 @@ By default KaTeX 0.19.0 comes from jsdelivr. To use a different copy:
 ```sh
 make           # rebuild the docs, then run the tests
 make test      # node --test: signals, formats, expressions, TeX parsing, docs build
-make docs      # regenerate docs/*.html from docs/*.md
-make serve     # serve the site at http://localhost:8000
-make pr        # rebuild and test, push the branch and open a pull request
+make docs      # generate docs/*.html from docs/*.md
+make site      # assemble the published site in _site/
+make serve     # serve the repo at http://localhost:8000 (run make docs first)
+make pr        # test, push the branch and open a pull request
 ```
 
-CI runs `make test` on every push to main and on pull requests.
+CI runs `make test` on every push to main and on pull requests. On main, the Pages workflow also runs `make site` and publishes `_site/` to GitHub Pages.
 
-The docs are written in Markdown (`docs/*.md`), and `site/build.js` turns them into the HTML pages, which are committed. Edit the Markdown, not the HTML. A test fails if the two are out of sync, and `make pr` refuses to push if the docs build left uncommitted changes. Live examples are raw HTML blocks in the Markdown, so the HTML in the docs is the HTML a reader would copy. `llms.txt` is written by hand; update it when a page is added.
+The docs are written in Markdown (`docs/*.md`), and `site/build.js` turns them into the HTML pages. The HTML is generated, not committed (it's gitignored). Live examples are raw HTML blocks in the Markdown, so the HTML in the docs is the HTML a reader would copy. `llms.txt` is written by hand; update it when a page is added.
 
 ## Credits
 

@@ -774,13 +774,40 @@ function validName(el) {
   return null;
 }
 
-class TangleElement extends Base {
+/**
+ * The base class of the built-in elements, and of your own. Effects started
+ * with `watch` stop when the element leaves the page; if you override
+ * `disconnectedCallback`, call `super.disconnectedCallback()`.
+ */
+export class TangleElement extends Base {
+  /** The variables this element belongs to: its nearest <t-scope>, else the page's. */
+  get scope() {
+    return scopeOf(this);
+  }
   disconnectedCallback() {
     for (const dispose of this._disposers ?? []) dispose();
     this._disposers = [];
   }
+  /** Run `fn(scope)` now and whenever a variable it read changes, until disconnected. */
   watch(fn) {
-    (this._disposers ??= []).push(effect(fn));
+    (this._disposers ??= []).push(effect(() => fn(this.scope)));
+  }
+  /** Declare `name` from this element's min, max, step, color, label and format attributes. */
+  declare(name, initial) {
+    declare(this, this.scope, name, initial);
+  }
+  /** Let the reader drag, type or arrow-key `name` on `target`, like a <t-num>. */
+  makeDraggable(name, target = this) {
+    const scope = this.scope;
+    target.dataset.tangleParam = name;
+    this.watch(() => {
+      scope.meta(name), scope.get(name);
+      untracked(() => decorate(target, scope, name));
+    });
+    this.watch(() => {
+      hover.value, active.value;
+      syncClasses(target, scope, name);
+    });
   }
 }
 
@@ -993,7 +1020,7 @@ class TVar extends TangleElement {
     const name = validName(this);
     if (!name) return;
     const raw = this.getAttribute("value");
-    declare(this, scopeOf(this), name, raw == null ? undefined : parseNumber(raw));
+    this.declare(name, raw == null ? undefined : parseNumber(raw));
   }
 }
 
@@ -1005,20 +1032,13 @@ class TNum extends TangleElement {
     const name = validName(this);
     if (!name) return;
     this._initial ??= parseNumber(this.getAttribute("value") ?? this.textContent);
-    const scope = scopeOf(this);
-    declare(this, scope, name, this._initial);
-    this.dataset.tangleParam = name;
-    this.watch(() => {
+    this.declare(name, this._initial);
+    this.watch((scope) => {
       const meta = scope.meta(name);
-      const value = scope.get(name);
-      this.textContent = formatValue(value, this.getAttribute("format") ?? meta.format, meta.step);
+      this.textContent = formatValue(scope.get(name), this.getAttribute("format") ?? meta.format, meta.step);
       this.setAttribute("aria-valuetext", this.textContent);
-      untracked(() => decorate(this, scope, name));
     });
-    this.watch(() => {
-      hover.value, active.value;
-      syncClasses(this, scope, name);
-    });
+    this.makeDraggable(name);
   }
 }
 
@@ -1072,7 +1092,7 @@ class TChoice extends TangleElement {
       options.find((o) => String(o.value) === this._initial) ??
       options.find((o) => o.label === this._initial) ??
       options[0];
-    declare(this, scope, name, start.value);
+    this.declare(name, start.value);
     const indexOf = (value) => options.findIndex((o) => Object.is(o.value, value));
     const cycle = (by) => {
       const i = indexOf(scope.peek(name));

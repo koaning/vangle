@@ -13,6 +13,8 @@ import {
   snap,
   vegaBindings,
   diffRows,
+  TangleElement,
+  scopeOf,
 } from "../tangle.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve));
@@ -204,4 +206,26 @@ test("diffRows modifies rows in place, and only adds or removes the difference",
   const [plain, none] = diffRows(vega, next, [1, 2]);
   assert.deepEqual(plain.log.remove, ["all"]);
   assert.equal(none, null);
+});
+
+test("TangleElement: watch gets the scope and stops on disconnect, declare reads attributes", async () => {
+  // Outside a browser the base class is a plain class, so stub the attributes.
+  class Widget extends TangleElement {
+    attrs = { min: "0", max: "10", color: "red" };
+    hasAttribute(name) { return name in this.attrs; }
+    getAttribute(name) { return this.attrs[name] ?? null; }
+  }
+  const el = new Widget();
+  assert.equal(el.scope, scopeOf(null)); // no <t-scope> around it: the page-wide scope
+  el.declare("widgetValue", 3);
+  assert.equal(el.scope.peek("widgetValue"), 3);
+  assert.deepEqual(el.scope.meta("widgetValue"), { min: 0, max: 10, color: "red" });
+  const seen = [];
+  el.watch((s) => seen.push(s.get("widgetValue")));
+  el.scope.set("widgetValue", 4);
+  await tick();
+  el.disconnectedCallback();
+  el.scope.set("widgetValue", 5);
+  await tick();
+  assert.deepEqual(seen, [3, 4]);
 });

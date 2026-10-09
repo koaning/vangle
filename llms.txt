@@ -29,6 +29,7 @@
 - [`<t-math>`](docs/t-math.md): a KaTeX formula with draggable `\tangle{}` parameters and live `\val{}` results.
 - [`<t-vega>`](docs/t-vega.md): a Vega-Lite chart (JSON spec in a `<script type="application/json">`, or `src`). Spec params and named data sources with a variable's name are linked to it; Vega loads from jsDelivr only on pages that use it.
 - [`<t-obsplot>`](docs/t-obsplot.md): an Observable Plot chart, written as a JavaScript expression (Plot options or an array of marks) in a `<script type="text/plain">`, or `src`. It can use `Plot`, `d3` and the variables, and redraws when a variable it read changes. `name="x"` puts the datum under Plot's pointer into `x`. d3 and Plot load from jsDelivr only on pages that use it.
+- [`<t-paint>`](docs/t-paint.md): a canvas the reader draws on, with brush, marker, eraser, color picker, undo and clear. With `name`, the drawing is a variable holding a PNG data URL, updated when a stroke ends; setting the variable loads a picture. The element's `canvas` property gives the pixels.
 - [`<t-scope>`](docs/t-scope.md): gives part of the page its own set of variables.
 - [`<t-panel>`](docs/t-panel.md): floats its contents (typically controls) in a draggable, minimizable panel fixed to a corner of the viewport. The children keep their scope.
 
@@ -39,6 +40,8 @@ Complete small documents that combine the elements with a script.
 - [Matrix transformations](docs/gallery-matrix.md): a 2×2 matrix in `<t-math>` whose entries are draggable, drawn as a warped plane. Dragging the basis arrows sets the variables, and preset buttons animate between matrices.
 - [Amdahl's law](docs/gallery-amdahl.md): speedup against cores for two programs with draggable serial fractions, built from markup alone: a list of `<t-num>`s and `<t-out>`s, a `<t-let>` per program and a `<t-obsplot>` chart.
 - [The winner's curse](docs/gallery-winners-curse.md): simulated auctions where the highest guess overpays. Sections share page-wide variables, a script registers seeded random functions for the expressions, and `<t-obsplot>` charts show one auction, thousands of auctions (the count is draggable), up to 100 bidders, and the cure of shaving your bid.
+
+- [Throwing darts at a drawing](docs/gallery-darts.md): a Monte Carlo estimate of the area of a shape the reader paints in `<t-paint>`. Registered functions read the canvas's pixels, a `<t-obsplot>` shows the darts over the drawing (`Plot.image` of the data URL) and how the estimate settles, and the starting disc gives an estimate of π.
 
 ## Reference
 

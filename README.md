@@ -45,6 +45,7 @@ Run `make docs`, serve the repo locally (`make serve`) and open:
 | `<t-math display>…</t-math>` | A KaTeX formula with live markers (see below). Omit `display` for inline math. |
 | `<t-vega>…</t-vega>` | A Vega-Lite chart, with its spec in a `<script type="application/json">` or `src`. Vega loads only if the page has one. See [Vega](#vega). |
 | `<t-obsplot>…</t-obsplot>` | An Observable Plot chart, written as a JavaScript expression in a `<script type="text/plain">` or `src`. Plot loads only if the page has one. See [Observable Plot](#observable-plot). |
+| `<t-paint name="art" width height tools>` | A canvas the reader draws on, with brush, marker, eraser, undo and clear. The variable holds the drawing as a PNG data URL, updated when a stroke ends, and setting it loads a picture. |
 | `<t-scope>…</t-scope>` | Gives its contents their own variables. Without one, everything shares a page-wide scope. |
 | `<t-panel corner label width collapsed>…</t-panel>` | Floats its contents in a draggable panel that stays in view while the page scrolls, so controls can follow the reader. |
 

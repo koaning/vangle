@@ -42,6 +42,7 @@ Complete small documents that combine the elements with a script.
 - [The winner's curse](docs/gallery-winners-curse.md): simulated auctions where the highest guess overpays. Sections share page-wide variables, a script registers seeded random functions for the expressions, and `<t-obsplot>` charts show one auction, thousands of auctions (the count is draggable), up to 100 bidders, and the cure of shaving your bid.
 
 - [Throwing darts at a drawing](docs/gallery-darts.md): a Monte Carlo estimate of the area of a shape the reader paints in `<t-paint>`. Registered functions read the canvas's pixels, a `<t-obsplot>` shows the darts over the drawing (`Plot.image` of the data URL) and how the estimate settles, and the starting disc gives an estimate of π.
+- [What recomputes](docs/gallery-recompute.md): two `<t-let>`s and a registered `count` function that bumps a counter variable each time a variable runs, showing that only dependents re-run and that a variable read in several places runs once.
 
 ## Reference
 

@@ -45,6 +45,7 @@ export const NAV = [
     ["gallery-amdahl", "Amdahl's law"],
     ["gallery-winners-curse", "The winner's curse"],
     ["gallery-darts", "Throwing darts at a drawing"],
+    ["gallery-recompute", "What recomputes"],
   ]],
   ["Reference", [
     ["javascript", "JavaScript API"],

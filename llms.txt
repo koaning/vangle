@@ -32,6 +32,7 @@
 - [`<t-obsplot>`](docs/t-obsplot.md): an Observable Plot chart, written as a JavaScript expression (Plot options or an array of marks) in a `<script type="text/plain">`, or `src`. It can use `Plot`, `d3` and the variables, and redraws when a variable it read changes. `name="x"` puts the datum under Plot's pointer into `x`. d3 and Plot load from jsDelivr only on pages that use it.
 - [`<t-paint>`](docs/t-paint.md): a canvas the reader draws on, with brush, marker, eraser, color picker, undo and clear. With `name`, the drawing is a variable holding a PNG data URL, updated when a stroke ends; setting the variable loads a picture. The element's `canvas` property gives the pixels.
 - [`<t-scope>`](docs/t-scope.md): gives part of the page its own set of variables.
+- [`<t-debug>`](docs/t-debug.md): a live table of the variables for debugging while writing: each one's kind (value, formula with its run count, fetch, or never set), value or error, the variables it reads and is read by, and the elements that show it. Inside a `<t-scope>` it shows that scope, elsewhere every scope. `?tangle-debug` in a page's URL floats one over the page. `inspectScope(scope)` returns the same rows as data, for scripts and agents.
 - [`<t-panel>`](docs/t-panel.md): floats its contents (typically controls) in a draggable, minimizable panel fixed to a corner of the viewport. The children keep their scope.
 
 ## Gallery

@@ -19,6 +19,7 @@ import {
   TangleElement,
   scopeOf,
   buildRequest,
+  inspectScope,
 } from "../tangle.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve));
@@ -342,4 +343,43 @@ test("an element that reads a pending variable, even through a formula, is stale
   assert.ok(!shows.classes.has("is-stale"));
   scope.setPending("answer", false);
   unrelated.disconnectedCallback();
+});
+
+test("inspectScope lists kinds, values, reads, readers and the elements that show each variable", async () => {
+  class Out extends TangleElement {
+    localName = "t-out";
+  }
+  const scope = new Scope();
+  scope.setValues({ w: 4, h: 3 });
+  scope.define("area", "w * h");
+  scope.define("tiles", "area / tile * (1 + wastage)");
+  scope.define("broken", () => {
+    throw new Error("nope");
+  });
+  const a = new Out();
+  a.watch(() => scope.get("area"));
+  const b = new Out();
+  b.watch(() => [scope.get("area"), scope.get("tiles")]);
+  scope.set("w", 5);
+  await tick();
+  scope.setPending("h");
+
+  const rows = Object.fromEntries(inspectScope(scope).map((row) => [row.name, row]));
+  assert.equal(rows.w.kind, "value");
+  assert.equal(rows.area.kind, "formula");
+  assert.equal(rows.area.value, 15);
+  assert.equal(rows.area.runs, 2); // once for the first read, once after w changed
+  assert.deepEqual(rows.area.reads.sort(), ["h", "w"]);
+  assert.deepEqual(rows.area.readBy, ["tiles"]);
+  assert.deepEqual(rows.area.elements, [a, b]);
+  assert.deepEqual(rows.w.readBy, ["area"]);
+  assert.equal(rows.h.pending, true);
+  // Read but never set: the typo in "tiles" shows up.
+  assert.equal(rows.wastage.kind, "unset");
+  assert.equal(rows.tile.kind, "unset");
+  assert.equal(rows.broken.error, "nope");
+
+  scope.setPending("h", false);
+  a.disconnectedCallback();
+  b.disconnectedCallback();
 });

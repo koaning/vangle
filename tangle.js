@@ -78,6 +78,7 @@ class Computed {
     this.dirty = true;
     this._value = undefined;
     this.error = null;
+    this.runs = 0;
   }
   mark() {
     if (this.dirty) return;
@@ -94,6 +95,7 @@ class Computed {
     return untracked(() => this.value);
   }
   recompute() {
+    this.runs++;
     unsubscribe(this);
     const previous = observer;
     observer = this;
@@ -164,10 +166,15 @@ const pending = new Set(); // the def signals of pending variables
 const watchers = new Set(); // elements with effects from TangleElement.watch
 let staleScheduled = false;
 
+// Bumped when variables, elements or pending requests come and go, for <t-debug>.
+const graphVersion = new Signal(0);
+const bumpGraph = () => (graphVersion.value = graphVersion.peek() + 1);
+
 function setPending(source, on) {
   if (on === pending.has(source)) return;
   if (on) pending.add(source);
   else pending.delete(source);
+  bumpGraph();
   if (staleScheduled) return;
   staleScheduled = true;
   queueMicrotask(refreshStale); // after the effects that the answer re-runs
@@ -264,6 +271,7 @@ export class Scope {
         }),
       };
       this.slots.set(name, slot);
+      bumpGraph();
     }
     return slot;
   }
@@ -742,8 +750,9 @@ function onPointerUp(event) {
 
 function onPointerOver(event) {
   if (drag) return;
-  const el = event.target.closest?.(PARAM);
-  hover.value = el ? keyOf(scopeOf(el), el.dataset.tangleParam) : null;
+  // A <t-debug> row names its variable's key itself: it isn't in that variable's scope.
+  const el = event.target.closest?.(`${PARAM}, [data-tangle-hover]`);
+  hover.value = !el ? null : (el.dataset.tangleHover ?? keyOf(scopeOf(el), el.dataset.tangleParam));
 }
 
 function onKeyDown(event) {
@@ -911,6 +920,7 @@ export class TangleElement extends Base {
     this._disposers = [];
     this._effects?.clear();
     watchers.delete(this);
+    bumpGraph();
     this.classList?.remove("is-stale");
   }
   /**
@@ -922,6 +932,7 @@ export class TangleElement extends Base {
     (this._effects ??= new Set()).add(e);
     (this._disposers ??= []).push(() => e.dispose());
     watchers.add(this);
+    bumpGraph();
   }
   /** Declare `name` from this element's min, max, step, color, label and format attributes. */
   declare(name, initial) {
@@ -1830,6 +1841,7 @@ class TFetch extends TangleElement {
     this._name = validName(this);
     if (!this._name) return;
     if (!this.hasAttribute("url")) return console.error('tangle: <t-fetch> needs a url="…"', this);
+    this.scope.slot(this._name).kind = "fetch";
     this._last = null;
     this.watch((scope) => {
       let request;
@@ -1922,6 +1934,186 @@ class TFetch extends TangleElement {
     this.scope.setPending(this._name, on);
     const name = this.getAttribute("loading");
     if (name) this.scope.set(name, on);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Debugging: <t-debug> shows every variable, what it reads and what reads it.
+// ---------------------------------------------------------------------------
+
+/**
+ * The variables of `scope` as data, which is what <t-debug> shows: one row per
+ * variable with its `value` (or `error`), its `kind` ("value", "formula", "fetch",
+ * or "unset" if something reads it but nothing sets it), whether it's `pending`,
+ * how many times it has `runs`, the variables it `reads` and is `readBy`, and the
+ * `elements` whose effects read it.
+ */
+export function inspectScope(scope) {
+  return untracked(() => {
+    const names = new Map(); // cell → variable name
+    for (const [name, slot] of scope.slots) names.set(slot.cell, name);
+    const rows = new Map();
+    for (const [name, slot] of scope.slots) {
+      const def = slot.def.peek();
+      let value;
+      let error = null;
+      try {
+        value = slot.cell.value;
+      } catch (e) {
+        error = e?.message ?? String(e);
+      }
+      const kind = def instanceof Formula ? "formula" : (slot.kind ?? (def === undefined ? "unset" : "value"));
+      const reads = [...slot.cell.deps].filter((d) => d !== slot.cell && names.has(d)).map((d) => names.get(d));
+      rows.set(name, {
+        name, kind, value, error, reads,
+        pending: pending.has(slot.def),
+        runs: slot.cell.runs,
+        readBy: [],
+        elements: [],
+      });
+    }
+    for (const row of rows.values()) for (const name of row.reads) rows.get(name).readBy.push(row.name);
+    for (const el of watchers) {
+      const read = new Set();
+      for (const e of el._effects) for (const d of e.deps) if (names.has(d)) read.add(names.get(d));
+      for (const name of read) rows.get(name).elements.push(el);
+    }
+    return [...rows.values()];
+  });
+}
+
+/** A short, one-line version of any value, for the debug table. */
+function preview(value, max = 48) {
+  if (typeof value === "function") return `ƒ ${value.name || "anonymous"}`;
+  if (typeof value === "number" || typeof value === "boolean" || value == null) return String(value);
+  let s;
+  try {
+    s = JSON.stringify(value) ?? String(value);
+  } catch {
+    s = String(value);
+  }
+  if (s.length <= max) return s;
+  return Array.isArray(value) ? `Array(${value.length}) ${s.slice(0, max - 12)}…` : `${s.slice(0, max - 1)}…`;
+}
+
+// <t-debug></t-debug>
+// A live table of variables: their values, what each reads and what reads it, and
+// which elements show it. Inside a <t-scope> it shows that scope, elsewhere every
+// scope on the page. Hovering a row outlines the elements that show the variable.
+// Add ?tangle-debug to any page's URL to float one over it.
+class TDebug extends Base {
+  connectedCallback() {
+    this._seen ??= new Map(); // the values shown last time, to flash the ones that change
+    this._outlined = new Set();
+    // A plain effect, not watch(): the table isn't a view of the variables, so it doesn't dim.
+    this._dispose = effect(() => {
+      graphVersion.value, hover.value;
+      for (const [, scope] of this.scopes()) {
+        for (const slot of scope.slots.values()) {
+          slot.def.value;
+          try {
+            slot.cell.value;
+          } catch {}
+        }
+      }
+      this._frame ??= requestAnimationFrame(() => {
+        this._frame = null;
+        if (this.isConnected) this.render();
+      });
+    });
+    this._onClick ??= (event) => {
+      const cell = event.target.closest?.("[data-tangle-hover] .t-debug-value");
+      if (cell) console.log(cell.dataset.name, cell._value); // the whole value, to explore
+    };
+    this.addEventListener("click", this._onClick);
+  }
+
+  disconnectedCallback() {
+    this._dispose?.();
+    cancelAnimationFrame(this._frame);
+    this._frame = null;
+    this.outline(new Set());
+    this.removeEventListener("click", this._onClick);
+  }
+
+  /** [label, scope] for each scope shown. */
+  scopes() {
+    if (this.closest("t-scope")) return [["", scopeOf(this)]];
+    const hosts = [...document.querySelectorAll("t-scope")];
+    return [
+      ["page", scopeOf(document)],
+      ...hosts.map((host, i) => [host.id ? `#${host.id}` : `<t-scope> ${i + 1}`, scopeOf(host)]),
+    ].filter(([, scope]) => scope.slots.size);
+  }
+
+  render() {
+    const cell = (tag, className, text) => {
+      const el = document.createElement(tag);
+      if (className) el.className = className;
+      if (text != null) el.textContent = text;
+      return el;
+    };
+    const table = cell("table", "t-debug-table");
+    const head = table.createTHead().insertRow();
+    for (const title of ["variable", "value", "reads", "read by"]) head.append(cell("th", null, title));
+    const body = table.createTBody();
+    const scopes = this.scopes();
+    const outlined = new Set();
+    for (const [label, scope] of scopes) {
+      if (scopes.length > 1) body.insertRow().append(Object.assign(cell("th", "t-debug-scope", label), { colSpan: 4 }));
+      for (const row of this.sorted(inspectScope(scope))) {
+        const key = keyOf(scope, row.name);
+        const tr = body.insertRow();
+        tr.dataset.tangleHover = key;
+        const changed = this._seen.has(key) && !Object.is(this._seen.get(key), row.value);
+        this._seen.set(key, row.value);
+        tr.classList.toggle("is-changed", changed);
+        tr.classList.toggle("is-hot", hover.peek() === key);
+        if (hover.peek() === key) for (const el of row.elements) outlined.add(el);
+
+        const name = cell("td", "t-debug-name", row.name);
+        const color = scope.slot(row.name).meta.peek().color;
+        if (color) name.style.setProperty("--tangle-color", color);
+        const kind = row.pending ? "loading" : row.kind === "unset" ? "never set" : row.kind;
+        const runs = row.kind === "formula" ? ` ×${row.runs}` : "";
+        name.append(cell("span", `t-debug-kind is-${row.pending ? "loading" : row.kind}`, kind + runs));
+
+        const value = cell("td", "t-debug-value", row.error ? `⚠ ${row.error}` : preview(row.value));
+        value.classList.toggle("is-error", Boolean(row.error) || row.kind === "unset");
+        value.dataset.name = row.name;
+        value._value = row.error ?? row.value;
+        value.title = row.error ?? preview(row.value, 2000);
+
+        const counts = new Map();
+        for (const el of row.elements) counts.set(el.localName, (counts.get(el.localName) ?? 0) + 1);
+        const shown = [...counts].map(([tag, n]) => (n > 1 ? `<${tag}> ×${n}` : `<${tag}>`));
+        tr.append(name, value, cell("td", null, row.reads.join(", ")), cell("td", null, [...row.readBy, ...shown].join(", ")));
+      }
+    }
+    if (!body.rows.length) body.insertRow().append(Object.assign(cell("td", "t-debug-empty", "No variables yet."), { colSpan: 4 }));
+    this.replaceChildren(table);
+    this.outline(outlined);
+  }
+
+  /** Inputs first, then each formula after the variables it reads. */
+  sorted(rows) {
+    const byName = new Map(rows.map((row) => [row.name, row]));
+    const depth = new Map();
+    const depthOf = (row, seen = new Set()) => {
+      if (depth.has(row.name)) return depth.get(row.name);
+      if (seen.has(row.name)) return 0; // a cycle
+      seen.add(row.name);
+      const d = Math.max(-1, ...row.reads.map((name) => depthOf(byName.get(name), seen))) + 1;
+      depth.set(row.name, d);
+      return d;
+    };
+    return rows.map((row, i) => [depthOf(row), i, row]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(([, , row]) => row);
+  }
+
+  outline(elements) {
+    for (const el of this._outlined) if (!elements.has(el)) el.classList.remove("t-debug-target");
+    for (const el of elements) el.classList.add("t-debug-target");
+    this._outlined = elements;
   }
 }
 
@@ -2566,6 +2758,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-text": TText,
     "t-call": TCall,
     "t-fetch": TFetch,
+    "t-debug": TDebug,
     "t-tag": TTag,
     "t-math": TMath,
     "t-vega": TVega,
@@ -2575,5 +2768,18 @@ if (typeof window !== "undefined" && window.customElements) {
   };
   for (const [tag, cls] of Object.entries(elements)) {
     if (!customElements.get(tag)) customElements.define(tag, cls);
+  }
+
+  // ?tangle-debug in the URL floats a <t-debug> over any page.
+  if (new URLSearchParams(location.search).has("tangle-debug")) {
+    const addDebug = () => {
+      const panel = document.createElement("t-panel");
+      panel.setAttribute("label", "Debug");
+      panel.setAttribute("corner", "bottom-left");
+      panel.append(document.createElement("t-debug"));
+      document.body.append(panel);
+    };
+    if (document.body) addDebug();
+    else document.addEventListener("DOMContentLoaded", addDebug);
   }
 }

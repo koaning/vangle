@@ -101,6 +101,7 @@ import { scopeOf, registerFunction, registerFormat, tangleCall, configure, Tangl
 | `effect(fn)` | Runs `fn(scope)` now, and again whenever a variable it read changes. Returns a function that stops it. |
 | `meta(name)` | The variable's settings: `{ min, max, step, format, color, label, pixelsPerStep }`. |
 | `setMeta(name, patch)` | Changes some of those settings. |
+| `inspectScope(scope)` | Not a method: an export that lists the scope's variables as data, with what each reads and what reads it. See [`<t-debug>`](t-debug.md#from-javascript). |
 | `setPending(name, on)` | Marks a variable as waiting on a new value, as [`<t-fetch>`](t-fetch.md) does while it reloads. Elements that show it, directly or through other variables, get the class `is-stale` until `setPending(name, false)`. |
 
 ### Timing

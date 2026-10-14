@@ -19,6 +19,8 @@ import {
   TangleElement,
   scopeOf,
   buildRequest,
+  inspectScope,
+  layoutGraph,
 } from "../tangle.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve));
@@ -342,4 +344,63 @@ test("an element that reads a pending variable, even through a formula, is stale
   assert.ok(!shows.classes.has("is-stale"));
   scope.setPending("answer", false);
   unrelated.disconnectedCallback();
+});
+
+test("inspectScope lists kinds, values, reads, readers and the elements that show each variable", async () => {
+  class Out extends TangleElement {
+    localName = "t-out";
+  }
+  const scope = new Scope();
+  scope.setValues({ w: 4, h: 3 });
+  scope.define("area", "w * h");
+  scope.define("tiles", "area / tile * (1 + wastage)");
+  scope.define("broken", () => {
+    throw new Error("nope");
+  });
+  const a = new Out();
+  a.watch(() => scope.get("area"));
+  const b = new Out();
+  b.watch(() => [scope.get("area"), scope.get("tiles")]);
+  scope.set("w", 5);
+  await tick();
+  scope.setPending("h");
+
+  const rows = Object.fromEntries(inspectScope(scope).map((row) => [row.name, row]));
+  assert.equal(rows.w.kind, "value");
+  assert.equal(rows.area.kind, "formula");
+  assert.equal(rows.area.value, 15);
+  assert.equal(rows.area.runs, 2); // once for the first read, once after w changed
+  assert.deepEqual(rows.area.reads.sort(), ["h", "w"]);
+  assert.deepEqual(rows.area.readBy, ["tiles"]);
+  assert.deepEqual(rows.area.elements, [a, b]);
+  assert.deepEqual(rows.w.readBy, ["area"]);
+  assert.equal(rows.h.pending, true);
+  // Read but never set: the typo in "tiles" shows up.
+  assert.equal(rows.wastage.kind, "unset");
+  assert.equal(rows.tile.kind, "unset");
+  assert.equal(rows.broken.error, "nope");
+
+  scope.setPending("h", false);
+  a.disconnectedCallback();
+  b.disconnectedCallback();
+});
+
+test("layoutGraph puts each formula a column right of what it reads, and keeps neighbours close", () => {
+  const row = (name, reads, value = 1) => ({ name, reads, readBy: [], value, kind: reads.length ? "formula" : "value" });
+  const rows = [row("tile", []), row("w", []), row("tiles", ["area", "tile"]), row("h", []), row("area", ["w", "h"]), row("loop", ["loop"])];
+  for (const r of rows) for (const n of r.reads) rows.find((x) => x.name === n).readBy.push(r.name);
+  const { nodes, edges, width, height } = layoutGraph(rows);
+  const at = Object.fromEntries(nodes.map((n) => [n.row.name, n]));
+  assert.equal(at.w.x, at.h.x);
+  assert.ok(at.area.x > at.w.x);
+  assert.ok(at.tiles.x > at.area.x); // after area, though it also reads tile from the first column
+  assert.equal(nodes.at(-1).row.name, "tiles"); // nodes come in column order
+  assert.equal(edges.length, 5); // a self-loop is drawn too, and doesn't hang the layout
+  // tile reads into tiles, which sits below area: tile goes below w and h.
+  assert.ok(at.tile.y > at.w.y && at.tile.y > at.h.y);
+  for (const n of nodes) assert.ok(n.x + n.width <= width && n.y + n.height <= height);
+  // No two boxes overlap.
+  for (const a of nodes) for (const b of nodes) {
+    if (a !== b && a.x === b.x) assert.ok(a.y + a.height <= b.y || b.y + b.height <= a.y);
+  }
 });

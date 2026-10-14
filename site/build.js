@@ -40,6 +40,7 @@ export const NAV = [
     ["t-paint", "<code>&lt;t-paint&gt;</code>"],
     ["t-scope", "<code>&lt;t-scope&gt;</code>"],
     ["t-panel", "<code>&lt;t-panel&gt;</code>"],
+    ["t-debug", "<code>&lt;t-debug&gt;</code>"],
   ]],
   ["Gallery", [
     ["gallery-matrix", "Matrix transformations"],

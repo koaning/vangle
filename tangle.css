@@ -421,8 +421,110 @@ t-debug {
   font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+.t-debug-scope {
+  margin: 10px 0 4px;
+  font-weight: 600;
+}
+
+.t-debug-graph {
+  display: block;
+  overflow: visible;
+  margin: 4px 0 8px;
+}
+
+.t-debug-edge {
+  fill: none;
+  stroke: color-mix(in srgb, currentColor 30%, transparent);
+  stroke-width: 1.5;
+  transition: opacity 120ms;
+}
+
+.t-debug-edge.is-hot {
+  stroke: var(--tangle-accent);
+  stroke-width: 2;
+}
+
+.t-debug-edge.is-faded {
+  opacity: 0.35;
+}
+
+.t-debug-node {
+  cursor: pointer;
+}
+
+.t-debug-node rect {
+  fill: var(--tangle-surface);
+  stroke: color-mix(in srgb, currentColor 30%, transparent);
+  stroke-width: 1.5;
+}
+
+/* Values the reader sets have the color of their variable; formulas are plain. */
+.t-debug-node.is-value rect {
+  stroke: var(--tangle-color, var(--tangle-accent));
+}
+
+.t-debug-node.is-fetch rect,
+.t-debug-node.is-loading rect {
+  stroke: var(--tangle-accent);
+  stroke-dasharray: 4 3;
+}
+
+.t-debug-node.is-loading {
+  opacity: var(--tangle-stale);
+}
+
+.t-debug-node.is-unset rect,
+.t-debug-node.is-error rect {
+  stroke: var(--tangle-error);
+}
+
+.t-debug-node.is-hot rect {
+  fill: color-mix(in srgb, var(--tangle-accent) var(--tangle-soft), var(--tangle-surface));
+  stroke-width: 2;
+}
+
+.t-debug-node.is-changed rect {
+  animation: t-debug-pulse 700ms ease-out;
+}
+
+@keyframes t-debug-pulse {
+  from {
+    fill: color-mix(in srgb, var(--tangle-accent) 35%, var(--tangle-surface));
+  }
+}
+
+.t-debug-node text {
+  fill: currentColor;
+  font: inherit;
+}
+
+.t-debug-node .t-debug-node-name {
+  font-weight: 600;
+}
+
+.t-debug-node.is-value .t-debug-node-name {
+  fill: var(--tangle-color, var(--tangle-accent));
+}
+
+.t-debug-node .t-debug-node-value {
+  font-size: 11px;
+  fill-opacity: 0.65;
+}
+
+.t-debug-node.is-unset .t-debug-node-value,
+.t-debug-node.is-error .t-debug-node-value {
+  fill: var(--tangle-error);
+  fill-opacity: 1;
+}
+
+.t-debug-details summary {
+  cursor: pointer;
+  opacity: 0.6;
+}
+
 .t-debug-table {
   width: 100%;
+  margin-top: 4px;
   border-collapse: collapse;
 }
 
@@ -491,7 +593,8 @@ t-debug {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .t-debug-table tr.is-changed .t-debug-value {
+  .t-debug-table tr.is-changed .t-debug-value,
+  .t-debug-node.is-changed rect {
     animation: none;
   }
 }

@@ -41,12 +41,14 @@ Run `make docs`, serve the repo locally (`make serve`) and open:
 | `<t-choice name="n" options="yearly:1, monthly:12">monthly</t-choice>` | Click to cycle through options. Each option is `label` or `label:value`, numeric values become numbers, and `true`/`false` become booleans. Two options make a toggle. |
 | `<t-text name="who">reader</t-text>` | Click to rewrite a piece of text. The variable holds a string. |
 | `<t-call fn="f" name="y">…</t-call>` | Shows its `<t-num>`, `<t-choice>` and `<t-text>` children as a call, `f(a=1, b='x')`. With `name`, the return value becomes a variable. `tangleCall(fn)` builds one from a JS function. |
+| `<t-fetch name="info" url="data/${planet}.json">` | Puts a server's answer in a variable, and asks again when the variables in `url`, `params` or `body` change. While a new answer loads, the old value shows dimmed. Answers are cached for the page, or in `localStorage` with `cache="local"`. |
 | `<t-tag tag="progress">…</t-tag>` | Shows an HTML tag whose attributes are `<t-num>`, `<t-choice>` and `<t-text>` children, with the live element below it. Handy for documenting an element. |
 | `<t-math display>…</t-math>` | A KaTeX formula with live markers (see below). Omit `display` for inline math. |
 | `<t-vega>…</t-vega>` | A Vega-Lite chart, with its spec in a `<script type="application/json">` or `src`. Vega loads only if the page has one. See [Vega](#vega). |
 | `<t-obsplot>…</t-obsplot>` | An Observable Plot chart, written as a JavaScript expression in a `<script type="text/plain">` or `src`. Plot loads only if the page has one. See [Observable Plot](#observable-plot). |
 | `<t-paint name="art" width height tools>` | A canvas the reader draws on, with brush, marker, eraser, undo and clear. The variable holds the drawing as a PNG data URL, updated when a stroke ends, and setting it loads a picture. |
 | `<t-scope>…</t-scope>` | Gives its contents their own variables. Without one, everything shares a page-wide scope. |
+| `<t-debug>` | The variables as a live graph, for writing: an edge from each variable to the formulas that read it, with values that pulse when they change, and the elements that show each one. Add `?tangle-debug` to any page's URL to float one over it. |
 | `<t-panel corner label width collapsed>…</t-panel>` | Floats its contents in a draggable panel that stays in view while the page scrolls, so controls can follow the reader. |
 
 To write your own, extend `TangleElement`. See `docs/custom-elements.md`.

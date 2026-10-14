@@ -1,0 +1,6 @@
+{
+  "name": "Earth",
+  "gravity": 9.81,
+  "day_hours": 24.0,
+  "distance_au": 1.0
+}

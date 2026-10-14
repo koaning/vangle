@@ -6,6 +6,7 @@
   --tangle-surface: #fff;
   --tangle-error: #c9382b;
   --tangle-muted: 55%; /* strength of the punctuation in <t-call> and <t-tag> */
+  --tangle-stale: 0.45; /* opacity of a value waiting on a new answer */
   --tangle-code-tag: #6f5cbd;
   --tangle-code-attr: #b45b1b;
   --tangle-code-string: #147a68;
@@ -34,8 +35,21 @@
 }
 
 t-var,
-t-let {
+t-let,
+t-fetch {
   display: none;
+}
+
+/* Waiting on a <t-fetch>: the old value shows, dimmed. The delay skips quick answers. */
+.is-stale {
+  opacity: var(--tangle-stale);
+  transition: opacity 150ms 150ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-stale {
+    transition: none;
+  }
 }
 
 /* A scope groups content without adding a box of its own. */

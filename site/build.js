@@ -32,6 +32,7 @@ export const NAV = [
     ["t-choice", "<code>&lt;t-choice&gt;</code>"],
     ["t-text", "<code>&lt;t-text&gt;</code>"],
     ["t-call", "<code>&lt;t-call&gt;</code>"],
+    ["t-fetch", "<code>&lt;t-fetch&gt;</code>"],
     ["t-tag", "<code>&lt;t-tag&gt;</code>"],
     ["t-math", "<code>&lt;t-math&gt;</code>"],
     ["t-vega", "<code>&lt;t-vega&gt;</code>"],

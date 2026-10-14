@@ -18,6 +18,7 @@ import {
   plotOptions,
   TangleElement,
   scopeOf,
+  buildRequest,
 } from "../tangle.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve));
@@ -286,4 +287,59 @@ test("TangleElement: watch gets the scope and stops on disconnect, declare reads
   el.scope.set("widgetValue", 5);
   await tick();
   assert.deepEqual(seen, [3, 4]);
+});
+
+test("buildRequest fills in the URL template, the query string and a JSON body", () => {
+  const scope = new Scope();
+  scope.setValues({ planet: "mars", year: 2020, age: 40 });
+  assert.deepEqual(buildRequest(scope, { url: "data/${planet}.json" }), {
+    url: "data/mars.json",
+    init: { method: "GET" },
+    key: "GET data/mars.json ",
+  });
+  // A plain URL is just a string, backticks included.
+  assert.equal(buildRequest(scope, { url: "/a?q=`x`" }).url, "/a?q=`x`");
+  const get = buildRequest(scope, { url: "/rows?x=1", params: "{ year, limit: 10, skip: undefined }" });
+  assert.equal(get.url, "/rows?x=1&year=2020&limit=10");
+  const post = buildRequest(scope, { url: "/predict", body: "{ age }" });
+  assert.deepEqual(post.init, { method: "POST", body: '{"age":40}', headers: { "Content-Type": "application/json" } });
+  assert.equal(buildRequest(scope, { url: "/predict", body: "{ age }", method: "put" }).init.method, "PUT");
+  // The key changes with the request, and only then.
+  const key = (s) => buildRequest(s, { url: "/p", params: "{ y: Math.round(year / 10) }" }).key;
+  const before = key(scope);
+  scope.set("year", 2021);
+  assert.equal(key(scope), before);
+  scope.set("year", 2031);
+  assert.notEqual(key(scope), before);
+});
+
+test("an element that reads a pending variable, even through a formula, is stale", async () => {
+  class Widget extends TangleElement {
+    classes = new Set();
+    classList = { toggle: (c, on) => (on ? this.classes.add(c) : this.classes.delete(c)), remove: (c) => this.classes.delete(c) };
+  }
+  const scope = scopeOf(null);
+  scope.setValues({ answer: 1, other: 2 });
+  scope.define("doubled", "answer * 2");
+  const shows = new Widget();
+  shows.watch((s) => s.get("doubled"));
+  const unrelated = new Widget();
+  unrelated.watch((s) => s.get("other"));
+
+  scope.setPending("answer");
+  await tick();
+  assert.ok(shows.classes.has("is-stale"));
+  assert.ok(!unrelated.classes.has("is-stale"));
+
+  scope.set("answer", 5);
+  scope.setPending("answer", false);
+  await tick();
+  assert.ok(!shows.classes.has("is-stale"));
+
+  scope.setPending("answer");
+  await tick();
+  shows.disconnectedCallback();
+  assert.ok(!shows.classes.has("is-stale"));
+  scope.setPending("answer", false);
+  unrelated.disconnectedCallback();
 });

@@ -129,7 +129,7 @@ A draggable gets the same color, hover and focus styles as a `<t-num>`, from
 | Member | Description |
 |---|---|
 | `this.scope` | The element's [scope](javascript.md#scopes): its nearest `<t-scope>`, or the page-wide one. |
-| `this.watch(fn)` | Runs `fn(scope)` now, and again whenever a variable it read changes. Stops when the element is removed. |
+| `this.watch(fn)` | Runs `fn(scope)` now, and again whenever a variable it read changes. Stops when the element is removed. While a variable it read is [reloading](t-fetch.md#stale), the element has the class `is-stale`. |
 | `this.declare(name, initial)` | Declares `name` from the `min`, `max`, `step`, `color`, `label` and `format` attributes, and sets it to `initial` unless something already did. |
 | `this.makeDraggable(name, target)` | Lets the reader drag, type or arrow-key `name` on `target`, which defaults to the element itself. |
 

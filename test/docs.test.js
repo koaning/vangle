@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { DOCS, NAV, blocks, build, inline } from "../site/build.js";
+import { DOCS, NAV, blocks, build, inline, landing } from "../site/build.js";
 
 test("every Markdown page builds to HTML", () => {
   const pages = build();
@@ -15,6 +15,15 @@ test("every page in the nav has Markdown", () => {
   for (const [, links] of NAV) {
     for (const [slug] of links) assert.ok(existsSync(join(DOCS, `${slug}.md`)), `docs/${slug}.md`);
   }
+});
+
+test("the landing page has the docs sidebar, with links into docs/", () => {
+  const html = landing();
+  for (const [, links] of NAV) {
+    for (const [slug] of links) assert.ok(html.includes(`<a href="docs/${slug}.html">`), `index.html is missing docs/${slug}.html`);
+  }
+  assert.match(html, /<link rel="stylesheet" href="tangle.css">/);
+  assert.doesNotMatch(html, /aria-current|class="pager"/);
 });
 
 test("llms.txt links to every docs page, and only to pages that exist", () => {

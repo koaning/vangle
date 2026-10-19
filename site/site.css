@@ -137,17 +137,15 @@ canvas.plot {
   border-radius: 8px;
 }
 
-/* Landing page */
-body.landing main { max-width: 680px; margin: 0 auto; padding: 2rem 1.25rem 6rem; }
+/* Landing page: links and the theme toggle above the title, level with the sidebar's top row. */
 .topbar {
   display: flex;
-  gap: 1.2rem;
+  justify-content: flex-end;
   align-items: baseline;
-  margin-bottom: 2.5rem;
+  gap: 1.2rem;
+  margin-bottom: 1.5rem;
   font: 0.9rem var(--sans);
 }
-.topbar .brand { margin-right: auto; color: var(--ink); font-weight: 700; text-decoration: none; }
-.cta { font: 600 0.95rem var(--sans); }
 
 .theme-toggle {
   padding: 0.1rem 0.45rem;

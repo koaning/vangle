@@ -1,4 +1,5 @@
-// Builds docs/*.html from docs/*.md. Run it with `make docs`.
+// Builds docs/*.html from docs/*.md, and the landing page index.html from
+// index.md. Run it with `make docs`.
 //
 // The Markdown is the source of truth: it's what LLMs read (see llms.txt). The
 // generated HTML is gitignored; the Pages workflow builds and publishes it.
@@ -190,16 +191,21 @@ export function blocks(src, tight = false) {
   return out.join("\n");
 }
 
-export function page(name, md) {
+// With root set, the page is the landing page at the top of the site, which
+// links into docs/ and isn't part of the nav. Its top bar has the theme toggle.
+export function page(name, md, root = false) {
   const body = blocks(md).replace(/(<\/h1>\n)<p>/, '$1<p class="lede">');
-  const title = body.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)[1].replace(/<[^>]+>/g, "");
+  const h1 = body.match(/<h1[^>]*>([\s\S]*?)<\/h1>/)[1].replace(/<[^>]+>/g, "");
+  const title = root ? h1 : `${h1} · vangle docs`;
+  const up = root ? "" : "../";
+  const docs = root ? "docs/" : "";
   const flat = NAV.flatMap(([, links]) => links);
-  const at = flat.findIndex(([slug]) => slug === name);
+  const at = root ? -1 : flat.findIndex(([slug]) => slug === name);
   const link = ([slug, label], cls, hint) => `<a class="${cls}" href="${slug}.html"><small>${hint}</small>${label}</a>`;
   const nav = NAV.map(
     ([heading, links]) =>
       `<h4>${heading}</h4>\n<ul>\n${links
-        .map(([slug, label]) => `<li><a href="${slug}.html"${slug === name ? ' aria-current="page"' : ""}>${label}</a></li>`)
+        .map(([slug, label]) => `<li><a href="${docs}${slug}.html"${slug === name && !root ? ' aria-current="page"' : ""}>${label}</a></li>`)
         .join("\n")}\n</ul>`,
   ).join("\n");
   const pager = [
@@ -213,35 +219,36 @@ export function page(name, md) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>${title} · vangle docs</title>
+<title>${title}</title>
 <script>try { const t = localStorage.getItem("theme"); if (t) document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="alternate" type="text/markdown" href="${name}.md">
-<link rel="icon" href="../site/favicon.svg" type="image/svg+xml">
-<link rel="stylesheet" href="../tangle.css">
-<link rel="stylesheet" href="../site/site.css">
-<script type="module" src="../tangle.js"></script>
+<link rel="icon" href="${up}site/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="${up}tangle.css">
+<link rel="stylesheet" href="${up}site/site.css">
+<script type="module" src="${up}tangle.js"></script>
 </head>
 <body class="docs">
 <nav class="docs-nav">
 <div class="docs-nav-top">
-<a class="brand" href="../index.html">vangle</a>
-<button class="theme-toggle" type="button" data-theme-toggle aria-label="Dark mode"></button>
-</div>
+<a class="brand" href="${up}index.html">vangle</a>
+${root ? "" : '<button class="theme-toggle" type="button" data-theme-toggle aria-label="Dark mode"></button>\n'}</div>
 ${nav}
 </nav>
 <main>
 ${body}
-<div class="pager">${pager}</div>
+${pager && `<div class="pager">${pager}</div>`}
 </main>
-<script src="../site/site.js"></script>
+<script src="${up}site/site.js"></script>
 </body>
 </html>
 `;
 }
 
 export const DOCS = join(dirname(fileURLToPath(import.meta.url)), "../docs");
+export const ROOT = join(DOCS, "..");
 
-// Returns { "name.html": html } for every Markdown page in dir.
+// Returns { "name.html": html } for every Markdown page in dir. The landing
+// page is built separately, by landing().
 export function build(dir = DOCS) {
   const pages = {};
   for (const file of readdirSync(dir).filter((f) => f.endsWith(".md")).sort()) {
@@ -251,9 +258,15 @@ export function build(dir = DOCS) {
   return pages;
 }
 
+export function landing(dir = ROOT) {
+  return page("index", readFileSync(join(dir, "index.md"), "utf8"), true);
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   for (const [file, html] of Object.entries(build())) {
     writeFileSync(join(DOCS, file), html);
     console.log(`docs/${file}`);
   }
+  writeFileSync(join(ROOT, "index.html"), landing());
+  console.log("index.html");
 }

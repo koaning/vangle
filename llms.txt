@@ -47,6 +47,7 @@ Complete small documents that combine the elements with a script.
 - [Throwing darts at a drawing](docs/gallery-darts.md): a Monte Carlo estimate of the area of a shape the reader paints in `<t-paint>`. Registered functions read the canvas's pixels, a `<t-obsplot>` shows the darts over the drawing (`Plot.image` of the data URL) and how the estimate settles, and the starting disc gives an estimate of π.
 - [What recomputes](docs/gallery-recompute.md): two `<t-let>`s and a registered `count` function that bumps a counter variable each time a variable runs, showing that only dependents re-run and that a variable read in several places runs once.
 - [Bézier curves](docs/gallery-bezier.md): de Casteljau's construction of a cubic Bézier curve in `<t-jsxgraph>`. Four draggable JSXGraph control points, mixed points that read a `<t-var>` `t` inside functions, the curve drawn up to `t`, a `<t-math>` formula whose weights are live `\val{}`s, and a Play button that animates `t`.
+- [Coaster nausea](docs/gallery-coaster-nausea.md): intensity against nausea for 142 RollerCoaster Tycoon 2 coasters, loaded by a `<t-fetch>` that sends a SQL query to datasette. A `<t-choice>` keeps, fixes or drops a broken row (the correlation goes from 0.20 to 0.72), and a `<t-math>` fit with a draggable intensity shows how far real rides spread around the line.
 
 ## Reference
 

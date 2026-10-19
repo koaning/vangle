@@ -50,6 +50,7 @@ export const NAV = [
     ["gallery-darts", "Throwing darts at a drawing"],
     ["gallery-recompute", "What recomputes"],
     ["gallery-bezier", "Bézier curves"],
+    ["gallery-coaster-nausea", "Coaster nausea"],
   ]],
   ["Reference", [
     ["javascript", "JavaScript API"],

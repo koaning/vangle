@@ -43,7 +43,7 @@ The stylesheet behind that example:
 
 | Selector | Matches |
 |---|---|
-| `t-num`, `t-choice`, `t-text`, `t-out`, `t-call`, `t-tag` | The elements themselves. |
+| `t-num`, `t-choice`, `t-select`, `t-text`, `t-out`, `t-call`, `t-tag` | The elements themselves. `t-select[aria-expanded="true"]` while its menu is open. |
 | `.t-call-key`, `.t-call-sep`, `.t-call-open`, `.t-call-close` | The parts a `<t-call>` adds: `name=`, the commas, `fn(` and `)`. `t-call.is-multiline` while it wraps one argument per line. `<t-tag>` has the same parts as `.t-tag-*`. |
 | `.t-code-punct`, `.t-code-tag`, `.t-code-attr`, `.t-code-string`, `.t-code-fn` | The syntax-highlighting tokens inside those parts. |
 | `.t-tag-flag` | A boolean attribute in a `<t-tag>`, which toggles it. `.is-off` while the attribute is off. |
@@ -56,6 +56,7 @@ The stylesheet behind that example:
 | `t-num::after` | The "drag" hint shown on hover. |
 | `html.tangle-dragging` | The page, during a drag. |
 | `.tangle-editor` | The typing field. `.is-invalid` while it holds something unparseable. |
+| `.tangle-menu` | The menu of a `<t-select>`: an `input` over a `ul` of options. `li.is-highlighted` is the one <kbd>Enter</kbd> picks, `li[aria-selected="true"]` the current one. |
 | `t-out.is-error` | An output whose expression threw. |
 | `.tangle-math-error` | The message shown in place of a formula that doesn't parse. |
 | `t-panel::part(header)`, `::part(label)`, `::part(toggle)`, `::part(body)` | The pieces of a floating panel. `t-panel[collapsed]` while it's minimized. See [`<t-panel>`](t-panel.md#styling). |

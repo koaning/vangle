@@ -39,6 +39,7 @@ Run `make docs`, serve the repo locally (`make serve`) and open:
 | `<t-let name="y" expr="x * 2">` | A named computed value. Other expressions and formulas can use it. |
 | `<t-out expr="x * 2" format="%.1f">` | Shows the result of an expression. |
 | `<t-choice name="n" options="yearly:1, monthly:12">monthly</t-choice>` | Click to cycle through options. Each option is `label` or `label:value`, numeric values become numbers, and `true`/`false` become booleans. Two options make a toggle. |
+| `<t-select name="g" options="Mercury:3.7, Earth:9.81, …">Earth</t-select>` | Like `<t-choice>`, but a click opens a menu of the options that the reader can search by typing. For long lists. |
 | `<t-text name="who">reader</t-text>` | Click to rewrite a piece of text. The variable holds a string. |
 | `<t-call fn="f" name="y">…</t-call>` | Shows its `<t-num>`, `<t-choice>` and `<t-text>` children as a call, `f(a=1, b='x')`. With `name`, the return value becomes a variable. `tangleCall(fn)` builds one from a JS function. |
 | `<t-fetch name="info" url="data/${planet}.json">` | Puts a server's answer in a variable, and asks again when the variables in `url`, `params` or `body` change. While a new answer loads, the old value shows dimmed. Answers are cached for the page, or in `localStorage` with `cache="local"`. |

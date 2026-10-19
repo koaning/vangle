@@ -1,6 +1,7 @@
 # `<t-choice>`
 
-A word the reader clicks to cycle through a list of options. With two options, it's a toggle.
+A word the reader clicks to cycle through a list of options. With two options, it's a toggle. For a
+long list, use a [`<t-select>`](t-select.md), which opens a menu the reader can search.
 
 <t-scope class="example" data-show-source="open">
   <p>Saving <t-num name="amount" value="200" min="0" max="2000" step="10" format="$%d"></t-num>

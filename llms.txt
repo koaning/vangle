@@ -23,6 +23,7 @@
 - [`<t-let>`](docs/t-let.md): a named value computed from other variables.
 - [`<t-out>`](docs/t-out.md): shows the live result of an expression in the text.
 - [`<t-choice>`](docs/t-choice.md): a word the reader clicks to cycle through options, or a toggle.
+- [`<t-select>`](docs/t-select.md): a word the reader clicks to pick from a searchable menu of options, for lists too long to cycle through. Same `options` as `<t-choice>`; set `el.options` from JavaScript for generated lists.
 - [`<t-text>`](docs/t-text.md): a piece of text the reader clicks to rewrite; its variable holds a string.
 - [`<t-call>`](docs/t-call.md): shows `<t-num>`, `<t-choice>` and `<t-text>` children as the arguments of a function call, `fn(a=1, b='x')`, with the return value as a variable. `tangleCall(fn, options)` builds one from a JavaScript function's parameter defaults.
 - [`<t-fetch>`](docs/t-fetch.md): a variable whose value comes from a server. `url` is a template with `${…}` expressions, `params` an expression for the query string and `body` one for a JSON POST body; it requests again when the variables they read change, with a debounce, and only the newest answer lands. While it waits, the old value stays and elements that depend on it get the class `is-stale` (dimmed). `loading` and `error` name variables for the state. Answers are cached for the page; `cache="local"` also keeps them in `localStorage`, revalidating on load.

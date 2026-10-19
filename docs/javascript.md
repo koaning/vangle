@@ -176,4 +176,5 @@ stop();
 | `katexCssUrl` | jsDelivr, KaTeX 0.19.0 | The KaTeX stylesheet, added if the page has none. |
 | `vegaUrl`, `vegaLiteUrl`, `vegaEmbedUrl` | jsDelivr: Vega 6.4.0, Vega-Lite 6.4.3, vega-embed 7.3.0 | The three Vega scripts, loaded in order. Each is skipped if its global (`vega`, `vegaLite`, `vegaEmbed`) already exists. |
 | `d3Url`, `plotUrl` | jsDelivr: d3 7.9.0, Observable Plot 0.6.17 | The two Plot scripts, loaded in order. Each is skipped if its global (`d3`, `Plot`) already exists. |
+| `jsxgraphUrl` | jsDelivr, JSXGraph 1.14.0 | The JSXGraph script, skipped if `JXG` already exists. |
 | `pixelsPerStep` | `5` | The default drag sensitivity. |

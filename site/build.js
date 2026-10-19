@@ -37,6 +37,7 @@ export const NAV = [
     ["t-math", "<code>&lt;t-math&gt;</code>"],
     ["t-vega", "<code>&lt;t-vega&gt;</code>"],
     ["t-obsplot", "<code>&lt;t-obsplot&gt;</code>"],
+    ["t-jsxgraph", "<code>&lt;t-jsxgraph&gt;</code>"],
     ["t-paint", "<code>&lt;t-paint&gt;</code>"],
     ["t-scope", "<code>&lt;t-scope&gt;</code>"],
     ["t-panel", "<code>&lt;t-panel&gt;</code>"],
@@ -48,6 +49,7 @@ export const NAV = [
     ["gallery-winners-curse", "The winner's curse"],
     ["gallery-darts", "Throwing darts at a drawing"],
     ["gallery-recompute", "What recomputes"],
+    ["gallery-bezier", "Bézier curves"],
   ]],
   ["Reference", [
     ["javascript", "JavaScript API"],

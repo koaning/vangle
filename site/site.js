@@ -64,8 +64,23 @@
     });
   }
 
+  // The body of a <script> (a module, a <t-obsplot> expression, a JSON spec) is highlighted as
+  // JavaScript, and the body of a <style> as CSS. The rest is markup.
   function highlightHtml(src) {
-    let inMath = false;
+    const parts = [];
+    let last = 0;
+    inMath = false;
+    for (const m of src.matchAll(/(<(script|style)\b[^>]*>)([\s\S]*?)(<\/\2\s*>)/g)) {
+      const body = m[2] === "style" ? highlightCss : highlightJs;
+      parts.push(highlightMarkup(src.slice(last, m.index) + m[1]), body(m[3]), highlightMarkup(m[4]));
+      last = m.index + m[0].length;
+    }
+    parts.push(highlightMarkup(src.slice(last)));
+    return parts.join("");
+  }
+
+  let inMath = false;
+  function highlightMarkup(src) {
     return src.replace(
       /(<!--[\s\S]*?-->)|(<\/?)([\w-]+)((?:\s+[\w-]+(?:="[^"]*")?)*)(\s*\/?>)|([^<]+)|([\s\S])/g,
       (match, comment, open, tag, attrs, close, text) => {

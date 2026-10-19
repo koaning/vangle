@@ -46,6 +46,7 @@ Run `make docs`, serve the repo locally (`make serve`) and open:
 | `<t-math display>…</t-math>` | A KaTeX formula with live markers (see below). Omit `display` for inline math. |
 | `<t-vega>…</t-vega>` | A Vega-Lite chart, with its spec in a `<script type="application/json">` or `src`. Vega loads only if the page has one. See [Vega](#vega). |
 | `<t-obsplot>…</t-obsplot>` | An Observable Plot chart, written as a JavaScript expression in a `<script type="text/plain">` or `src`. Plot loads only if the page has one. See [Observable Plot](#observable-plot). |
+| `<t-jsxgraph>…</t-jsxgraph>` | A JSXGraph board of draggable points, lines and curves, built by a script that runs once. `point("x", "y")` ties a point to two variables. JSXGraph loads only if the page has one. See [docs/t-jsxgraph.md](docs/t-jsxgraph.md). |
 | `<t-paint name="art" width height tools>` | A canvas the reader draws on, with brush, marker, eraser, undo and clear. The variable holds the drawing as a PNG data URL, updated when a stroke ends, and setting it loads a picture. |
 | `<t-scope>…</t-scope>` | Gives its contents their own variables. Without one, everything shares a page-wide scope. |
 | `<t-debug>` | The variables as a live graph, for writing: an edge from each variable to the formulas that read it, with values that pulse when they change, and the elements that show each one. Add `?tangle-debug` to any page's URL to float one over it. |

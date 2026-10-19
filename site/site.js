@@ -7,9 +7,9 @@
 // - [data-show-source] on an element appends a panel with its highlighted
 //   source (innerHTML for markup, textContent for a <script> or <style>).
 //   Use data-show-source="open" to expand the panel.
-// - <pre><code class="language-html|js|css"> is highlighted. The docs are
+// - <pre><code class="language-html|js|css|python"> is highlighted. The docs are
 //   generated from Markdown (site/build.js), whose code fences produce these.
-// - <script type="text/plain" data-lang="html|js|css"> is replaced by a
+// - <script type="text/plain" data-lang="html|js|css|python"> is replaced by a
 //   highlighted code block. Write "</script>" inside it as "<\/script>".
 // - [data-theme-toggle] buttons switch between light and dark by setting
 //   data-theme on <html>, remembered in localStorage. Until one is clicked, the
@@ -108,6 +108,21 @@
     );
   }
 
+  function highlightPython(src) {
+    return src.replace(
+      /(#.*)|((?:\b[rbfRBF]{1,2})?(?:"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'))|(@[\w.]+)|\b(import|from|as|def|class|return|if|elif|else|for|while|in|not|and|or|is|with|try|except|finally|raise|pass|break|continue|lambda|yield|async|await|global|None|True|False|self)\b|\b(\d[\d_]*(?:\.\d+)?)\b|([A-Za-z_]\w*)(?=\()|([^"'#@\w]+|[\s\S])/g,
+      (match, comment, string, decorator, keyword, number, call) => {
+        if (comment) return span("comment", esc(comment));
+        if (string) return span("string", esc(string));
+        if (decorator) return span("call", esc(decorator));
+        if (keyword) return span("keyword", keyword);
+        if (number) return span("number", number);
+        if (call) return span("call", call);
+        return esc(match);
+      },
+    );
+  }
+
   function highlightCss(src) {
     return src.replace(
       /(\/\*[\s\S]*?\*\/)|([^{}\s][^{};]*)(?=\{)|(--[\w-]+|[a-z-]+)(?=\s*:)|("[^"]*")|([\s\S])/g,
@@ -121,7 +136,7 @@
     );
   }
 
-  const highlighters = { html: highlightHtml, js: highlightJs, css: highlightCss };
+  const highlighters = { html: highlightHtml, js: highlightJs, css: highlightCss, python: highlightPython, py: highlightPython };
 
   function dedent(src) {
     const lines = src.replace(/^\s*\n/, "").replace(/\s+$/, "").split("\n");

@@ -18,6 +18,9 @@ import {
   plotOptions,
   TangleElement,
   scopeOf,
+  buildRequest,
+  inspectScope,
+  layoutGraph,
 } from "../tangle.js";
 
 const tick = () => new Promise((resolve) => setTimeout(resolve));
@@ -286,4 +289,118 @@ test("TangleElement: watch gets the scope and stops on disconnect, declare reads
   el.scope.set("widgetValue", 5);
   await tick();
   assert.deepEqual(seen, [3, 4]);
+});
+
+test("buildRequest fills in the URL template, the query string and a JSON body", () => {
+  const scope = new Scope();
+  scope.setValues({ planet: "mars", year: 2020, age: 40 });
+  assert.deepEqual(buildRequest(scope, { url: "data/${planet}.json" }), {
+    url: "data/mars.json",
+    init: { method: "GET" },
+    key: "GET data/mars.json ",
+  });
+  // A plain URL is just a string, backticks included.
+  assert.equal(buildRequest(scope, { url: "/a?q=`x`" }).url, "/a?q=`x`");
+  const get = buildRequest(scope, { url: "/rows?x=1", params: "{ year, limit: 10, skip: undefined }" });
+  assert.equal(get.url, "/rows?x=1&year=2020&limit=10");
+  const post = buildRequest(scope, { url: "/predict", body: "{ age }" });
+  assert.deepEqual(post.init, { method: "POST", body: '{"age":40}', headers: { "Content-Type": "application/json" } });
+  assert.equal(buildRequest(scope, { url: "/predict", body: "{ age }", method: "put" }).init.method, "PUT");
+  // The key changes with the request, and only then.
+  const key = (s) => buildRequest(s, { url: "/p", params: "{ y: Math.round(year / 10) }" }).key;
+  const before = key(scope);
+  scope.set("year", 2021);
+  assert.equal(key(scope), before);
+  scope.set("year", 2031);
+  assert.notEqual(key(scope), before);
+});
+
+test("an element that reads a pending variable, even through a formula, is stale", async () => {
+  class Widget extends TangleElement {
+    classes = new Set();
+    classList = { toggle: (c, on) => (on ? this.classes.add(c) : this.classes.delete(c)), remove: (c) => this.classes.delete(c) };
+  }
+  const scope = scopeOf(null);
+  scope.setValues({ answer: 1, other: 2 });
+  scope.define("doubled", "answer * 2");
+  const shows = new Widget();
+  shows.watch((s) => s.get("doubled"));
+  const unrelated = new Widget();
+  unrelated.watch((s) => s.get("other"));
+
+  scope.setPending("answer");
+  await tick();
+  assert.ok(shows.classes.has("is-stale"));
+  assert.ok(!unrelated.classes.has("is-stale"));
+
+  scope.set("answer", 5);
+  scope.setPending("answer", false);
+  await tick();
+  assert.ok(!shows.classes.has("is-stale"));
+
+  scope.setPending("answer");
+  await tick();
+  shows.disconnectedCallback();
+  assert.ok(!shows.classes.has("is-stale"));
+  scope.setPending("answer", false);
+  unrelated.disconnectedCallback();
+});
+
+test("inspectScope lists kinds, values, reads, readers and the elements that show each variable", async () => {
+  class Out extends TangleElement {
+    localName = "t-out";
+  }
+  const scope = new Scope();
+  scope.setValues({ w: 4, h: 3 });
+  scope.define("area", "w * h");
+  scope.define("tiles", "area / tile * (1 + wastage)");
+  scope.define("broken", () => {
+    throw new Error("nope");
+  });
+  const a = new Out();
+  a.watch(() => scope.get("area"));
+  const b = new Out();
+  b.watch(() => [scope.get("area"), scope.get("tiles")]);
+  scope.set("w", 5);
+  await tick();
+  scope.setPending("h");
+
+  const rows = Object.fromEntries(inspectScope(scope).map((row) => [row.name, row]));
+  assert.equal(rows.w.kind, "value");
+  assert.equal(rows.area.kind, "formula");
+  assert.equal(rows.area.value, 15);
+  assert.equal(rows.area.runs, 2); // once for the first read, once after w changed
+  assert.deepEqual(rows.area.reads.sort(), ["h", "w"]);
+  assert.deepEqual(rows.area.readBy, ["tiles"]);
+  assert.deepEqual(rows.area.elements, [a, b]);
+  assert.deepEqual(rows.w.readBy, ["area"]);
+  assert.equal(rows.h.pending, true);
+  // Read but never set: the typo in "tiles" shows up.
+  assert.equal(rows.wastage.kind, "unset");
+  assert.equal(rows.tile.kind, "unset");
+  assert.equal(rows.broken.error, "nope");
+
+  scope.setPending("h", false);
+  a.disconnectedCallback();
+  b.disconnectedCallback();
+});
+
+test("layoutGraph puts each formula a column right of what it reads, and keeps neighbours close", () => {
+  const row = (name, reads, value = 1) => ({ name, reads, readBy: [], value, kind: reads.length ? "formula" : "value" });
+  const rows = [row("tile", []), row("w", []), row("tiles", ["area", "tile"]), row("h", []), row("area", ["w", "h"]), row("loop", ["loop"])];
+  for (const r of rows) for (const n of r.reads) rows.find((x) => x.name === n).readBy.push(r.name);
+  const { nodes, edges, width, height } = layoutGraph(rows);
+  const at = Object.fromEntries(nodes.map((n) => [n.row.name, n]));
+  assert.equal(at.w.x, at.h.x);
+  assert.ok(at.area.x > at.w.x);
+  assert.ok(at.tiles.x > at.area.x); // after area, though it also reads tile from the first column
+  assert.equal(nodes.at(-1).row.name, "tiles"); // nodes come in column order
+  assert.equal(edges.length, 5); // a self-loop is drawn too, and doesn't hang the layout
+  // tile reads into tiles, which sits below area: tile goes below w and h.
+  assert.ok(at.tile.y > at.w.y && at.tile.y > at.h.y);
+  for (const n of nodes) assert.ok(n.x + n.width <= width && n.y + n.height <= height);
+  // No two boxes overlap.
+  for (const a of nodes) for (const b of nodes) {
+    if (a !== b && a.x === b.x) assert.ok(a.y + a.height <= b.y || b.y + b.height <= a.y);
+  }
 });

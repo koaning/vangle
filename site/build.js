@@ -32,6 +32,7 @@ export const NAV = [
     ["t-choice", "<code>&lt;t-choice&gt;</code>"],
     ["t-text", "<code>&lt;t-text&gt;</code>"],
     ["t-call", "<code>&lt;t-call&gt;</code>"],
+    ["t-fetch", "<code>&lt;t-fetch&gt;</code>"],
     ["t-tag", "<code>&lt;t-tag&gt;</code>"],
     ["t-math", "<code>&lt;t-math&gt;</code>"],
     ["t-vega", "<code>&lt;t-vega&gt;</code>"],
@@ -40,6 +41,7 @@ export const NAV = [
     ["t-paint", "<code>&lt;t-paint&gt;</code>"],
     ["t-scope", "<code>&lt;t-scope&gt;</code>"],
     ["t-panel", "<code>&lt;t-panel&gt;</code>"],
+    ["t-debug", "<code>&lt;t-debug&gt;</code>"],
   ]],
   ["Gallery", [
     ["gallery-matrix", "Matrix transformations"],

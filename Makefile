@@ -1,16 +1,16 @@
-.PHONY: all docs site test serve pr
+.PHONY: all docs site test serve dev pr
 
 # Rebuild the docs and run the tests.
 all: docs test
 
-# Generate docs/*.html from docs/*.md. The HTML is gitignored.
+# Generate docs/*.html from docs/*.md, and index.html from index.md. The HTML is gitignored.
 docs:
 	node site/build.js
 
 # Assemble the site that GitHub Pages publishes in _site/.
 site: docs
 	rm -rf _site && mkdir -p _site/docs _site/site
-	cp index.html tangle.js tangle.css llms.txt _site/
+	cp index.html index.md tangle.js tangle.css llms.txt _site/
 	cp docs/*.html docs/*.md _site/docs/
 	cp -R docs/data _site/docs/
 	cp site/site.css site/site.js site/favicon.svg _site/site/
@@ -22,6 +22,11 @@ test:
 PORT ?= 8000
 serve:
 	python3 -m http.server $(PORT)
+
+# Serve the site like `make serve`, but rebuild the HTML when the Markdown changes
+# and reload open pages on any change.
+dev:
+	PORT=$(PORT) node site/serve.js
 
 # Test, then push the current branch and open a pull request against main,
 # filled in from the commits. Commit your work first.

@@ -26,7 +26,7 @@ If you import from `tangle.js` in your own module (to register functions, or for
 
 Run `make docs`, serve the repo locally (`make serve`) and open:
 
-- `index.html` for the demos.
+- `index.html` for the demos (built from `index.md`).
 - `docs/index.html` for the documentation: a page per element with live examples, guides on expressions and formats, blogging (Markdown, KaTeX, CSP), the JavaScript API and styling, and a gallery of complete examples.
 - `llms.txt` for LLMs. It links to the Markdown source of each docs page.
 
@@ -191,15 +191,16 @@ By default KaTeX 0.19.0 comes from jsdelivr. To use a different copy:
 ```sh
 make           # rebuild the docs, then run the tests
 make test      # node --test: signals, formats, expressions, TeX parsing, docs build
-make docs      # generate docs/*.html from docs/*.md
+make docs      # generate docs/*.html from docs/*.md, and index.html from index.md
 make site      # assemble the published site in _site/
 make serve     # serve the repo at http://localhost:8000 (run make docs first)
+make dev       # serve it with live reload, rebuilding the HTML when the Markdown changes
 make pr        # test, push the branch and open a pull request
 ```
 
 CI runs `make test` on every push to main and on pull requests. On main, the Pages workflow also runs `make site` and publishes `_site/` to GitHub Pages.
 
-The docs are written in Markdown (`docs/*.md`), and `site/build.js` turns them into the HTML pages. The HTML is generated, not committed (it's gitignored). Live examples are raw HTML blocks in the Markdown, so the HTML in the docs is the HTML a reader would copy. `llms.txt` is written by hand; update it when a page is added.
+The docs and the landing page are written in Markdown (`docs/*.md` and `index.md`), and `site/build.js` turns them into the HTML pages, with the same sidebar. The HTML is generated, not committed (it's gitignored). Live examples are raw HTML blocks in the Markdown, so the HTML in the docs is the HTML a reader would copy. `llms.txt` is written by hand; update it when a page is added.
 
 ## Credits
 

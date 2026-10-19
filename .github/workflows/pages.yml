@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 22
       - run: make test
-      # Builds docs/*.html from docs/*.md and assembles the site in _site/.
+      # Builds docs/*.html and index.html from their Markdown and assembles the site in _site/.
       - run: make site
       - uses: actions/upload-pages-artifact@v3
         with:

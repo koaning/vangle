@@ -5,6 +5,6 @@ run_mode = "concurrent"
 
 [scripts.run.serve]
 available_in = [ "local" ]
-command = "make docs && make serve PORT=$CONDUCTOR_PORT"
+command = "make dev PORT=$CONDUCTOR_PORT"
 default = true
 icon = "globe"

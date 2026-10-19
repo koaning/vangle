@@ -27,8 +27,8 @@ the call's return value becomes a variable you can show anywhere.
   });
 </script>
 
-The arguments are ordinary [`<t-num>`](t-num.md), [`<t-choice>`](t-choice.md) and
-[`<t-text>`](t-text.md) elements, so they work exactly as they do in prose. They are also
+The arguments are ordinary [`<t-num>`](t-num.md), [`<t-choice>`](t-choice.md),
+[`<t-select>`](t-select.md) and [`<t-text>`](t-text.md) elements, so they work exactly as they do in prose. They are also
 ordinary variables: the `deposit` in the sentence is the same one as in the call, and hovering
 either highlights both. `<t-call>` adds the function name, a `name=` before each argument and
 the punctuation in between. String values get quotes. To show an HTML element instead
@@ -64,7 +64,7 @@ signature reads. Each default sets the starting value and the kind of argument:
 |---|---|
 | A number | A draggable [`<t-num>`](t-num.md). The step is `1` for whole numbers, and otherwise matches the default's decimals: `0.05` steps by `0.01`. |
 | `true` or `false` | A [`<t-choice>`](t-choice.md) toggle between `true` and `false`. |
-| A string | An editable [`<t-text>`](t-text.md), or a choice if you give `options`. |
+| A string | An editable [`<t-text>`](t-text.md), or a choice if you give `options`: a [`<t-select>`](t-select.md) with `select: true`. |
 
 Add the returned element to the page. It joins the scope it lands in:
 
@@ -98,7 +98,7 @@ The options are:
 | Option | Description |
 |---|---|
 | `name` | The variable that holds the return value, like the `name` attribute. |
-| `params` | Settings per parameter: `min`, `max`, `step`, `format`, `color`, `label` and `pixelsPerStep` work as the attributes of the same name. `options` (a list of values, or `{ label, value }` objects) turns the argument into a choice, and `value` replaces the default. |
+| `params` | Settings per parameter: `min`, `max`, `step`, `format`, `color`, `label` and `pixelsPerStep` work as the attributes of the same name. `options` (a list of values, or `{ label, value }` objects) turns the argument into a choice, `select: true` makes that choice a [`<t-select>`](t-select.md) menu, and `value` replaces the default. |
 
 The returned element has no `display` attribute. Set it before adding the element to get the block style:
 `el.setAttribute("display", "")`.

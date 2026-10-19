@@ -44,7 +44,8 @@ Try dragging the number. You can also click it to type a value, or focus it and 
 Every value in the document is a named *variable*. A variable is declared by
 [`<t-num>`](t-num.md),
 [`<t-var>`](t-var.md),
-[`<t-choice>`](t-choice.md) or
+[`<t-choice>`](t-choice.md),
+[`<t-select>`](t-select.md) or
 [`<t-text>`](t-text.md) (values the reader can change), or by
 [`<t-let>`](t-let.md) and [`<t-call>`](t-call.md) (values computed from other variables).
 Names follow JavaScript identifier rules: `rate`, `x2`, `total_cost`.
@@ -83,6 +84,7 @@ RSS readers and no-JS browsers still get a readable sentence.
 | [`<t-let>`](t-let.md) | A named value computed from other variables. |
 | [`<t-out>`](t-out.md) | Showing the live result of an expression in the text. |
 | [`<t-choice>`](t-choice.md) | A word the reader clicks to cycle through options, or a toggle. |
+| [`<t-select>`](t-select.md) | A word the reader clicks to pick from a searchable menu of options. |
 | [`<t-text>`](t-text.md) | A piece of text the reader clicks to rewrite. |
 | [`<t-call>`](t-call.md) | A function call whose arguments the reader can change, with the result as a variable. |
 | [`<t-tag>`](t-tag.md) | An HTML tag whose attributes the reader can change, with the live element below it. |

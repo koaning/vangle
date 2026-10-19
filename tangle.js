@@ -392,6 +392,44 @@ function parseNumber(text) {
 }
 
 // ---------------------------------------------------------------------------
+// Options, for <t-choice> and <t-select>
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse options="yearly:1, monthly:12" into `[{ label, value }]`. Without a
+ * `:value` the label is the value; numeric values become numbers, and true
+ * and false become booleans.
+ */
+export function parseOptions(text) {
+  return text.split(",").map((raw) => {
+    const [label, value = label] = raw.split(":").map((s) => s.trim());
+    if (value === "true" || value === "false") return { label, value: value === "true" };
+    return { label, value: value !== "" && Number.isFinite(Number(value)) ? Number(value) : value };
+  });
+}
+
+/**
+ * The options whose label contains `query`, ignoring case: labels that start
+ * with it first, then labels with a word that starts with it, then the rest.
+ */
+export function filterOptions(options, query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [...options];
+  const rank = (label) => {
+    let at = label.indexOf(q);
+    if (at <= 0) return at;
+    for (; at > 0; at = label.indexOf(q, at + 1)) if (!/[\p{L}\p{N}]/u.test(label[at - 1])) return 1;
+    return 2;
+  };
+  const groups = [[], [], []];
+  for (const option of options) {
+    const r = rank(String(option.label).toLowerCase());
+    if (r >= 0) groups[r].push(option);
+  }
+  return groups.flat();
+}
+
+// ---------------------------------------------------------------------------
 // TeX markers: \tangle[symbol]{name} and \val[format]{expression}
 // ---------------------------------------------------------------------------
 
@@ -772,10 +810,8 @@ function openEditor(el, { text = false } = {}) {
   if (text) input.value = value == null ? "" : String(value);
   else input.value = typeof value === "number" ? formatValue(value, null, meta.step) : "";
   if (meta.color) input.style.setProperty("--tangle-color", meta.color);
-  const rect = el.getBoundingClientRect();
-  input.style.left = `${rect.left + window.scrollX + rect.width / 2}px`;
-  input.style.top = `${rect.bottom + window.scrollY + 6}px`;
   document.body.append(input);
+  placeBelow(input, el);
   editor = { input, scope, name, meta, text, where: occurrence(el) };
   active.value = keyOf(scope, name);
   input.addEventListener("keydown", (event) => {
@@ -824,6 +860,121 @@ function closeEditor(commit, { strict = false } = {}) {
     // After the value lands (and any formula re-renders), return focus.
     queueMicrotask(() => relocate(ed.where, ed.name)?.focus({ preventScroll: true }));
   }
+}
+
+/** Centers a popup (already on the page) just under `el`, keeping it inside the window. */
+function placeBelow(popup, el) {
+  const rect = el.getBoundingClientRect();
+  const half = popup.offsetWidth / 2;
+  const right = document.documentElement.clientWidth - half - 8;
+  const center = Math.max(half + 8, Math.min(rect.left + rect.width / 2, right));
+  popup.style.left = `${center + window.scrollX}px`;
+  popup.style.top = `${rect.bottom + window.scrollY + 6}px`;
+}
+
+// A <t-select> opens a menu: a search field over its options. Typing filters
+// them, the arrow keys move the highlight, and Enter or a click picks one.
+let menu = null;
+let menuCount = 0;
+
+function openMenu(el, options, query = "") {
+  closeMenu();
+  const scope = scopeOf(el);
+  const name = el.getAttribute("name");
+  const meta = scope.slot(name).meta.peek();
+  const box = document.createElement("div");
+  box.className = "tangle-menu";
+  if (meta.color) box.style.setProperty("--tangle-color", meta.color);
+  const input = document.createElement("input");
+  Object.assign(input, { type: "text", value: query, placeholder: "Search…", autocomplete: "off", spellcheck: false });
+  input.setAttribute("role", "combobox");
+  input.setAttribute("aria-expanded", "true");
+  input.setAttribute("aria-autocomplete", "list");
+  input.setAttribute("aria-label", `Search ${meta.label ?? name}`);
+  const list = document.createElement("ul");
+  list.id = `tangle-menu-${++menuCount}`;
+  list.setAttribute("role", "listbox");
+  list.setAttribute("aria-label", meta.label ?? name);
+  input.setAttribute("aria-controls", list.id);
+  box.append(input, list);
+  document.body.append(box);
+  menu = { el, box, input, list, options, scope, name, shown: [], index: -1 };
+  el.setAttribute("aria-expanded", "true");
+  renderMenu();
+  placeBelow(box, el);
+  input.addEventListener("input", () => renderMenu());
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "ArrowDown") highlight(menu.index + 1);
+    else if (event.key === "ArrowUp") highlight(menu.index - 1);
+    else if (event.key === "Enter") closeMenu(true);
+    else if (event.key === "Escape" || event.key === "Tab") closeMenu();
+    else return;
+    event.preventDefault();
+  });
+  input.addEventListener("blur", () => closeMenu());
+  // Keep the focus in the search field while the pointer picks.
+  list.addEventListener("pointerdown", (event) => event.preventDefault());
+  list.addEventListener("pointermove", (event) => {
+    const row = event.target.closest("[role=option]");
+    if (row) highlight([...list.children].indexOf(row), false);
+  });
+  list.addEventListener("click", (event) => {
+    if (event.target.closest("[role=option]")) closeMenu(true);
+  });
+  input.focus();
+}
+
+/** Shows the options that match the search, highlighting the first, or else the current one. */
+function renderMenu() {
+  const { input, list, options, scope, name } = menu;
+  const query = input.value;
+  const current = scope.peek(name);
+  menu.shown = filterOptions(options, query);
+  list.replaceChildren(
+    ...menu.shown.map((option, i) => {
+      const row = document.createElement("li");
+      row.id = `${list.id}-${i}`;
+      row.setAttribute("role", "option");
+      row.setAttribute("aria-selected", String(Object.is(option.value, current)));
+      row.textContent = option.label;
+      return row;
+    }),
+  );
+  if (!menu.shown.length) {
+    const empty = document.createElement("li");
+    empty.className = "tangle-menu-empty";
+    empty.textContent = "No matches";
+    list.append(empty);
+  }
+  highlight(query.trim() ? 0 : menu.shown.findIndex((o) => Object.is(o.value, current)));
+}
+
+function highlight(index, scroll = true) {
+  const { input, list, shown } = menu;
+  menu.index = shown.length ? Math.max(0, Math.min(index, shown.length - 1)) : -1;
+  const rows = shown.length ? [...list.children] : [];
+  rows.forEach((row, i) => row.classList.toggle("is-highlighted", i === menu.index));
+  const row = rows[menu.index];
+  if (row) input.setAttribute("aria-activedescendant", row.id);
+  else input.removeAttribute("aria-activedescendant");
+  // Scroll the list, not the page (scrollIntoView would scroll both).
+  if (row && scroll) {
+    const bottom = row.offsetTop + row.offsetHeight;
+    if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
+    else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+  }
+}
+
+function closeMenu(pick = false) {
+  if (!menu) return;
+  const m = menu;
+  menu = null;
+  const option = pick ? m.shown[m.index] : undefined;
+  if (option) m.scope.set(m.name, option.value);
+  const refocus = document.activeElement === m.input;
+  m.box.remove();
+  m.el.setAttribute("aria-expanded", "false");
+  if (refocus) m.el.focus({ preventScroll: true });
 }
 
 function syncClasses(el, scope, name) {
@@ -1520,52 +1671,36 @@ class TOut extends TangleElement {
   }
 }
 
-// <t-choice name="n" options="yearly:1, monthly:12, daily:365">monthly</t-choice>
-// Click to cycle. Options are "label" or "label:value"; numeric values become numbers,
-// and true and false become booleans.
-// From JavaScript, set `el.options = [{ label, value }, …]` before adding it to the page.
-class TChoice extends TangleElement {
+// Shared by <t-choice> and <t-select>: a variable that holds one of a list of options.
+// Options are "label" or "label:value"; numeric values become numbers, and true and
+// false become booleans. From JavaScript, set `el.options = [{ label, value }, …]`
+// before adding the element to the page. Subclasses say how the reader picks, in
+// handlers(), an object of event listeners.
+class ChoiceElement extends TangleElement {
   connectedCallback() {
     const name = validName(this);
     if (!name) return;
     const scope = scopeOf(this);
-    const options =
-      this.options ??
-      (this.getAttribute("options") ?? "").split(",").map((raw) => {
-        const [label, value = label] = raw.split(":").map((s) => s.trim());
-        if (value === "true" || value === "false") return { label, value: value === "true" };
-        return { label, value: value !== "" && Number.isFinite(Number(value)) ? Number(value) : value };
-      });
+    const options = this.options ?? parseOptions(this.getAttribute("options") ?? "");
     if (!options.length || !options[0].label) {
-      console.error('tangle: <t-choice> needs options="a, b, c"', this);
+      console.error(`tangle: <${this.localName}> needs options="a, b, c"`, this);
       return;
     }
+    this._options = options;
     this._initial ??= this.getAttribute("value") ?? this.textContent.trim();
     const start =
       options.find((o) => String(o.value) === this._initial) ??
       options.find((o) => o.label === this._initial) ??
       options[0];
     this.declare(name, start.value);
-    const indexOf = (value) => options.findIndex((o) => Object.is(o.value, value));
-    const cycle = (by) => {
-      const i = indexOf(scope.peek(name));
-      scope.set(name, options[(i + by + options.length) % options.length].value);
-    };
     this.tabIndex = 0;
     this.setAttribute("role", "button");
-    this._onClick ??= (event) => cycle(event.shiftKey ? -1 : 1);
-    this._onKey ??= (event) => {
-      if (event.key === "Enter" || event.key === " " || event.key === "ArrowRight") cycle(1);
-      else if (event.key === "ArrowLeft") cycle(-1);
-      else return;
-      event.preventDefault();
-    };
-    this.addEventListener("click", this._onClick);
-    this.addEventListener("keydown", this._onKey);
+    this._handlers ??= this.handlers();
+    for (const [type, fn] of Object.entries(this._handlers)) this.addEventListener(type, fn);
     this.watch(() => {
       const meta = scope.meta(name);
       const value = scope.get(name);
-      const option = options[indexOf(value)];
+      const option = options.find((o) => Object.is(o.value, value));
       this.textContent = option ? option.label : formatValue(value);
       this.dataset.type = typeof value;
       this.setAttribute("aria-label", `${meta.label ?? name}: ${this.textContent}. Click to change.`);
@@ -1574,8 +1709,66 @@ class TChoice extends TangleElement {
   }
   disconnectedCallback() {
     super.disconnectedCallback();
-    this.removeEventListener("click", this._onClick);
-    this.removeEventListener("keydown", this._onKey);
+    for (const [type, fn] of Object.entries(this._handlers ?? {})) this.removeEventListener(type, fn);
+  }
+  /** Moves `by` options from the current one, wrapping around. */
+  step(by) {
+    const options = this._options;
+    const name = this.getAttribute("name");
+    const i = options.findIndex((o) => Object.is(o.value, this.scope.peek(name)));
+    this.scope.set(name, options[(i + by + options.length) % options.length].value);
+  }
+}
+
+// <t-choice name="n" options="yearly:1, monthly:12, daily:365">monthly</t-choice>
+// Click to cycle through the options.
+class TChoice extends ChoiceElement {
+  handlers() {
+    return {
+      click: (event) => this.step(event.shiftKey ? -1 : 1),
+      keydown: (event) => {
+        if (event.key === "Enter" || event.key === " " || event.key === "ArrowRight") this.step(1);
+        else if (event.key === "ArrowLeft") this.step(-1);
+        else return;
+        event.preventDefault();
+      },
+    };
+  }
+}
+
+// <t-select name="g" options="Mercury:3.7, Venus:8.87, Earth:9.81, …">Earth</t-select>
+// Click to open a menu of the options, and type to search it. For long lists.
+class TSelect extends ChoiceElement {
+  connectedCallback() {
+    super.connectedCallback();
+    if (!this._options) return;
+    this.setAttribute("aria-haspopup", "listbox");
+    this.setAttribute("aria-expanded", "false");
+  }
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (menu?.el === this) closeMenu();
+  }
+  handlers() {
+    let wasOpen = false;
+    return {
+      // A click on the word while its menu is open closes the menu (the search field
+      // loses focus first), rather than opening it again.
+      pointerdown: () => (wasOpen = menu?.el === this),
+      click: () => {
+        if (!wasOpen) openMenu(this, this._options);
+        wasOpen = false;
+      },
+      keydown: (event) => {
+        if (event.altKey || event.metaKey || event.ctrlKey) return;
+        if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown") openMenu(this, this._options);
+        else if (event.key === "ArrowRight") this.step(1);
+        else if (event.key === "ArrowLeft") this.step(-1);
+        else if (event.key.length === 1) openMenu(this, this._options, event.key);
+        else return;
+        event.preventDefault();
+      },
+    };
   }
 }
 
@@ -2507,8 +2700,9 @@ const CALL_ATTRS = {
  * Build a <t-call> with one argument per parameter of `fn`. Each default sets
  * the starting value and the kind of argument: numbers drag, booleans toggle,
  * strings are editable text. `params` adds settings per parameter:
- * `{ min, max, step, format, color, label, pixelsPerStep, options, value }`,
- * where `options` (values, or `{ label, value }` objects) makes it a choice.
+ * `{ min, max, step, format, color, label, pixelsPerStep, options, select, value }`,
+ * where `options` (values, or `{ label, value }` objects) makes it a choice, and
+ * `select: true` makes that choice a searchable menu, a <t-select>.
  * Add the result to the page; it joins the scope it lands in.
  */
 export function tangleCall(fn, { name, params = {} } = {}) {
@@ -2524,7 +2718,7 @@ export function tangleCall(fn, { name, params = {} } = {}) {
     }
     let el;
     if (opts.options || typeof value === "boolean") {
-      el = document.createElement("t-choice");
+      el = document.createElement(opts.select ? "t-select" : "t-choice");
       el.options = (opts.options ?? [true, false]).map((o) =>
         o !== null && typeof o === "object" ? o : { label: String(o), value: o },
       );
@@ -2566,6 +2760,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-let": TLet,
     "t-out": TOut,
     "t-choice": TChoice,
+    "t-select": TSelect,
     "t-text": TText,
     "t-call": TCall,
     "t-tag": TTag,

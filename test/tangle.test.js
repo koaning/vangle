@@ -11,6 +11,8 @@ import {
   parseTex,
   toTex,
   snap,
+  parseOptions,
+  filterOptions,
   vegaBindings,
   diffRows,
   parseParams,
@@ -131,6 +133,31 @@ test("snap clamps and rounds to the step grid", () => {
   assert.equal(snap(42, { min: 0, max: 10 }), 10);
   assert.equal(snap(0.1 + 0.2, { step: 0.1 }), 0.3);
   assert.equal(snap(4, { min: 1, step: 2 }), 5); // anchored at min
+});
+
+test("parseOptions reads labels, values, numbers and booleans", () => {
+  assert.deepEqual(parseOptions(" per week:52, per month : 12,yearly"), [
+    { label: "per week", value: 52 },
+    { label: "per month", value: 12 },
+    { label: "yearly", value: "yearly" },
+  ]);
+  assert.deepEqual(parseOptions("on:true, off:false, 0, -1.5"), [
+    { label: "on", value: true },
+    { label: "off", value: false },
+    { label: "0", value: 0 },
+    { label: "-1.5", value: -1.5 },
+  ]);
+});
+
+test("filterOptions ranks a prefix, then a word start, then any match", () => {
+  const options = ["Ganymede", "Titan", "Enceladus", "the Moon", "Mars", "Saturn"].map((label) => ({ label, value: label }));
+  const labels = (query) => filterOptions(options, query).map((o) => o.label);
+  assert.deepEqual(labels(""), options.map((o) => o.label));
+  assert.deepEqual(labels("  "), options.map((o) => o.label));
+  assert.deepEqual(labels("m"), ["Mars", "the Moon", "Ganymede"]);
+  assert.deepEqual(labels("TI"), ["Titan"]);
+  assert.deepEqual(labels("an"), ["Ganymede", "Titan"]);
+  assert.deepEqual(labels("xyz"), []);
 });
 
 test("parseTex finds markers, options and nested braces", () => {

@@ -23,6 +23,7 @@
 - [`<t-let>`](docs/t-let.md): a named value computed from other variables.
 - [`<t-out>`](docs/t-out.md): shows the live result of an expression in the text.
 - [`<t-choice>`](docs/t-choice.md): a word the reader clicks to cycle through options, or a toggle.
+- [`<t-select>`](docs/t-select.md): a word the reader clicks to pick from a searchable menu of options, for lists too long to cycle through. Same `options` as `<t-choice>`; set `el.options` from JavaScript for generated lists.
 - [`<t-text>`](docs/t-text.md): a piece of text the reader clicks to rewrite; its variable holds a string.
 - [`<t-call>`](docs/t-call.md): shows `<t-num>`, `<t-choice>` and `<t-text>` children as the arguments of a function call, `fn(a=1, b='x')`, with the return value as a variable. `tangleCall(fn, options)` builds one from a JavaScript function's parameter defaults.
 - [`<t-tag>`](docs/t-tag.md): shows an HTML tag, `<input type="range" max="10">`, whose attributes are `<t-num>`, `<t-choice>` and `<t-text>` children, with the live element rendered below it. Useful for documenting an element's attributes.

@@ -1,0 +1,63 @@
+/* Function calls ---------------------------------------------------------- */
+
+t-call {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: bottom;
+  white-space: pre;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+t-call[display] {
+  display: block;
+  box-sizing: border-box;
+  width: fit-content;
+  margin: 1rem 0;
+  padding: 0.7em 1em;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 8px;
+  background: var(--tangle-surface);
+  line-height: 1.8;
+}
+
+/* Syntax highlighting, shared with <t-tag>. Values the reader can change keep the accent color. */
+.t-code-punct {
+  color: color-mix(in srgb, currentColor var(--tangle-muted), transparent);
+}
+
+.t-code-tag {
+  color: var(--tangle-code-tag);
+}
+
+.t-code-attr {
+  color: var(--tangle-code-attr);
+}
+
+.t-code-string {
+  color: var(--tangle-code-string);
+}
+
+/* In code, strings get quotes and the color is enough of a hint. */
+t-call t-select::after {
+  content: none;
+}
+
+t-call t-text::before,
+t-call t-text::after,
+t-call t-choice[data-type="string"]::before,
+t-call t-choice[data-type="string"]::after,
+t-call t-select[data-type="string"]::before,
+t-call t-select[data-type="string"]::after {
+  content: "'";
+  margin: 0;
+  font-size: inherit;
+  color: var(--tangle-code-string);
+}
+
+t-call t-num,
+t-call t-choice,
+t-call t-select,
+t-call t-text {
+  border-bottom: 0;
+}

@@ -13,7 +13,14 @@ the base template, so every post can use the elements:
 <script type="module" src="/assets/tangle.js"></script>
 ```
 
-Pages without any `t-*` elements pay only for downloading the file, about 30 KB unminified.
+Or skip the copying and load them from jsDelivr:
+
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/koaning/vangle@v0.1.0/tangle.min.css">
+<script type="module" src="https://cdn.jsdelivr.net/gh/koaning/vangle@v0.1.0/tangle.min.js"></script>
+```
+
+Pages without any `t-*` elements pay only for downloading the file, about 40 KB gzipped.
 Nothing else is loaded or run. Formulas fetch KaTeX only when they appear.
 
 ## Markdown {#markdown}

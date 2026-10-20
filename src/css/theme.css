@@ -1,0 +1,33 @@
+:root {
+  --tangle-accent: #246bce;
+  --tangle-soft: 14%; /* strength of the hover/drag highlight */
+  --tangle-surface: #fff;
+  --tangle-error: #c9382b;
+  --tangle-muted: 55%; /* strength of the punctuation in <t-call> and <t-tag> */
+  --tangle-stale: 0.45; /* opacity of a value waiting on a new answer */
+  --tangle-code-tag: #6f5cbd;
+  --tangle-code-attr: #b45b1b;
+  --tangle-code-string: #147a68;
+  --tangle-chart-grid: 12%; /* strength of the gridlines */
+  --tangle-chart-text: 60%; /* strength of the tick and axis labels */
+  --tangle-chart-font: 12px ui-sans-serif, system-ui, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --tangle-accent: #75a7ff;
+    --tangle-surface: #22201d;
+    --tangle-code-tag: #b9a8ff;
+    --tangle-code-attr: #ffad66;
+    --tangle-code-string: #5ed5bd;
+  }
+}
+
+:root[data-theme="dark"],
+:root.dark {
+  --tangle-accent: #75a7ff;
+  --tangle-surface: #22201d;
+  --tangle-code-tag: #b9a8ff;
+  --tangle-code-attr: #ffad66;
+  --tangle-code-string: #5ed5bd;
+}

@@ -1,0 +1,27 @@
+/* Choices ----------------------------------------------------------------- */
+
+t-choice,
+t-select {
+  color: var(--tangle-color, var(--tangle-accent));
+  border-bottom: 1px dotted currentColor;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 0.18em;
+  outline: none;
+}
+
+t-choice:hover,
+t-choice:focus-visible,
+t-select:hover,
+t-select:focus-visible,
+t-select[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--tangle-color, var(--tangle-accent)) var(--tangle-soft), transparent);
+}
+
+/* A caret says that a <t-select> opens a menu. */
+t-select::after {
+  content: "▾";
+  margin-left: 0.15em;
+  font-size: 0.75em;
+}

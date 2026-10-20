@@ -6,6 +6,7 @@
   "main": "tangle.js",
   "files": ["tangle.js", "tangle.css"],
   "scripts": {
+    "build": "node site/bundle.js",
     "test": "node --test",
     "docs": "node site/build.js"
   },

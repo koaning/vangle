@@ -1,9 +1,10 @@
 // Serves the repo for development with live reload. Run it with `make dev`.
 //
-// - A change to a Markdown page (or to site/build.js) rebuilds the HTML.
+// - A change under src/ rebuilds tangle.js and tangle.css, and a change to a
+//   Markdown page rebuilds the HTML.
 // - Any change reloads the open pages: each served HTML page gets a script
 //   that listens on /__reload (server-sent events).
-// The generated HTML is ignored by the watcher, since this server writes it.
+// The generated files are ignored by the watcher, since this server writes them.
 import { execFileSync } from "node:child_process";
 import { readFile, watch } from "node:fs";
 import { createServer } from "node:http";
@@ -17,14 +18,16 @@ const TYPES = {
   ".md": "text/markdown", ".txt": "text/plain", ".json": "application/json", ".png": "image/png",
 };
 const RELOAD = `<script>new EventSource("/__reload").onmessage = () => location.reload();</script>`;
-const IGNORED = /^(\.git|_site|node_modules|\.context)\/|^(docs\/[^/]+\.html|index\.html)$/;
-const SOURCE = /\.md$|^site\/build\.js$/;
+const IGNORED = /^(\.git|_site|node_modules|\.context)\/|^(docs\/[^/]+\.html|index\.html|tangle\.js|tangle\.css)$/;
+const SOURCE = /\.md$|^src\/|^site\/(build|bundle)\.js$/;
 
 const clients = new Set();
 
 function rebuild() {
   try {
-    execFileSync(process.execPath, [join(ROOT, "site/build.js")], { stdio: ["ignore", "ignore", "pipe"] });
+    for (const script of ["site/bundle.js", "site/build.js"]) {
+      execFileSync(process.execPath, [join(ROOT, script)], { stdio: ["ignore", "ignore", "pipe"] });
+    }
     return true;
   } catch (err) {
     console.error(`Build failed:\n${err.stderr ?? err.message}`);

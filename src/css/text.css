@@ -1,0 +1,20 @@
+/* Editable text ----------------------------------------------------------- */
+
+t-text {
+  color: var(--tangle-color, var(--tangle-accent));
+  border-bottom: 1px dotted currentColor;
+  cursor: text;
+  user-select: none;
+  -webkit-user-select: none;
+  border-radius: 0.18em;
+  outline: none;
+}
+
+t-text:empty {
+  padding-inline: 0.6em;
+}
+
+t-text:hover,
+t-text:focus-visible {
+  background: color-mix(in srgb, var(--tangle-color, var(--tangle-accent)) var(--tangle-soft), transparent);
+}

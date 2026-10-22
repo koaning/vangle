@@ -1,0 +1,10 @@
+/* Outputs ----------------------------------------------------------------- */
+
+t-out {
+  font-variant-numeric: tabular-nums;
+}
+
+t-out.is-error {
+  color: var(--tangle-error);
+  cursor: help;
+}

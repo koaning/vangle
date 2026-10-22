@@ -1,0 +1,29 @@
+/* Click-to-type editor ---------------------------------------------------- */
+
+.tangle-editor {
+  --tangle-c: var(--tangle-color, var(--tangle-accent));
+  position: absolute;
+  z-index: 1000;
+  width: 6em;
+  transform: translateX(-50%);
+  padding: 5px 8px;
+  border: 1px solid var(--tangle-c);
+  border-radius: 6px;
+  background: var(--tangle-surface);
+  color: var(--tangle-c);
+  font: 600 0.9rem/1.2 ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tangle-c) 18%, transparent), 0 6px 20px rgb(0 0 0 / 0.15);
+}
+
+.tangle-editor.is-text {
+  width: 12em;
+  text-align: left;
+}
+
+.tangle-editor.is-invalid {
+  border-color: var(--tangle-error);
+  color: var(--tangle-error);
+}

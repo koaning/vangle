@@ -11,6 +11,8 @@
 // likewise Vega, only if it has a <t-vega>, Observable Plot for <t-obsplot>, and
 // JSXGraph for <t-jsxgraph>.
 // MIT license.
+//
+// Built by `make build` from src/. Edit the files there, not this one.
 
 // ---------------------------------------------------------------------------
 // Signals: push-dirty / pull-value, effects flushed in a microtask.
@@ -339,6 +341,19 @@ export function scopeOf(node) {
   let scope = scopes.get(host);
   if (!scope) scopes.set(host, (scope = new Scope()));
   return scope;
+}
+
+/** The scope's names, with the ones in `extra` taking precedence: the `with` target of evalWith. */
+function withExtra(scope, extra) {
+  return new Proxy(Object.create(null), {
+    has: (_, key) => key in extra || Reflect.has(scope.proxy, key),
+    get: (_, key) => (typeof key === "string" && key in extra ? extra[key] : scope.proxy[key]),
+  });
+}
+
+/** Evaluate `expr` against `scope`, with the names in `extra` (e.g. { Plot, d3 }) taking precedence. */
+export function evalWith(scope, expr, extra) {
+  return compile(expr)(withExtra(scope, extra));
 }
 
 // ---------------------------------------------------------------------------
@@ -1030,6 +1045,22 @@ function syncClasses(el, scope, name) {
   const key = keyOf(scope, name);
   el.classList.toggle("is-hot", hover.peek() === key);
   el.classList.toggle("is-active", active.peek() === key);
+}
+
+// The document-level listeners behind all of the above. Called once, in a browser.
+function listen() {
+  document.addEventListener("pointerdown", onPointerDown);
+  document.addEventListener("pointermove", onPointerMove);
+  document.addEventListener("pointerup", onPointerUp);
+  document.addEventListener("pointercancel", onPointerUp);
+  document.addEventListener("pointerover", onPointerOver);
+  document.documentElement.addEventListener("pointerleave", () => {
+    if (!drag) hover.value = null;
+  });
+  document.addEventListener("keydown", onKeyDown);
+  document.addEventListener("dragstart", (event) => {
+    if (event.target.closest?.(PARAM)) event.preventDefault();
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -2899,19 +2930,6 @@ class TVega extends TangleElement {
 // scope, with Plot and d3 in reach, and redraws whenever a variable it read changes.
 // ---------------------------------------------------------------------------
 
-/** The scope's names, with the ones in `extra` taking precedence: the `with` target of evalWith. */
-function withExtra(scope, extra) {
-  return new Proxy(Object.create(null), {
-    has: (_, key) => key in extra || Reflect.has(scope.proxy, key),
-    get: (_, key) => (typeof key === "string" && key in extra ? extra[key] : scope.proxy[key]),
-  });
-}
-
-/** Evaluate `expr` against `scope`, with the names in `extra` (e.g. { Plot, d3 }) taking precedence. */
-export function evalWith(scope, expr, extra) {
-  return compile(expr)(withExtra(scope, extra));
-}
-
 /**
  * Plot options from what a <t-obsplot> expression returned: an array of marks,
  * an options object, or an element it already made (returned as is). The
@@ -3251,18 +3269,7 @@ export function tangleCall(fn, { name, params = {} } = {}) {
 }
 
 if (typeof window !== "undefined" && window.customElements) {
-  document.addEventListener("pointerdown", onPointerDown);
-  document.addEventListener("pointermove", onPointerMove);
-  document.addEventListener("pointerup", onPointerUp);
-  document.addEventListener("pointercancel", onPointerUp);
-  document.addEventListener("pointerover", onPointerOver);
-  document.documentElement.addEventListener("pointerleave", () => {
-    if (!drag) hover.value = null;
-  });
-  document.addEventListener("keydown", onKeyDown);
-  document.addEventListener("dragstart", (event) => {
-    if (event.target.closest?.(PARAM)) event.preventDefault();
-  });
+  listen();
 
   const elements = {
     "t-scope": TScope,

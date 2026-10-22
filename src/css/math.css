@@ -1,0 +1,31 @@
+/* Formulas ---------------------------------------------------------------- */
+
+t-math[display] {
+  display: block;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+t-math[display] .katex-display {
+  margin: 0.8em 0;
+}
+
+/* KaTeX lays struts and glyphs over each other; only markers take the pointer. */
+t-math .katex-html * {
+  pointer-events: none;
+}
+
+t-math .katex-html [data-tangle-param] {
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.tangle-math-error,
+.tangle-vega-error,
+.tangle-obsplot-error,
+.tangle-jsxgraph-error {
+  color: var(--tangle-error);
+  font: 0.85em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+}

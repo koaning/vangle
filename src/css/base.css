@@ -1,0 +1,27 @@
+t-var,
+t-let,
+t-fetch {
+  display: none;
+}
+
+/* Waiting on a <t-fetch>: the old value shows, dimmed. The delay skips quick answers. */
+.is-stale {
+  opacity: var(--tangle-stale);
+  transition: opacity 150ms 150ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .is-stale {
+    transition: none;
+  }
+}
+
+/* A scope groups content without adding a box of its own. */
+t-scope {
+  display: contents;
+}
+
+/* A floating panel. Until tangle.js runs, its contents show in place. */
+t-panel {
+  display: block;
+}

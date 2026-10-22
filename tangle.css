@@ -1,4 +1,5 @@
 /* tangle.css: styles for tangle.js. Override the custom properties to theme. */
+/* Built by `make build` from src/. Edit the files there, not this one. */
 
 :root {
   --tangle-accent: #246bce;

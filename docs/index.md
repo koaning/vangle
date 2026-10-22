@@ -17,6 +17,13 @@ the page's `<head>`, or to your blog's layout template:
 <script type="module" src="/tangle.js"></script>
 ```
 
+Or load both from jsDelivr instead of copying them:
+
+```html
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/koaning/vangle@v0.1.0/tangle.min.css">
+<script type="module" src="https://cdn.jsdelivr.net/gh/koaning/vangle@v0.1.0/tangle.min.js"></script>
+```
+
 That's all. KaTeX is only downloaded on pages that contain a [`<t-math>`](t-math.md) formula.
 
 ## Your first reactive paragraph

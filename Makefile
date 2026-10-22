@@ -1,14 +1,20 @@
-.PHONY: all docs site test serve dev pr
+.PHONY: all build docs site test serve dev pr
 
-# Rebuild the docs and run the tests.
-all: docs test
+# Rebuild everything and run the tests.
+all: build test
+
+# Bundle src/ into tangle.js and tangle.css, then rebuild the docs. Both bundles
+# are committed, since they are what pages load; `make test` fails if they're stale.
+build:
+	node site/bundle.js
+	$(MAKE) docs
 
 # Generate docs/*.html from docs/*.md, and index.html from index.md. The HTML is gitignored.
 docs:
 	node site/build.js
 
 # Assemble the site that GitHub Pages publishes in _site/.
-site: docs
+site: build
 	rm -rf _site && mkdir -p _site/docs _site/site
 	cp index.html index.md tangle.js tangle.css llms.txt _site/
 	cp docs/*.html docs/*.md _site/docs/

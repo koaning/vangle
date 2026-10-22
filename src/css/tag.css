@@ -1,0 +1,48 @@
+/* HTML tags --------------------------------------------------------------- */
+
+t-tag {
+  display: block;
+  margin: 1rem 0;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 8px;
+  background: var(--tangle-surface);
+  padding: 0.7em 1em 0;
+  white-space: pre;
+}
+
+/* The code is everything but the preview, which keeps the page's own font. */
+t-tag > :not(.t-tag-preview) {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.82em;
+}
+
+.t-tag-flag {
+  color: var(--tangle-accent);
+  cursor: pointer;
+  border-radius: 0.18em;
+  outline: none;
+}
+
+.t-tag-flag:hover,
+.t-tag-flag:focus-visible {
+  background: color-mix(in srgb, var(--tangle-accent) var(--tangle-soft), transparent);
+}
+
+.t-tag-flag.is-off {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+t-tag t-num,
+t-tag t-choice,
+t-tag t-select,
+t-tag t-text {
+  border-bottom: 0;
+}
+
+.t-tag-preview {
+  margin: 0.7em -1em 0;
+  padding: 1em;
+  border-top: 1px dashed color-mix(in srgb, currentColor 15%, transparent);
+  white-space: normal;
+}

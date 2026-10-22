@@ -1,0 +1,17 @@
+/* Observable Plot --------------------------------------------------------- */
+
+/* Plot draws in currentColor, so only its background (behind tips and halos) needs the theme. */
+t-obsplot svg,
+t-obsplot figure {
+  --plot-background: var(--tangle-surface);
+}
+
+t-obsplot g[aria-label$="tick label"],
+t-obsplot g[aria-label$="axis label"] {
+  opacity: var(--tangle-chart-text);
+}
+
+/* Plot wraps a chart with a legend or title in a <figure>. */
+t-obsplot figure {
+  margin: 0;
+}

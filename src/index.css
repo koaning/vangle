@@ -1,0 +1,18 @@
+/* tangle.css: styles for tangle.js. Override the custom properties to theme. */
+/* The source of tangle.css: `make build` puts these files together, in this order. */
+
+@import "css/theme.css";
+@import "css/base.css";
+@import "css/numbers.css";
+@import "css/choice.css";
+@import "css/text.css";
+@import "css/code.css";
+@import "css/tag.css";
+@import "css/out.css";
+@import "css/math.css";
+@import "css/editor.css";
+@import "css/menu.css";
+@import "css/vega.css";
+@import "css/obsplot.css";
+@import "css/jsxgraph.css";
+@import "css/debug.css";

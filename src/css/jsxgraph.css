@@ -1,0 +1,20 @@
+/* JSXGraph ---------------------------------------------------------------- */
+
+/* The board takes its size from this box. Set a different aspect-ratio or height to change it. */
+.tangle-jsxgraph {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  overflow: hidden;
+  font: var(--tangle-chart-font);
+  font-variant-numeric: tabular-nums;
+  touch-action: none;
+  user-select: none;
+}
+
+.tangle-jsxgraph .JXGtext {
+  margin: 0;
+  padding: 0;
+  font-family: inherit;
+  white-space: nowrap;
+}

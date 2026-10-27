@@ -53,6 +53,7 @@ export const NAV = [
     ["gallery-recompute", "What recomputes"],
     ["gallery-bezier", "Bézier curves"],
     ["gallery-coaster-nausea", "Coaster nausea"],
+    ["gallery-attention", "Attention"],
   ]],
   ["Reference", [
     ["javascript", "JavaScript API"],

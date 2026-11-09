@@ -9,6 +9,7 @@ so it's easy to fit to your blog's look.
 |---|---|---|
 | `--tangle-accent` | `#246bce` (dark: `#75a7ff`) | Color of numbers, choices and formula parameters without their own `color`. |
 | `--tangle-soft` | `14%` | Strength of the hover and drag highlight. |
+| `--tangle-tint` | `8%` | Strength of the resting tint behind numbers, choices and text the reader can change. `0%` turns it off. |
 | `--tangle-surface` | `#fff` (dark: `#22201d`) | Background of the typing field and text of the "drag" hint. |
 | `--tangle-error` | `#c9382b` | Broken outputs and formula errors. |
 | `--tangle-muted` | `55%` | Strength of the punctuation in a [`<t-call>`](t-call.md) or [`<t-tag>`](t-tag.md). |
@@ -29,9 +30,9 @@ The stylesheet behind that example:
   .warm {
     --tangle-accent: #c2410c;
     --tangle-soft: 22%;
+    --tangle-tint: 12%;
   }
   .warm t-num {
-    border-bottom-style: solid;
     font-weight: 600;
   }
   .warm t-num::after {
@@ -73,8 +74,12 @@ t-num::after { display: none; }
 /* Make computed results in formulas stand out */
 t-math .tangle-val { color: var(--tangle-accent); }
 
-/* A dotted underline instead of dashed */
-t-num { border-bottom-style: dotted; }
+/* A dotted underline instead of the tint */
+t-num, t-choice, t-select, t-text {
+  --tangle-tint: 0%;
+  padding-inline: 0;
+  border-bottom: 1px dotted currentColor;
+}
 
 /* Style a scope as a card (scopes have display: contents by default) */
 t-scope.card { display: block; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }

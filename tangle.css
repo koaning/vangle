@@ -4,6 +4,7 @@
 :root {
   --tangle-accent: #246bce;
   --tangle-soft: 14%; /* strength of the hover/drag highlight */
+  --tangle-tint: 8%; /* strength of the resting tint behind values the reader can change */
   --tangle-surface: #fff;
   --tangle-error: #c9382b;
   --tangle-muted: 55%; /* strength of the punctuation in <t-call> and <t-tag> */
@@ -80,7 +81,8 @@ t-num,
 
 t-num {
   position: relative;
-  border-bottom: 1px dashed currentColor;
+  padding-inline: 0.12em;
+  background: color-mix(in srgb, var(--tangle-c) var(--tangle-tint), transparent);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -135,7 +137,8 @@ t-num:focus-visible,
 t-choice,
 t-select {
   color: var(--tangle-color, var(--tangle-accent));
-  border-bottom: 1px dotted currentColor;
+  padding-inline: 0.12em;
+  background: color-mix(in srgb, var(--tangle-color, var(--tangle-accent)) var(--tangle-tint), transparent);
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
@@ -162,7 +165,8 @@ t-select::after {
 
 t-text {
   color: var(--tangle-color, var(--tangle-accent));
-  border-bottom: 1px dotted currentColor;
+  padding-inline: 0.12em;
+  background: color-mix(in srgb, var(--tangle-color, var(--tangle-accent)) var(--tangle-tint), transparent);
   cursor: text;
   user-select: none;
   -webkit-user-select: none;
@@ -240,7 +244,8 @@ t-call t-num,
 t-call t-choice,
 t-call t-select,
 t-call t-text {
-  border-bottom: 0;
+  padding-inline: 0;
+  background: none;
 }
 
 /* HTML tags --------------------------------------------------------------- */
@@ -282,7 +287,8 @@ t-tag t-num,
 t-tag t-choice,
 t-tag t-select,
 t-tag t-text {
-  border-bottom: 0;
+  padding-inline: 0;
+  background: none;
 }
 
 .t-tag-preview {

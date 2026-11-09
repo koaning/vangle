@@ -1,6 +1,7 @@
 :root {
   --tangle-accent: #246bce;
   --tangle-soft: 14%; /* strength of the hover/drag highlight */
+  --tangle-tint: 8%; /* strength of the resting tint behind values the reader can change */
   --tangle-surface: #fff;
   --tangle-error: #c9382b;
   --tangle-muted: 55%; /* strength of the punctuation in <t-call> and <t-tag> */

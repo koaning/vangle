@@ -59,5 +59,6 @@ t-call t-num,
 t-call t-choice,
 t-call t-select,
 t-call t-text {
-  border-bottom: 0;
+  padding-inline: 0;
+  background: none;
 }

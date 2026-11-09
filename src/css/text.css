@@ -2,7 +2,8 @@
 
 t-text {
   color: var(--tangle-color, var(--tangle-accent));
-  border-bottom: 1px dotted currentColor;
+  padding-inline: 0.12em;
+  background: color-mix(in srgb, var(--tangle-color, var(--tangle-accent)) var(--tangle-tint), transparent);
   cursor: text;
   user-select: none;
   -webkit-user-select: none;

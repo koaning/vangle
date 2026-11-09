@@ -15,7 +15,8 @@ t-num,
 
 t-num {
   position: relative;
-  border-bottom: 1px dashed currentColor;
+  padding-inline: 0.12em;
+  background: color-mix(in srgb, var(--tangle-c) var(--tangle-tint), transparent);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }

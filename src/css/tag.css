@@ -37,7 +37,8 @@ t-tag t-num,
 t-tag t-choice,
 t-tag t-select,
 t-tag t-text {
-  border-bottom: 0;
+  padding-inline: 0;
+  background: none;
 }
 
 .t-tag-preview {

@@ -3,7 +3,8 @@
 t-choice,
 t-select {
   color: var(--tangle-color, var(--tangle-accent));
-  border-bottom: 1px dotted currentColor;
+  padding-inline: 0.12em;
+  background: color-mix(in srgb, var(--tangle-color, var(--tangle-accent)) var(--tangle-tint), transparent);
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;

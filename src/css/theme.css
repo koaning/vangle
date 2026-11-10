@@ -12,6 +12,16 @@
   --tangle-chart-grid: 12%; /* strength of the gridlines */
   --tangle-chart-text: 60%; /* strength of the tick and axis labels */
   --tangle-chart-font: 12px ui-sans-serif, system-ui, sans-serif;
+  /* <t-formula-dag>: one color per formula that feeds others, and the notes' gray. */
+  --tangle-dag-1: #246bce;
+  --tangle-dag-2: #b45b1b;
+  --tangle-dag-3: #147a68;
+  --tangle-dag-4: #a23b78;
+  --tangle-dag-5: #6f5cbd;
+  --tangle-dag-6: #8a6d00;
+  --tangle-dag-7: #2f7d32;
+  --tangle-dag-8: #b3262e;
+  --tangle-dag-note: #6b6459;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -21,6 +31,15 @@
     --tangle-code-tag: #b9a8ff;
     --tangle-code-attr: #ffad66;
     --tangle-code-string: #5ed5bd;
+    --tangle-dag-1: #75a7ff;
+    --tangle-dag-2: #ffad66;
+    --tangle-dag-3: #5ed5bd;
+    --tangle-dag-4: #f08bc2;
+    --tangle-dag-5: #b9a8ff;
+    --tangle-dag-6: #e3c35a;
+    --tangle-dag-7: #86d38a;
+    --tangle-dag-8: #ff8a8f;
+    --tangle-dag-note: #b8b0a4;
   }
 }
 
@@ -31,4 +50,13 @@
   --tangle-code-tag: #b9a8ff;
   --tangle-code-attr: #ffad66;
   --tangle-code-string: #5ed5bd;
+  --tangle-dag-1: #75a7ff;
+  --tangle-dag-2: #ffad66;
+  --tangle-dag-3: #5ed5bd;
+  --tangle-dag-4: #f08bc2;
+  --tangle-dag-5: #b9a8ff;
+  --tangle-dag-6: #e3c35a;
+  --tangle-dag-7: #86d38a;
+  --tangle-dag-8: #ff8a8f;
+  --tangle-dag-note: #b8b0a4;
 }

@@ -132,6 +132,22 @@ customElements.define("t-stars", class extends TangleElement {
 It adds `this.scope`, `this.watch(fn)`, `this.declare(name, initial)` and
 `this.makeDraggable(name)`. See [Your own elements](custom-elements.md) for examples.
 
+## Formula DAGs {#formula-dag}
+
+`formulaDag(spec)` checks a [`<t-formula-dag>`](t-formula-dag.md) spec and works out its
+layout, without drawing it. It throws an `Error` that says what's wrong, or returns:
+
+| Key | Description |
+|---|---|
+| `formulas` | One entry per formula, in spec order: `name`, `symbol`, `label`, `uses` (the formulas it uses), `color` (or `null`), `value`, `format`. |
+| `edges` | `[producer, consumer]` pairs, once each. |
+| `layers` | The rows, top to bottom. Each lists formula names, plus ids starting with `!` for the gaps kept free for long arrows. |
+| `routes` | One `[producer, …gaps, consumer]` chain per edge. |
+| `notes`, `params` | The notes and `\tangle{}` numbers, with their settings. |
+
+The element itself has `el.edges`, `el.upstream(name)` and `el.downstream(name)`. The last two
+list every formula that `name` uses, or that uses it, directly or not.
+
 ## Signals
 
 The reactive core is exported too, for state that doesn't belong in a scope:

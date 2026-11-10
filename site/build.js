@@ -37,6 +37,7 @@ export const NAV = [
     ["t-fetch", "<code>&lt;t-fetch&gt;</code>"],
     ["t-tag", "<code>&lt;t-tag&gt;</code>"],
     ["t-math", "<code>&lt;t-math&gt;</code>"],
+    ["t-formula-dag", "<code>&lt;t-formula-dag&gt;</code>"],
     ["t-vega", "<code>&lt;t-vega&gt;</code>"],
     ["t-obsplot", "<code>&lt;t-obsplot&gt;</code>"],
     ["t-jsxgraph", "<code>&lt;t-jsxgraph&gt;</code>"],
@@ -54,6 +55,7 @@ export const NAV = [
     ["gallery-bezier", "Bézier curves"],
     ["gallery-coaster-nausea", "Coaster nausea"],
     ["gallery-attention", "Attention"],
+    ["gallery-projectile", "Projectile motion with wind"],
   ]],
   ["Reference", [
     ["javascript", "JavaScript API"],

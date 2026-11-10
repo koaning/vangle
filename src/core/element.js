@@ -20,10 +20,20 @@ export function declare(el, scope, name, initial) {
   for (const attr of ["color", "label", "format"]) {
     if (el.hasAttribute(attr)) patch[attr] = el.getAttribute(attr);
   }
-  const color = patch.color?.trim().split(/\s+/);
-  if (color?.length === 2) patch.color = `light-dark(${color[0]}, ${color[1]})`;
   // A <t-num>'s format only becomes the variable's default if none is set yet.
   if (el.localName === "t-num" && scope.slot(name).meta.peek().format) delete patch.format;
+  declareMeta(scope, name, patch, initial);
+}
+
+/**
+ * Merge `patch` (min, max, step, pixelsPerStep, color, label, format) into the
+ * variable's metadata, and give it `initial` unless something already did.
+ * A color "a b" means a in light mode and b in dark mode.
+ */
+export function declareMeta(scope, name, patch, initial) {
+  patch = { ...patch };
+  const color = typeof patch.color === "string" ? patch.color.trim().split(/\s+/) : null;
+  if (color?.length === 2) patch.color = `light-dark(${color[0]}, ${color[1]})`;
   if (Object.keys(patch).length) scope.setMeta(name, patch);
   const slot = scope.slot(name);
   if (initial !== undefined && !slot.initialized) {

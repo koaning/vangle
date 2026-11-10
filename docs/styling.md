@@ -15,6 +15,7 @@ so it's easy to fit to your blog's look.
 | `--tangle-muted` | `55%` | Strength of the punctuation in a [`<t-call>`](t-call.md) or [`<t-tag>`](t-tag.md). |
 | `--tangle-code-tag`, `--tangle-code-attr`, `--tangle-code-string` | `#6f5cbd`, `#b45b1b`, `#147a68` (dark: `#b9a8ff`, `#ffad66`, `#5ed5bd`) | Syntax highlighting in `<t-call>` and `<t-tag>`: tag names, attribute and argument names, and strings. Values the reader can change use the accent color. |
 | `--tangle-color` | | Set per element from a variable's `color` attribute. |
+| `--tangle-dag-1` … `--tangle-dag-8`, `--tangle-dag-note` | blue, orange, teal, magenta, violet, ochre, green, red; gray (each with a dark variant) | The colors a [`<t-formula-dag>`](t-formula-dag.md) gives the formulas others use, in order, and its notes. See [Formula DAGs](#formula-dag). |
 | `--tangle-chart-grid`, `--tangle-chart-text`, `--tangle-chart-font` | `12%`, `60%`, `12px` system font | Strength of chart gridlines and labels, and their font. See [`<t-vega>`](t-vega.md#theme) and [`<t-obsplot>`](t-obsplot.md#theme). |
 
 Set them on `:root` to restyle the whole site, or on any container to restyle part of a page:
@@ -60,6 +61,7 @@ The stylesheet behind that example:
 | `.tangle-menu` | The menu of a `<t-select>`: an `input` over a `ul` of options. `li.is-highlighted` is the one <kbd>Enter</kbd> picks, `li[aria-selected="true"]` the current one. |
 | `t-out.is-error` | An output whose expression threw. |
 | `.tangle-math-error` | The message shown in place of a formula that doesn't parse. |
+| `.tangle-dag-card`, `.tangle-dag-caption`, `.tangle-dag-note`, `.tangle-dag-chip`, `.tangle-dag-reset` | The parts of a [`<t-formula-dag>`](t-formula-dag.md). See [Formula DAGs](#formula-dag). |
 | `t-panel::part(header)`, `::part(label)`, `::part(toggle)`, `::part(body)` | The pieces of a floating panel. `t-panel[collapsed]` while it's minimized. See [`<t-panel>`](t-panel.md#styling). |
 | `t-paint::part(toolbar)`, `::part(button)`, `::part(paper)`, `::part(canvas)` | The pieces of a drawing canvas. See [`<t-paint>`](t-paint.md#styling). |
 | `.tangle-vega` | A Vega chart. `.is-loading` until Vega has loaded; `.tangle-vega-error` replaces it on failure. See [`<t-vega>`](t-vega.md#how-vega-loads). |
@@ -83,6 +85,31 @@ t-num, t-choice, t-select, t-text {
 
 /* Style a scope as a card (scopes have display: contents by default) */
 t-scope.card { display: block; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+```
+
+## Formula DAGs {#formula-dag}
+
+A [`<t-formula-dag>`](t-formula-dag.md) draws each formula as a `.tangle-dag-card`, holding the
+rendered TeX and a `.tangle-dag-caption`. The SVG `.tangle-dag-edge` and `.tangle-dag-head` are
+its arrows. Each colored part, from a formula's output and its uses to its arrows and notes, sets
+`--tangle-dag-c` to its color. States:
+
+| Selector | Matches |
+|---|---|
+| `.tangle-dag-card.is-selected` | The formula picked with `name`. |
+| `.is-dim` | Cards and arrows outside what the hovered formula uses and is used by. |
+| `[data-fdag-out]`, `[data-fdag-use]` | A formula's output symbol, and each place it's used. `.is-hot` while its chip or a use is under the pointer. |
+| `.tangle-dag-note`, `.tangle-dag-tint`, `.tangle-dag-note-arrow` | A note's label, the tint behind what it marks, and its arrow. `.is-hovered` on the lifted one. |
+| `.tangle-dag-chip` | A legend chip: `[data-tangle-param]` for a number, `.is-output` for a value, `.is-error` when it threw. |
+| `.tangle-dag-reset.is-changed` | The Reset button, once a number moved. |
+
+To use your own palette, set the colors on `:root`, or on the element:
+
+```css
+t-formula-dag {
+  --tangle-dag-1: #0f766e;
+  --tangle-dag-2: #9333ea;
+}
 ```
 
 ## Dark mode

@@ -7,9 +7,9 @@
 //   When you eat <t-num name="cookies" min="0" max="20">3</t-num> cookies,
 //   you consume <t-out expr="cookies * 50"></t-out> calories.
 //
-// Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>;
-// likewise Vega, only if it has a <t-vega>, Observable Plot for <t-obsplot>, and
-// JSXGraph for <t-jsxgraph>.
+// Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>
+// or a <t-formula-dag>; likewise Vega, only if it has a <t-vega>, Observable Plot
+// for <t-obsplot>, and JSXGraph for <t-jsxgraph>.
 // MIT license.
 //
 // Built by `make build` from src/. Edit the files there, not this one.
@@ -493,141 +493,6 @@ export function filterOptions(options, query) {
 }
 
 // ---------------------------------------------------------------------------
-// TeX markers: \tangle[symbol]{name} and \val[format]{expression}
-// ---------------------------------------------------------------------------
-
-function matchClose(src, start, open, close) {
-  let depth = 0;
-  for (let i = start; i < src.length; i++) {
-    const ch = src[i];
-    if (ch === "\\") {
-      i++;
-      continue;
-    }
-    if (ch === open) depth++;
-    else if (ch === close && --depth === 0) return i;
-  }
-  throw new Error(`Unbalanced "${open}" at position ${start}`);
-}
-
-function skipSpace(src, i) {
-  while (i < src.length && /\s/.test(src[i])) i++;
-  return i;
-}
-
-/** Split TeX source into literal strings and marker objects. */
-export function parseTex(src) {
-  const parts = [];
-  const re = /\\(tangle|val)(?![A-Za-z])/g;
-  let last = 0;
-  let m;
-  while ((m = re.exec(src))) {
-    let i = skipSpace(src, m.index + m[0].length);
-    let option = null;
-    if (src[i] === "[") {
-      const end = matchClose(src, i, "[", "]");
-      option = src.slice(i + 1, end).trim();
-      i = skipSpace(src, end + 1);
-    }
-    if (src[i] !== "{") throw new Error(`\\${m[1]} must be followed by {…}`);
-    const end = matchClose(src, i, "{", "}");
-    const body = src.slice(i + 1, end).trim();
-    if (src.slice(last, m.index)) parts.push(src.slice(last, m.index));
-    if (m[1] === "tangle") {
-      if (!NAME_RE.test(body)) throw new Error(`\\tangle{${body}}: not a valid variable name`);
-      parts.push({ type: "param", name: body, symbol: option || null });
-    } else {
-      compile(body); // surface syntax errors early
-      parts.push({ type: "val", expr: body, format: option || null });
-    }
-    last = end + 1;
-    re.lastIndex = last;
-  }
-  if (src.slice(last)) parts.push(src.slice(last));
-  return parts;
-}
-
-const TEXT_ESCAPES = {
-  "\\": "\\textbackslash{}", "{": "\\{", "}": "\\}", $: "\\$", "%": "\\%",
-  "#": "\\#", "&": "\\&", _: "\\_", "~": "\\textasciitilde{}", "^": "\\textasciicircum{}",
-};
-
-/** Turn a value into TeX: numbers stay math, anything wordy becomes \text{…}. */
-export function toTex(value, fmt, step) {
-  const s = formatValue(value, fmt, step);
-  if (typeof value !== "number" || /[A-Za-z\s]/.test(s)) {
-    return `\\text{${s.replace(/[\\{}$%#&_~^]/g, (c) => TEXT_ESCAPES[c])}}`;
-  }
-  return s
-    .replace(/[\\{}$%#&_~^]/g, (c) => (c === "~" || c === "^" ? "" : `\\${c}`))
-    .replace(/,/g, "{,}")
-    .replace(/∞/g, "\\infty ");
-}
-
-// ---------------------------------------------------------------------------
-// Function signatures: what tangleCall() reads from a JavaScript function.
-// ---------------------------------------------------------------------------
-
-/** Split a parameter list on top-level commas, from the "(" at `open` to its ")". */
-function splitParams(src, open) {
-  const parts = [];
-  let depth = 0;
-  let last = open + 1;
-  for (let i = open + 1; i < src.length; i++) {
-    const ch = src[i];
-    if (ch === '"' || ch === "'" || ch === "`") {
-      for (i++; i < src.length && src[i] !== ch; i++) if (src[i] === "\\") i++;
-    } else if (ch === "/" && src[i + 1] === "/") {
-      i = src.indexOf("\n", i);
-      if (i < 0) break;
-    } else if (ch === "/" && src[i + 1] === "*") {
-      i = src.indexOf("*/", i) + 1;
-      if (i <= 0) break;
-    } else if ("([{".includes(ch)) {
-      depth++;
-    } else if (")]}".includes(ch) && depth-- === 0) {
-      parts.push(src.slice(last, i));
-      return parts.map((p) => p.trim()).filter(Boolean);
-    } else if (ch === "," && depth === 0) {
-      parts.push(src.slice(last, i));
-      last = i + 1;
-    }
-  }
-  throw new Error("Unbalanced parameter list");
-}
-
-/**
- * Read a function's parameters and evaluate their defaults:
- * `function f(a = 1, b = "x", c)` gives `[{ name: "a", value: 1, hasDefault: true }, …]`.
- * Defaults must evaluate to a number, string or boolean on their own.
- */
-export function parseParams(fn) {
-  const src = Function.prototype.toString.call(fn);
-  const bare = /^\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/.exec(src);
-  const open = src.indexOf("(");
-  if (!bare && open < 0) throw new Error("Can't find the parameter list");
-  const parts = bare ? [bare[1]] : splitParams(src, open);
-  return parts.map((part) => {
-    if (part.startsWith("...")) throw new Error(`Rest parameter "${part}" isn't supported`);
-    if (/^[[{]/.test(part)) throw new Error(`Destructured parameter "${part}" isn't supported`);
-    const m = /^([A-Za-z_$][\w$]*)\s*(?:=([\s\S]*))?$/.exec(part);
-    if (!m) throw new Error(`Can't read parameter "${part}"`);
-    const [, name, expr] = m;
-    if (expr === undefined) return { name, value: undefined, hasDefault: false };
-    let value;
-    try {
-      value = new Function(`return (${expr}\n);`)();
-    } catch (error) {
-      throw new Error(`Can't evaluate the default of "${name}": ${error.message}`);
-    }
-    if (!["number", "string", "boolean"].includes(typeof value)) {
-      throw new Error(`The default of "${name}" must be a number, string or boolean`);
-    }
-    return { name, value, hasDefault: true };
-  });
-}
-
-// ---------------------------------------------------------------------------
 // Lazy loading: KaTeX for <t-math>, Vega for <t-vega>, Plot for <t-obsplot>. Each
 // loads only if the page has such an element, and a copy the page already loaded is reused.
 // ---------------------------------------------------------------------------
@@ -738,7 +603,7 @@ function paramOf(el) {
 }
 
 function occurrence(el) {
-  const host = el.closest("t-math");
+  const host = el.closest("t-math, t-formula-dag");
   if (!host) return { el, host: null, index: -1 };
   const all = [...host.querySelectorAll(`.katex-html [data-tangle-param="${el.dataset.tangleParam}"]`)];
   return { el, host, index: all.indexOf(el) };
@@ -1064,6 +929,797 @@ function listen() {
 }
 
 // ---------------------------------------------------------------------------
+// TeX markers: \tangle[symbol]{name} and \val[format]{expression}
+// ---------------------------------------------------------------------------
+
+/** The index of the bracket that closes the one at `start` (skipping backslash escapes). */
+function matchClose(src, start, open, close) {
+  let depth = 0;
+  for (let i = start; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === "\\") {
+      i++;
+      continue;
+    }
+    if (ch === open) depth++;
+    else if (ch === close && --depth === 0) return i;
+  }
+  throw new Error(`Unbalanced "${open}" at position ${start}`);
+}
+
+function skipSpace(src, i) {
+  while (i < src.length && /\s/.test(src[i])) i++;
+  return i;
+}
+
+/** Split TeX source into literal strings and marker objects. */
+export function parseTex(src) {
+  const parts = [];
+  const re = /\\(tangle|val)(?![A-Za-z])/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(src))) {
+    let i = skipSpace(src, m.index + m[0].length);
+    let option = null;
+    if (src[i] === "[") {
+      const end = matchClose(src, i, "[", "]");
+      option = src.slice(i + 1, end).trim();
+      i = skipSpace(src, end + 1);
+    }
+    if (src[i] !== "{") throw new Error(`\\${m[1]} must be followed by {…}`);
+    const end = matchClose(src, i, "{", "}");
+    const body = src.slice(i + 1, end).trim();
+    if (src.slice(last, m.index)) parts.push(src.slice(last, m.index));
+    if (m[1] === "tangle") {
+      if (!NAME_RE.test(body)) throw new Error(`\\tangle{${body}}: not a valid variable name`);
+      parts.push({ type: "param", name: body, symbol: option || null });
+    } else {
+      compile(body); // surface syntax errors early
+      parts.push({ type: "val", expr: body, format: option || null });
+    }
+    last = end + 1;
+    re.lastIndex = last;
+  }
+  if (src.slice(last)) parts.push(src.slice(last));
+  return parts;
+}
+
+const TEXT_ESCAPES = {
+  "\\": "\\textbackslash{}", "{": "\\{", "}": "\\}", $: "\\$", "%": "\\%",
+  "#": "\\#", "&": "\\&", _: "\\_", "~": "\\textasciitilde{}", "^": "\\textasciicircum{}",
+};
+
+/** Turn a value into TeX: numbers stay math, anything wordy becomes \text{…}. */
+export function toTex(value, fmt, step) {
+  const s = formatValue(value, fmt, step);
+  if (typeof value !== "number" || /[A-Za-z\s]/.test(s)) {
+    return `\\text{${s.replace(/[\\{}$%#&_~^]/g, (c) => TEXT_ESCAPES[c])}}`;
+  }
+  return s
+    .replace(/[\\{}$%#&_~^]/g, (c) => (c === "~" || c === "^" ? "" : `\\${c}`))
+    .replace(/,/g, "{,}")
+    .replace(/∞/g, "\\infty ");
+}
+
+/**
+ * The TeX for parsed parts (from parseTex) right now: \tangle markers show
+ * their variable's value (or their symbol, unless being dragged or edited) and
+ * \val markers their result. `text` maps the literal strings in between.
+ * Reactive: inside an effect, re-runs when a value it showed changes.
+ */
+function partsTex(parts, scope, text = (s) => s) {
+  let tex = "";
+  for (const part of parts) {
+    if (typeof part === "string") {
+      tex += text(part);
+    } else if (part.type === "param") {
+      const meta = scope.meta(part.name);
+      const value = scope.get(part.name);
+      const shown =
+        !part.symbol || active.value === keyOf(scope, part.name)
+          ? toTex(value, meta.format, meta.step)
+          : part.symbol;
+      tex += `\\htmlData{tangle-param=${part.name}}{${shown}}`;
+    } else {
+      let shown;
+      try {
+        shown = toTex(scope.eval(part.expr), part.format);
+      } catch {
+        shown = "\\text{?}";
+      }
+      tex += `\\htmlClass{tangle-val}{${shown}}`;
+    }
+  }
+  return tex;
+}
+
+// ---------------------------------------------------------------------------
+// DAG layout for <t-formula-dag>: layering, ordering within a layer, routes
+// through the layers an edge skips, and the plain geometry the arrows use.
+// No DOM here: boxes are { left, right, top, bottom } in px.
+// ---------------------------------------------------------------------------
+
+// Waypoint ids: an edge that skips a layer threads one per skipped layer.
+// "!" can't start a formula name, so these never collide with one.
+const DAG_WAYPOINT = "!wp";
+const DAG_NEAR_X = 6; // two vertical runs closer than this read as one line
+
+/** One cycle among `edges` as a list of names (first equals last), or null. */
+function dagCycle(names, edges) {
+  const children = new Map(names.map((n) => [n, []]));
+  for (const [src, dst] of edges) children.get(src).push(dst);
+  const state = new Map(); // name -> "visiting" | "done"
+  const stack = [];
+  const visit = (n) => {
+    state.set(n, "visiting");
+    stack.push(n);
+    for (const c of children.get(n)) {
+      if (state.get(c) === "visiting") return [...stack.slice(stack.indexOf(c)), c];
+      if (!state.has(c)) {
+        const found = visit(c);
+        if (found) return found;
+      }
+    }
+    stack.pop();
+    state.set(n, "done");
+    return null;
+  };
+  for (const n of names) {
+    if (state.has(n)) continue;
+    const found = visit(n);
+    if (found) return found;
+  }
+  return null;
+}
+
+/**
+ * The layer of each node (0 = top), as a Map: one below the deepest node it
+ * comes from, so nodes without parents share the top layer. `minRows` (a Map)
+ * pushes a node down to at least that layer, and everything below it follows,
+ * so a minimum never puts a node above one it comes from. `edges` must be acyclic.
+ */
+function dagLayers(names, edges, minRows = new Map()) {
+  const parents = new Map(names.map((n) => [n, []]));
+  for (const [src, dst] of edges) parents.get(dst).push(src);
+  const layer = new Map();
+  const place = (n) => {
+    if (!layer.has(n)) {
+      const below = 1 + Math.max(-1, ...parents.get(n).map(place));
+      layer.set(n, Math.max(minRows.get(n) ?? 0, below));
+    }
+    return layer.get(n);
+  };
+  names.forEach(place);
+  return layer;
+}
+
+/** Every ordering of `items`, starting with `items` itself. */
+function* dagPermutations(items) {
+  if (items.length <= 1) {
+    yield items.slice();
+    return;
+  }
+  for (let i = 0; i < items.length; i++) {
+    const rest = [...items.slice(0, i), ...items.slice(i + 1)];
+    for (const p of dagPermutations(rest)) yield [items[i], ...p];
+  }
+}
+
+/** The first of `candidates` with the lowest `score` (stops early at zero). */
+function dagBest(candidates, score) {
+  let best = null;
+  let bestCost = Infinity;
+  for (const c of candidates) {
+    const cost = score(c);
+    if (cost < bestCost) {
+      best = c;
+      bestCost = cost;
+      if (cost === 0) break;
+    }
+  }
+  return best;
+}
+
+/**
+ * Order the nodes within each layer to reduce crossings, and split every edge
+ * that skips layers with waypoints. `layerOf` maps a node to its layer (from
+ * dagLayers); `names` seeds each layer's order. Returns { layers, routes }:
+ * `layers` top to bottom, each a list of ids (names or waypoints), and one
+ * route [src, ...waypoints, dst] per edge. Layers wider than `cap` keep their
+ * seeded order instead of trying every permutation. Empty layers are dropped.
+ */
+function dagOrder(names, layerOf, edges, { sweeps = 8, cap = 6 } = {}) {
+  const deepest = Math.max(0, ...names.map((n) => layerOf.get(n)));
+  const layers = Array.from({ length: deepest + 1 }, () => []);
+  for (const n of names) layers[layerOf.get(n)].push(n);
+
+  const below = new Map(); // id -> ids one layer down, after splitting
+  const link = (a, b) => (below.has(a) ? below.get(a).push(b) : below.set(a, [b]));
+  const routes = [];
+  let waypoints = 0;
+  for (const [src, dst] of edges) {
+    let prev = src;
+    const chain = [src];
+    for (let l = layerOf.get(src) + 1; l < layerOf.get(dst); l++) {
+      const wp = `${DAG_WAYPOINT}${waypoints++}`;
+      layers[l].push(wp);
+      link(prev, wp);
+      chain.push(wp);
+      prev = wp;
+    }
+    link(prev, dst);
+    chain.push(dst);
+    routes.push(chain);
+  }
+
+  const crossings = (upper, lower) => {
+    const pos = new Map(lower.map((n, i) => [n, i]));
+    const segs = [];
+    upper.forEach((n, i) => {
+      for (const c of below.get(n) ?? []) if (pos.has(c)) segs.push([i, pos.get(c)]);
+    });
+    let count = 0;
+    for (let a = 0; a < segs.length; a++) {
+      for (let b = a + 1; b < segs.length; b++) {
+        if ((segs[a][0] - segs[b][0]) * (segs[a][1] - segs[b][1]) < 0) count++;
+      }
+    }
+    return count;
+  };
+  const best = (layer, score) => dagBest(dagPermutations(layer), score);
+  for (let s = 0; s < sweeps; s++) {
+    for (let l = 1; l <= deepest; l++) {
+      if (layers[l].length <= cap) layers[l] = best(layers[l], (p) => crossings(layers[l - 1], p));
+    }
+    for (let l = deepest - 1; l >= 0; l--) {
+      if (layers[l].length <= cap) layers[l] = best(layers[l], (p) => crossings(p, layers[l + 1]));
+    }
+  }
+  // A minimum row can leave layers that nothing (not even a waypoint) passes through.
+  return { layers: layers.filter((l) => l.length), routes };
+}
+
+/** Everything reachable from `start` along `next` (a Map of id -> ids), not counting `start`. */
+function dagReach(start, next) {
+  const seen = new Set();
+  const todo = [start];
+  while (todo.length) {
+    for (const m of next.get(todo.pop()) ?? []) {
+      if (!seen.has(m)) {
+        seen.add(m);
+        todo.push(m);
+      }
+    }
+  }
+  return seen;
+}
+
+/** The box around `boxes`, or null when there are none. */
+function rectUnion(boxes) {
+  if (!boxes.length) return null;
+  return {
+    left: Math.min(...boxes.map((b) => b.left)),
+    right: Math.max(...boxes.map((b) => b.right)),
+    top: Math.min(...boxes.map((b) => b.top)),
+    bottom: Math.max(...boxes.map((b) => b.bottom)),
+  };
+}
+
+/**
+ * Where an arrow lands on the symbol box `sym`: "top" when no glyph covers
+ * it, otherwise "right" or "left" (whichever is clear, preferring the side
+ * facing the arrow, which comes down at `fromX`). `pad` is how much vertical
+ * clearance a side run keeps from the glyphs next to the symbol.
+ */
+function landingSide(sym, glyphs, fromX, pad = 4) {
+  // Anything starting higher up over the symbol's x-range covers it: a
+  // fraction bar or numerator, a limit, or a radical (whose SVG also reaches
+  // down past the symbol, so don't require it to end above).
+  const above = glyphs.some((g) => g.right > sym.left + 1 && g.left < sym.right - 1 && g.top < sym.top - 2);
+  if (!above) return "top";
+  const rowMates = glyphs.filter((g) => g.bottom > sym.top - pad && g.top < sym.bottom + pad);
+  const rightClear = !rowMates.some((g) => g.left >= sym.right - 1);
+  const leftClear = !rowMates.some((g) => g.right <= sym.left + 1);
+  const preferRight = fromX >= (sym.left + sym.right) / 2;
+  if (rightClear && (preferRight || !leftClear)) return "right";
+  if (leftClear) return "left";
+  return "top";
+}
+
+/**
+ * The cost of stacking producers' tracks top to bottom in `order` inside one
+ * gap between rows. `bySrc` maps a producer to its segments { from, to }: a
+ * segment drops at `from`, runs along the track, and drops again at `to`.
+ * Track i above track j crosses when i's lower drop lands inside j's run, or
+ * j's upper drop starts inside i's run. When i's lower drop and j's upper drop
+ * share (almost) the same x, the two read as one line: worse than a crossing.
+ */
+function trackCrossings(order, bySrc) {
+  let count = 0;
+  const inside = (x, s) => x > Math.min(s.from, s.to) + 1 && x < Math.max(s.from, s.to) - 1;
+  for (let i = 0; i < order.length; i++) {
+    for (let j = i + 1; j < order.length; j++) {
+      for (const s of bySrc.get(order[i])) {
+        for (const u of bySrc.get(order[j])) {
+          if (inside(s.to, u)) count++;
+          if (inside(u.from, s)) count++;
+          if (Math.abs(s.to - u.from) < DAG_NEAR_X) count += 2;
+        }
+      }
+    }
+  }
+  return count;
+}
+
+/** The order of the tracks in a gap with the fewest crossings (`seed` when more than `cap`). */
+function trackOrder(seed, bySrc, cap = 6) {
+  if (seed.length > cap) return seed;
+  return dagBest(dagPermutations(seed), (order) => trackCrossings(order, bySrc));
+}
+
+/**
+ * Spread labels along one row. Each item { cx, w } wants to sit centered on
+ * cx, may not overlap the item before it (keeping `gap`), and must clear
+ * `blocks` ({ left, right } spans the row can't use). Each gets the free x
+ * nearest its wanted one: the wanted x itself, or flush against a block.
+ * Sets item.x; items must be sorted by cx.
+ */
+function packRow(items, blocks, gap = 12) {
+  let floor = -Infinity;
+  for (const item of items) {
+    const want = Math.max(item.cx - item.w / 2, floor);
+    const free = (x) => x >= floor && !blocks.some((b) => x < b.right && x + item.w > b.left);
+    const candidates = [want, ...blocks.flatMap((b) => [b.left - item.w, b.right])].filter(free);
+    item.x = candidates.length
+      ? candidates.reduce((best, x) => (Math.abs(x - want) < Math.abs(best - want) ? x : best))
+      : want;
+    floor = item.x + item.w + gap;
+  }
+  return items;
+}
+
+// ---------------------------------------------------------------------------
+// The spec of a <t-formula-dag>: formulas that refer to each other's outputs
+// with \use{name}, notes, and parameters. Checked and turned into a model the
+// element draws, with the layout already worked out. No DOM here.
+// ---------------------------------------------------------------------------
+
+// Formula and note names end up inside \htmlData{key=name}, so keep them plain.
+const DAG_NAME_RE = /^[A-Za-z][A-Za-z0-9_]*$/;
+const DAG_NOTE_NAME_RE = /^[A-Za-z][A-Za-z0-9_-]*$/;
+// \use{name}, and an exponent right after it (see cardTex).
+const DAG_USE_RE = /\\use\s*\{([^}]*)\}(\^(?:\{[^{}]*\}|[^{}\s\\]))?/g;
+const DAG_MARKER_RE = /\\(use|tangle|val|note)(?![A-Za-z])/;
+const DAG_PALETTE_SIZE = 8; // --tangle-dag-1 … --tangle-dag-8
+const DAG_SPEC_KEYS = ["formulas", "notes", "params", "legend", "reset"];
+const DAG_FORMULA_KEYS = ["tex", "symbol", "label", "value", "format", "color", "row"];
+const DAG_NOTE_KEYS = ["text", "side", "color"];
+const DAG_PARAM_KEYS = ["value", "min", "max", "step", "pixelsPerStep", "label", "format", "color", "symbol"];
+const DAG_SIDES = ["auto", "top", "bottom"];
+
+const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+
+/**
+ * Split `tex` at its first top-level "=" into [lhs, rest]. Top-level means
+ * outside any {…} group, so the "=" in \sum_{i=1} doesn't count. Null when
+ * there is no such "=" or nothing before it.
+ */
+function splitLhs(tex) {
+  let depth = 0;
+  for (let i = 0; i < tex.length; i++) {
+    const ch = tex[i];
+    if (ch === "\\") {
+      i++; // \{ \} \= are not groups or splits
+    } else if (ch === "{") {
+      depth++;
+    } else if (ch === "}") {
+      depth--;
+    } else if (ch === "=" && depth === 0) {
+      const lhs = tex.slice(0, i).trim();
+      return lhs ? [lhs, tex.slice(i + 1)] : null;
+    }
+  }
+  return null;
+}
+
+/** Throw unless every { in `tex` has its } (KaTeX's own message wouldn't say which formula). */
+function checkBraces(tex) {
+  let depth = 0;
+  for (let i = 0; i < tex.length; i++) {
+    if (tex[i] === "\\") i++;
+    else if (tex[i] === "{") depth++;
+    else if (tex[i] === "}" && --depth < 0) throw new Error('a "}" has no matching "{"');
+  }
+  if (depth) throw new Error('a "{" is never closed');
+}
+
+/** The \note{name}{body} at `start` (where "\note" begins): its name and where its body ends. */
+function noteAt(tex, start) {
+  const i = skipSpace(tex, start + "\\note".length);
+  if (tex[i] !== "{") throw new Error("\\note must be followed by {name}{tex}");
+  const nameEnd = matchClose(tex, i, "{", "}");
+  const j = skipSpace(tex, nameEnd + 1);
+  if (tex[j] !== "{") throw new Error("\\note must be followed by {name}{tex}");
+  const bodyEnd = matchClose(tex, j, "{", "}");
+  return { name: tex.slice(i + 1, nameEnd).trim(), bodyStart: j + 1, bodyEnd };
+}
+
+/** Replace every \note{name}{body} in `tex` with fn(name, body), inner notes first. */
+function mapNotes(tex, fn) {
+  const re = /\\note(?![A-Za-z])/g;
+  let out = "";
+  let last = 0;
+  let m;
+  while ((m = re.exec(tex))) {
+    const { name, bodyStart, bodyEnd } = noteAt(tex, m.index);
+    out += tex.slice(last, m.index) + fn(name, mapNotes(tex.slice(bodyStart, bodyEnd), fn));
+    last = bodyEnd + 1;
+    re.lastIndex = last;
+  }
+  return out + tex.slice(last);
+}
+
+/** `tex` with every \note{name}{body} unwrapped to just its body. */
+function stripNotes(tex) {
+  return mapNotes(tex, (_, body) => body);
+}
+
+/** The name of the note when `tex` is exactly one \note{name}{…}, else null. */
+function wholeNote(tex) {
+  const t = tex.trim();
+  if (!/^\\note(?![A-Za-z])/.test(t)) return null;
+  const { name, bodyEnd } = noteAt(t, 0);
+  return bodyEnd === t.length - 1 ? name : null;
+}
+
+/** A name as TeX, for a symbol nobody gave: x stays x, rate becomes \mathrm{rate}. */
+function nameTex(name) {
+  return /^[A-Za-z]$/.test(name) ? name : `\\mathrm{${name.replace(/_/g, "\\_")}}`;
+}
+
+/** A color option: "a b" is a in light mode and b in dark mode. */
+function dagColor(color) {
+  const pair = color.trim().split(/\s+/);
+  return pair.length === 2 ? `light-dark(${pair[0]}, ${pair[1]})` : color.trim();
+}
+
+function checkKeys(obj, allowed, what) {
+  for (const key of Object.keys(obj)) {
+    if (!allowed.includes(key)) throw new Error(`${what}: unknown key "${key}" (use ${allowed.join(", ")})`);
+  }
+}
+
+/**
+ * Check a <t-formula-dag> spec and work out its layout. Throws an Error
+ * saying what's wrong. Returns { formulas, edges, layers, routes, notes,
+ * params, legend, reset }:
+ * - formulas: [{ name, tex, lhs, body, symbol, label, value, format, color, outNote, row, uses }]
+ *   in spec order. `lhs` is TeX (notes expanded) or null; `body` is the parsed
+ *   right-hand side; `color` is a CSS color for formulas others use, else null.
+ * - edges: [producer, consumer] pairs, once each, in the order the uses appear.
+ * - layers, routes: from dagOrder, top to bottom. A formula sits one row below
+ *   the deepest formula it uses, or lower if its `row` says so.
+ * - notes: { name: { text, side, color, formula, param } }, `param` set when
+ *   the note wraps exactly one \tangle.
+ * - params: [{ name, symbol, config }] for every \tangle, the spec's params first.
+ */
+export function formulaDag(spec) {
+  try {
+    return buildFormulaDag(spec);
+  } catch (error) {
+    throw new Error(`t-formula-dag: ${error.message}`);
+  }
+}
+
+function buildFormulaDag(spec) {
+  if (!isPlainObject(spec)) throw new Error("the spec must be an object, like { formulas: { … } }");
+  checkKeys(spec, DAG_SPEC_KEYS, "the spec");
+  if (!isPlainObject(spec.formulas) || !Object.keys(spec.formulas).length) {
+    throw new Error("formulas must be a non-empty object of names to TeX");
+  }
+  for (const key of ["legend", "reset"]) {
+    if (spec[key] !== undefined && typeof spec[key] !== "boolean") throw new Error(`${key} must be true or false`);
+  }
+  const names = Object.keys(spec.formulas);
+  const known = new Set(names);
+  const noteHome = new Map(); // note -> the formula it's marked in
+  const noteParam = new Map(); // note -> the parameter it wraps
+  const paramSymbol = new Map(); // parameter -> its first \tangle[symbol], in order of appearance
+
+  const formulas = names.map((name) => {
+    if (!DAG_NAME_RE.test(name)) {
+      throw new Error(`formula name "${name}" must start with a letter and use only letters, digits and _`);
+    }
+    let f = spec.formulas[name];
+    if (typeof f === "string") f = { tex: f };
+    if (!isPlainObject(f)) throw new Error(`formula "${name}" must be a TeX string or an object with tex`);
+    checkKeys(f, DAG_FORMULA_KEYS, `formula "${name}"`);
+    if (typeof f.tex !== "string" || !f.tex.trim()) throw new Error(`formula "${name}" needs a non-empty tex string`);
+    try {
+      return parseFormula(name, f);
+    } catch (error) {
+      throw new Error(`formula "${name}": ${error.message}`);
+    }
+  });
+
+  function parseFormula(name, f) {
+    checkBraces(f.tex);
+    const split = splitLhs(f.tex);
+    const [lhsTex, rhsTex] = split ?? [null, f.tex];
+    if (lhsTex && /\\(use|tangle|val)(?![A-Za-z])/.test(lhsTex)) {
+      throw new Error("the left of its = can't hold \\use, \\tangle or \\val");
+    }
+    const symbol = f.symbol ?? (lhsTex ? stripNotes(lhsTex) : nameTex(name));
+    const label = f.label ?? name;
+    for (const [key, v] of [["symbol", symbol], ["label", label]]) {
+      if (typeof v !== "string" || !v.trim()) throw new Error(`${key} must be a non-empty string`);
+    }
+    if (DAG_MARKER_RE.test(symbol)) throw new Error("symbol can't hold \\use, \\tangle, \\val or \\note");
+    if (f.value !== undefined && typeof f.value !== "string" && typeof f.value !== "function") {
+      throw new Error("value must be an expression string or a function");
+    }
+    if (typeof f.value === "string") compile(f.value); // surface syntax errors now
+    if (f.format !== undefined && typeof f.format !== "string") throw new Error("format must be a string");
+    if (f.color !== undefined && (typeof f.color !== "string" || !f.color.trim())) {
+      throw new Error("color must be a CSS color, or two: light and dark");
+    }
+    if (f.row !== undefined && !(Number.isInteger(f.row) && f.row >= 0)) {
+      throw new Error("row must be a whole number, 0 or more (0 is the top row)");
+    }
+
+    const expand = (tex) =>
+      mapNotes(tex, (note, body) => {
+        if (!DAG_NOTE_NAME_RE.test(note)) {
+          throw new Error(`note name "${note}" must start with a letter and use only letters, digits, _ and -`);
+        }
+        const home = noteHome.get(note);
+        if (home && home !== name) throw new Error(`note "${note}" is marked in more than one formula: ${home}, ${name}`);
+        noteHome.set(note, name);
+        const inner = parseTex(body.trim());
+        if (inner.length === 1 && inner[0].type === "param") noteParam.set(note, inner[0].name);
+        return `\\htmlData{note=${note}}{${body}}`;
+      });
+    const lhs = lhsTex ? expand(lhsTex) : null;
+    const body = parseTex(expand(rhsTex));
+
+    const uses = [];
+    for (const part of body) {
+      if (typeof part !== "string") {
+        if (part.type === "param" && !paramSymbol.get(part.name)) paramSymbol.set(part.name, part.symbol);
+        continue;
+      }
+      for (const [, used] of part.matchAll(DAG_USE_RE)) {
+        const u = used.trim();
+        if (u === name) throw new Error(`it can't \\use{${u}} itself`);
+        if (!known.has(u)) throw new Error(`\\use{${u}}: there is no formula "${u}"`);
+        if (!uses.includes(u)) uses.push(u);
+      }
+    }
+    return {
+      name,
+      tex: f.tex,
+      lhs,
+      body,
+      symbol,
+      label,
+      value: f.value ?? null,
+      format: f.format ?? null,
+      color: f.color === undefined ? null : dagColor(f.color),
+      outNote: lhsTex ? wholeNote(lhsTex) : null,
+      row: f.row ?? 0,
+      uses,
+    };
+  }
+
+  const edges = [];
+  for (const f of formulas) for (const u of f.uses) edges.push([u, f.name]);
+  const cycle = dagCycle(names, edges);
+  if (cycle) throw new Error(`formulas must not form a cycle: ${cycle.join(" -> ")}`);
+
+  // Color means "this came from formula X": only producers get one.
+  const producers = new Set(edges.map(([src]) => src));
+  let next = 0;
+  for (const f of formulas) {
+    if (!producers.has(f.name)) continue;
+    const index = next++;
+    f.color ??= `var(--tangle-dag-${(index % DAG_PALETTE_SIZE) + 1})`;
+  }
+
+  // Notes: one for every \note marker, and no others.
+  const rawNotes = spec.notes ?? {};
+  if (!isPlainObject(rawNotes)) throw new Error("notes must be an object of names to text");
+  const notes = {};
+  for (const [name, raw] of Object.entries(rawNotes)) {
+    const n = typeof raw === "string" ? { text: raw } : raw;
+    if (!isPlainObject(n)) throw new Error(`note "${name}" must be text or an object with text`);
+    checkKeys(n, DAG_NOTE_KEYS, `note "${name}"`);
+    if (typeof n.text !== "string" || !n.text.trim()) throw new Error(`note "${name}" needs some text`);
+    const side = n.side ?? "auto";
+    if (!DAG_SIDES.includes(side)) throw new Error(`note "${name}": side must be ${DAG_SIDES.join(", ")}`);
+    if (n.color !== undefined && (typeof n.color !== "string" || !n.color.trim())) {
+      throw new Error(`note "${name}": color must be a CSS color, or two: light and dark`);
+    }
+    if (!noteHome.has(name)) throw new Error(`note "${name}" isn't marked with \\note{${name}}{…} in any formula`);
+    notes[name] = {
+      text: n.text,
+      side,
+      color: n.color === undefined ? null : dagColor(n.color),
+      formula: noteHome.get(name),
+      param: noteParam.get(name) ?? null,
+    };
+  }
+  for (const name of noteHome.keys()) {
+    if (!notes[name]) throw new Error(`\\note{${name}} has no text: add notes: { ${name}: "…" }`);
+  }
+
+  // Parameters: every \tangle; the spec may configure them.
+  const rawParams = spec.params ?? {};
+  if (!isPlainObject(rawParams)) throw new Error("params must be an object of names to settings");
+  for (const [name, config] of Object.entries(rawParams)) {
+    if (!paramSymbol.has(name)) throw new Error(`params.${name}: no formula has \\tangle{${name}}`);
+    if (!isPlainObject(config)) throw new Error(`params.${name} must be an object like { value: 1, min: 0 }`);
+    checkKeys(config, DAG_PARAM_KEYS, `params.${name}`);
+  }
+  for (const name of paramSymbol.keys()) {
+    if (known.has(name)) throw new Error(`"${name}" is both a formula and a \\tangle parameter: rename one`);
+  }
+  const order = [...Object.keys(rawParams), ...[...paramSymbol.keys()].filter((p) => !(p in rawParams))];
+  const params = order.map((name) => {
+    const { symbol, ...config } = rawParams[name] ?? {};
+    return { name, symbol: symbol ?? paramSymbol.get(name) ?? nameTex(name), config };
+  });
+
+  const minRows = new Map(formulas.map((f) => [f.name, f.row]));
+  const { layers, routes } = dagOrder(names, dagLayers(names, edges, minRows), edges);
+  return {
+    formulas,
+    edges,
+    layers,
+    routes,
+    notes,
+    params,
+    legend: spec.legend ?? true,
+    reset: spec.reset ?? true,
+  };
+}
+
+/**
+ * The TeX a formula's card shows right now. `ctx` supplies:
+ * - symbol(name): a formula's output symbol;
+ * - revealed(name): whether a formula shows its value instead;
+ * - valueTex(name): that value as TeX;
+ * - markers(parts, text): TeX for parsed parts, mapping literal strings with `text`.
+ * Each \use{name} becomes the producer's symbol (or value), wrapped in
+ * \htmlData{fdag-use=name}; the output symbol is wrapped in fdag-out.
+ */
+function cardTex(f, ctx) {
+  // An exponent right after a subscripted symbol (\use{vy}^2 with v_y) moves
+  // inside it, so KaTeX stacks v_y^2 instead of raising the 2 over all of v_y.
+  const text = (s) =>
+    s.replace(DAG_USE_RE, (_, used, sup = "") => {
+      const name = used.trim();
+      const symbol = ctx.symbol(name);
+      const content = ctx.revealed(name) ? ctx.valueTex(name) : symbol;
+      const absorb = sup && symbol.includes("_") && !symbol.includes("^");
+      return absorb
+        ? `\\htmlData{fdag-use=${name}}{${content}${sup}}`
+        : `\\htmlData{fdag-use=${name}}{${content}}${sup}`;
+    });
+  let tex = ctx.markers(f.body, text);
+  const live = ctx.revealed(f.name);
+  if (f.lhs) {
+    // A note wrapping the whole output stays on the value, so it still points at something.
+    let out = f.lhs;
+    if (live) out = f.outNote ? `\\htmlData{note=${f.outNote}}{${ctx.valueTex(f.name)}}` : ctx.valueTex(f.name);
+    tex = `\\htmlData{fdag-out=${f.name}}{${out}} =${tex}`;
+  } else if (live) {
+    // No output symbol to replace: close the formula with its value.
+    tex += ` = \\htmlData{fdag-value=${f.name}}{${ctx.valueTex(f.name)}}`;
+  }
+  return tex;
+}
+
+/** Note text as pieces: { text } plain, { bold } for **bold**, { math } for $tex$. */
+function noteParts(text) {
+  const parts = [];
+  text.split(/\$([^$]+)\$/).forEach((piece, i) => {
+    if (i % 2) return parts.push({ math: piece });
+    piece.split(/\*\*(.+?)\*\*/).forEach((t, j) => {
+      if (t) parts.push(j % 2 ? { bold: t } : { text: t });
+    });
+  });
+  return parts;
+}
+
+/**
+ * The variables `name` reads, directly or through the formulas it reads, as
+ * a Set. Only what it read the last time it ran: call scope.get(name) first.
+ */
+function variablesRead(scope, name) {
+  const names = new Map(); // a variable's def signal and cell -> its name
+  for (const [n, slot] of scope.slots) {
+    names.set(slot.def, n);
+    names.set(slot.cell, n);
+  }
+  const out = new Set();
+  const seen = new Set();
+  const walk = (node) => {
+    for (const dep of node.deps ?? []) {
+      if (seen.has(dep)) continue;
+      seen.add(dep);
+      const n = names.get(dep);
+      if (n !== undefined && n !== name) out.add(n);
+      walk(dep);
+    }
+  };
+  walk(scope.slot(name).cell);
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Function signatures: what tangleCall() reads from a JavaScript function.
+// ---------------------------------------------------------------------------
+
+/** Split a parameter list on top-level commas, from the "(" at `open` to its ")". */
+function splitParams(src, open) {
+  const parts = [];
+  let depth = 0;
+  let last = open + 1;
+  for (let i = open + 1; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '"' || ch === "'" || ch === "`") {
+      for (i++; i < src.length && src[i] !== ch; i++) if (src[i] === "\\") i++;
+    } else if (ch === "/" && src[i + 1] === "/") {
+      i = src.indexOf("\n", i);
+      if (i < 0) break;
+    } else if (ch === "/" && src[i + 1] === "*") {
+      i = src.indexOf("*/", i) + 1;
+      if (i <= 0) break;
+    } else if ("([{".includes(ch)) {
+      depth++;
+    } else if (")]}".includes(ch) && depth-- === 0) {
+      parts.push(src.slice(last, i));
+      return parts.map((p) => p.trim()).filter(Boolean);
+    } else if (ch === "," && depth === 0) {
+      parts.push(src.slice(last, i));
+      last = i + 1;
+    }
+  }
+  throw new Error("Unbalanced parameter list");
+}
+
+/**
+ * Read a function's parameters and evaluate their defaults:
+ * `function f(a = 1, b = "x", c)` gives `[{ name: "a", value: 1, hasDefault: true }, …]`.
+ * Defaults must evaluate to a number, string or boolean on their own.
+ */
+export function parseParams(fn) {
+  const src = Function.prototype.toString.call(fn);
+  const bare = /^\s*(?:async\s+)?([A-Za-z_$][\w$]*)\s*=>/.exec(src);
+  const open = src.indexOf("(");
+  if (!bare && open < 0) throw new Error("Can't find the parameter list");
+  const parts = bare ? [bare[1]] : splitParams(src, open);
+  return parts.map((part) => {
+    if (part.startsWith("...")) throw new Error(`Rest parameter "${part}" isn't supported`);
+    if (/^[[{]/.test(part)) throw new Error(`Destructured parameter "${part}" isn't supported`);
+    const m = /^([A-Za-z_$][\w$]*)\s*(?:=([\s\S]*))?$/.exec(part);
+    if (!m) throw new Error(`Can't read parameter "${part}"`);
+    const [, name, expr] = m;
+    if (expr === undefined) return { name, value: undefined, hasDefault: false };
+    let value;
+    try {
+      value = new Function(`return (${expr}\n);`)();
+    } catch (error) {
+      throw new Error(`Can't evaluate the default of "${name}": ${error.message}`);
+    }
+    if (!["number", "string", "boolean"].includes(typeof value)) {
+      throw new Error(`The default of "${name}" must be a number, string or boolean`);
+    }
+    return { name, value, hasDefault: true };
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Custom elements
 // ---------------------------------------------------------------------------
 
@@ -1081,10 +1737,20 @@ function declare(el, scope, name, initial) {
   for (const attr of ["color", "label", "format"]) {
     if (el.hasAttribute(attr)) patch[attr] = el.getAttribute(attr);
   }
-  const color = patch.color?.trim().split(/\s+/);
-  if (color?.length === 2) patch.color = `light-dark(${color[0]}, ${color[1]})`;
   // A <t-num>'s format only becomes the variable's default if none is set yet.
   if (el.localName === "t-num" && scope.slot(name).meta.peek().format) delete patch.format;
+  declareMeta(scope, name, patch, initial);
+}
+
+/**
+ * Merge `patch` (min, max, step, pixelsPerStep, color, label, format) into the
+ * variable's metadata, and give it `initial` unless something already did.
+ * A color "a b" means a in light mode and b in dark mode.
+ */
+function declareMeta(scope, name, patch, initial) {
+  patch = { ...patch };
+  const color = typeof patch.color === "string" ? patch.color.trim().split(/\s+/) : null;
+  if (color?.length === 2) patch.color = `light-dark(${color[0]}, ${color[1]})`;
   if (Object.keys(patch).length) scope.setMeta(name, patch);
   const slot = scope.slot(name);
   if (initial !== undefined && !slot.initialized) {
@@ -2626,28 +3292,7 @@ class TMath extends TangleElement {
   }
 
   render(katex, scope) {
-    let tex = "";
-    for (const part of this._parts) {
-      if (typeof part === "string") {
-        tex += part;
-      } else if (part.type === "param") {
-        const meta = scope.meta(part.name);
-        const value = scope.get(part.name);
-        const shown =
-          !part.symbol || active.value === keyOf(scope, part.name)
-            ? toTex(value, meta.format, meta.step)
-            : part.symbol;
-        tex += `\\htmlData{tangle-param=${part.name}}{${shown}}`;
-      } else {
-        let shown;
-        try {
-          shown = toTex(scope.eval(part.expr), part.format);
-        } catch {
-          shown = "\\text{?}";
-        }
-        tex += `\\htmlClass{tangle-val}{${shown}}`;
-      }
-    }
+    const tex = partsTex(this._parts, scope);
 
     untracked(() => {
       // Remember which marker had keyboard focus; rendering replaces it.
@@ -2670,6 +3315,941 @@ class TMath extends TangleElement {
       }
       if (refocus) relocate(refocus, focused.dataset.tangleParam)?.focus({ preventScroll: true });
     });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// <t-formula-dag>: formulas in rows, one row per dependency depth, with an
+// arrow from each formula's output symbol to every place another formula
+// uses it (\use{name}). Formulas can carry draggable numbers (\tangle),
+// live results (\val), notes (\note), and a value of their own.
+// ---------------------------------------------------------------------------
+
+const DAG_HEAD_LEN = 7; // arrowhead length, px
+const DAG_HEAD_HALF = 3.5; // arrowhead half-width
+const DAG_LAND_GAP = 3; // between an arrow tip and the ink it points at
+const DAG_SIDE_GAP = 12; // how far beside a formula a side-landing arrow comes down
+const DAG_SIDE_PAD = 4; // vertical clearance a side landing keeps from glyphs
+const DAG_CORNER = 7; // radius of an arrow's turns
+const DAG_NOTE_PAD_Y = 4; // card edge to a row of note labels
+const DAG_NOTE_ARROW_SPACE = 22; // formula to a row of note labels
+const DAG_NOTE_GAP = 12; // between two labels in a row
+const DAG_NOTE_CLEARANCE = 3; // between a note arrow's end and what it touches
+const DAG_NOTE_HEAD_LEN = 6;
+const DAG_NOTE_HEAD_HALF = 3.5;
+const DAG_LANE_CLEARANCE = 8; // labels keep this far from a DAG arrow passing by
+const DAG_NOTE_SIDE_SPACE = 20; // a left-hand note's label to the output symbol
+const DAG_KATEX = {
+  displayMode: true,
+  throwOnError: true,
+  trust: (ctx) => ctx.command === "\\htmlData" || ctx.command === "\\htmlClass",
+  strict: (code) => (code === "htmlExtension" ? "ignore" : "warn"),
+};
+
+/** KaTeX's leaf boxes: glyph text, rules (fraction bars) and SVGs (radicals). Struts are skipped. */
+function glyphLeaves(root) {
+  const out = [];
+  const walk = (node) => {
+    if (node instanceof SVGElement) return out.push(node);
+    const cls = node.classList;
+    if (cls.contains("pstrut") || cls.contains("strut") || cls.contains("vlist-s")) return;
+    if (!node.children.length) {
+      const r = node.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) out.push(node);
+      return;
+    }
+    for (const child of node.children) walk(child);
+  };
+  walk(root);
+  return out;
+}
+
+// A text box spans the font's whole ascent and descent, well past the ink.
+// Measure the glyphs on a canvas and trim the box to the ink, so arrows land
+// on the symbol rather than on the empty space above it.
+let dagCanvas = null;
+const dagMetrics = new Map(); // font + text -> TextMetrics
+function inkRect(el) {
+  const r = el.getBoundingClientRect();
+  const text = el.textContent;
+  if (el instanceof SVGElement || !text || !text.trim()) return r;
+  const cs = getComputedStyle(el);
+  const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  const key = `${font}\n${text}`;
+  let m = dagMetrics.get(key);
+  if (!m) {
+    dagCanvas ??= document.createElement("canvas").getContext("2d");
+    dagCanvas.font = font;
+    m = dagCanvas.measureText(text);
+    // Before the KaTeX fonts load the metrics are for a fallback font: don't keep those.
+    if (document.fonts?.status !== "loading") dagMetrics.set(key, m);
+  }
+  if (!m.fontBoundingBoxAscent) return r;
+  const baseline = r.top + m.fontBoundingBoxAscent;
+  return {
+    left: r.left,
+    right: r.right,
+    top: baseline - m.actualBoundingBoxAscent,
+    bottom: baseline + m.actualBoundingBoxDescent,
+  };
+}
+
+const dagDiv = (className) => Object.assign(document.createElement("div"), { className });
+
+// <t-formula-dag name="picked">
+//   <script type="text/plain">
+//   {
+//     formulas: {
+//       mu: String.raw`\mu = \frac{1}{n}\sum_i x_i`,
+//       z: { tex: String.raw`z = \frac{\tangle{x} - \use{mu}}{\sigma}`, value: "(x - mu) / sigma" },
+//     },
+//   }
+//   </script>
+// </t-formula-dag>
+class TFormulaDag extends TangleElement {
+  connectedCallback() {
+    if (this._model === undefined) {
+      try {
+        this._model = this.readSpec();
+      } catch (error) {
+        this._model = null;
+        this.showError(error);
+      }
+    }
+    if (!this._model) return;
+    if (!this._root) {
+      this._root = dagDiv("tangle-dag is-loading");
+      this._root.textContent = "Loading formulas…";
+      this.append(this._root);
+    }
+    const token = (this._token = {});
+    loadKatex().then(
+      (katex) => {
+        if (this._token === token && this.isConnected) this.start(katex);
+      },
+      (error) => {
+        if (this._token === token) this.showError(new Error(`t-formula-dag: could not load KaTeX: ${error.message}`));
+      },
+    );
+  }
+
+  disconnectedCallback() {
+    this._token = null;
+    this._resize?.disconnect();
+    super.disconnectedCallback();
+  }
+
+  /** Evaluate the spec, check it, and define each formula's value in the scope. */
+  readSpec() {
+    const scope = this.scope;
+    const source = this.querySelector(":scope > script")?.textContent ?? "";
+    if (!source.trim()) {
+      throw new Error('t-formula-dag: put the spec in a <script type="text/plain"> inside it');
+    }
+    let spec;
+    try {
+      // Once, untracked: only a formula's value is reactive. Functions in the
+      // spec close over the scope, so `() => v * t` reads v and t when it runs.
+      spec = untracked(() => evalWith(scope, source, {}));
+    } catch (error) {
+      throw new Error(`t-formula-dag: the spec: ${error.message}`);
+    }
+    const model = formulaDag(spec);
+    for (const p of model.params) {
+      const { value, ...meta } = p.config;
+      declareMeta(scope, p.name, meta, value);
+    }
+    for (const f of model.formulas) {
+      if (f.value == null) continue;
+      const def = scope.slot(f.name).def.peek();
+      if (def !== undefined && !(def instanceof Formula)) {
+        console.warn(`t-formula-dag: formula "${f.name}" replaces the variable of the same name`, this);
+      }
+      scope.define(f.name, f.value);
+    }
+    this._byName = new Map(model.formulas.map((f) => [f.name, f]));
+    return model;
+  }
+
+  showError(error) {
+    this._root?.remove();
+    this._root = null;
+    this._error ??= dagDiv("tangle-dag-error");
+    this._error.textContent = error.message;
+    this.append(this._error);
+  }
+
+  // ---- the edges, as data -------------------------------------------------
+
+  /** [producer, consumer] pairs: which formula's output each formula uses. */
+  get edges() {
+    return (this._model?.edges ?? []).map((e) => [...e]);
+  }
+  /** The formulas `name` uses, directly or not. */
+  upstream(name) {
+    return [...dagReach(name, this.adjacency(1, 0))];
+  }
+  /** The formulas that use `name`, directly or not. */
+  downstream(name) {
+    return [...dagReach(name, this.adjacency(0, 1))];
+  }
+  adjacency(from, to) {
+    const next = new Map();
+    for (const e of this._model?.edges ?? []) {
+      if (!next.has(e[from])) next.set(e[from], []);
+      next.get(e[from]).push(e[to]);
+    }
+    return next;
+  }
+
+  // ---- building -------------------------------------------------------------
+
+  start(katex) {
+    const scope = this.scope;
+    const model = this._model;
+    this._katex = katex;
+    this._cards = new Map(); // name -> { card, stage, tex, tints, noteArrows, labels, caption }
+    this._lanes = new Map(); // waypoint -> lane element
+    this._rows = [];
+    this._rowOf = new Map();
+    this._lastTex = new Map();
+    this._edgeEls = [];
+    this._blocks = {}; // card -> { top: [x], bottom: [x] }: where DAG arrows cross its label rows
+    this._focused = null;
+    this._noteHover = null;
+    this._producers = new Set(model.edges.map(([src]) => src));
+    // What Reset goes back to: the values once everything on the page has declared.
+    this._initial = Object.fromEntries(model.params.map((p) => [p.name, scope.peek(p.name)]));
+
+    const root = this._root;
+    root.className = "tangle-dag";
+    const board = (this._board = dagDiv("tangle-dag-board"));
+    for (const layer of model.layers) {
+      const row = dagDiv("tangle-dag-row");
+      for (const id of layer) {
+        this._rowOf.set(id, this._rows.length);
+        if (this._byName.has(id)) {
+          row.append(this.buildCard(this._byName.get(id)));
+        } else {
+          // An empty lane for an edge that skips this row.
+          const lane = dagDiv("tangle-dag-lane");
+          this._lanes.set(id, lane);
+          row.append(lane);
+        }
+      }
+      this._rows.push(row);
+      board.append(row);
+    }
+    this._svg = svgNode("svg", { class: "tangle-dag-edges", "aria-hidden": "true" });
+    board.append(this._svg);
+    root.replaceChildren(board);
+    const footer = this.buildFooter();
+    if (footer) root.append(footer);
+
+    for (const f of model.formulas) this.watch(() => this.renderCard(f, scope));
+    this.watch(() => {
+      hover.value, active.value;
+      untracked(() => this.syncLinks(scope));
+    });
+    const name = this.getAttribute("name");
+    if (name) {
+      this.watch(() => {
+        const picked = scope.get(name);
+        for (const [id, { card }] of this._cards) card.classList.toggle("is-selected", id === picked);
+      });
+    }
+
+    if (!this._listening) {
+      this._listening = true;
+      root.addEventListener("pointerover", (event) => this.noteHoverAt(event.target));
+      root.addEventListener("focusin", (event) => this.noteHoverAt(event.target));
+      root.addEventListener("pointerleave", () => this.setNoteHover(null));
+    }
+    this._resize = new ResizeObserver(() => this.relayoutSoon());
+    this._resize.observe(root);
+    document.fonts?.ready.then(() => {
+      dagMetrics.clear();
+      this.relayoutSoon();
+    });
+    this.relayout();
+  }
+
+  buildCard(f) {
+    const card = dagDiv("tangle-dag-card");
+    card.dataset.node = f.name;
+    const stage = dagDiv("tangle-dag-stage");
+    const tints = svgNode("svg", { class: "tangle-dag-tints", "aria-hidden": "true" });
+    const tex = dagDiv("tangle-dag-tex");
+    const noteArrows = svgNode("svg", { class: "tangle-dag-note-arrows", "aria-hidden": "true" });
+    stage.append(tints, tex, noteArrows);
+    const labels = new Map();
+    for (const [name, note] of Object.entries(this._model.notes)) {
+      if (note.formula !== f.name) continue;
+      const label = dagDiv("tangle-dag-note");
+      label.dataset.note = name;
+      this.noteContent(label, note.text);
+      stage.append(label);
+      labels.set(name, label);
+    }
+    const caption = dagDiv("tangle-dag-caption");
+    caption.textContent = f.label;
+    card.append(stage, caption);
+    card.addEventListener("mouseenter", () => this.focus(f.name));
+    card.addEventListener("mouseleave", () => this.focus(null));
+    const name = this.getAttribute("name");
+    if (name) {
+      card.classList.add("is-pickable");
+      card.addEventListener("click", (event) => {
+        if (event.target.closest(`${PARAM}, .tangle-dag-note`)) return;
+        const scope = this.scope;
+        scope.set(name, scope.peek(name) === f.name ? null : f.name);
+      });
+    }
+    this._cards.set(f.name, { card, stage, tex, tints, noteArrows, labels, caption });
+    return card;
+  }
+
+  /** Note text: plain, with **bold** and $math$. Built as DOM, never as HTML. */
+  noteContent(el, text) {
+    for (const part of noteParts(text)) {
+      if (part.math !== undefined) {
+        const span = document.createElement("span");
+        this._katex.render(part.math, span, { throwOnError: false });
+        el.append(span);
+      } else if (part.bold !== undefined) {
+        el.append(Object.assign(document.createElement("strong"), { textContent: part.bold }));
+      } else {
+        el.append(part.text);
+      }
+    }
+  }
+
+  /** The legend (one chip per number, then one per formula value) and Reset. */
+  buildFooter() {
+    const model = this._model;
+    const scope = this.scope;
+    const valued = model.formulas.filter((f) => f.value != null);
+    const legend = model.legend && (model.params.length || valued.length);
+    const reset = model.reset && model.params.length;
+    if (!legend && !reset) return null;
+    const footer = dagDiv("tangle-dag-footer");
+    if (legend) {
+      const strip = dagDiv("tangle-dag-legend");
+      if (model.params.length) {
+        const row = dagDiv("tangle-dag-legend-row");
+        for (const p of model.params) {
+          const chip = dagDiv("tangle-dag-chip");
+          const symbol = dagDiv("tangle-dag-chip-symbol");
+          this._katex.render(p.symbol, symbol, { throwOnError: false });
+          const label = dagDiv("tangle-dag-chip-label");
+          const value = dagDiv("tangle-dag-chip-value");
+          chip.append(symbol, label, value);
+          this.makeDraggable(p.name, chip);
+          this.watch(() => {
+            const meta = scope.meta(p.name);
+            label.textContent = meta.label ?? "";
+            value.textContent = formatValue(scope.get(p.name), meta.format, meta.step);
+          });
+          row.append(chip);
+        }
+        strip.append(row);
+      }
+      if (valued.length) {
+        const row = dagDiv("tangle-dag-legend-row");
+        for (const f of valued) {
+          const chip = dagDiv("tangle-dag-chip is-output");
+          chip.dataset.tangleHover = keyOf(scope, f.name);
+          const symbol = dagDiv("tangle-dag-chip-symbol");
+          this._katex.render(f.symbol, symbol, { throwOnError: false });
+          if (f.color) symbol.style.setProperty("--tangle-dag-c", f.color);
+          chip.append(symbol);
+          if (f.label !== f.name) {
+            const label = dagDiv("tangle-dag-chip-label");
+            label.textContent = f.label;
+            chip.append(label);
+          }
+          const value = dagDiv("tangle-dag-chip-value");
+          chip.append(value);
+          this.watch(() => {
+            try {
+              value.textContent = formatValue(scope.get(f.name), f.format);
+              chip.classList.remove("is-error");
+              chip.title = "";
+            } catch (error) {
+              value.textContent = "⚠";
+              chip.classList.add("is-error");
+              chip.title = error?.message ?? String(error);
+            }
+          });
+          row.append(chip);
+        }
+        strip.append(row);
+      }
+      footer.append(strip);
+    }
+    if (reset) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tangle-dag-reset";
+      button.textContent = "Reset";
+      button.addEventListener("click", () => scope.setValues(this._initial));
+      this.watch(() => {
+        const changed = model.params.some((p) => !Object.is(scope.get(p.name), this._initial[p.name]));
+        button.classList.toggle("is-changed", changed);
+      });
+      footer.append(button);
+    }
+    return footer;
+  }
+
+  // ---- rendering a card -----------------------------------------------------
+
+  /** The name of the variable being dragged or edited, if it's in this scope. */
+  activeName(scope) {
+    const key = active.value;
+    const prefix = `${scope.id}:`;
+    return key && key.startsWith(prefix) ? key.slice(prefix.length) : null;
+  }
+
+  /** A formula shows its value instead of its symbol while a variable it reads is changing. */
+  revealed(name, scope) {
+    const f = this._byName.get(name);
+    const changing = this.activeName(scope);
+    if (f.value == null || !changing) return false;
+    return untracked(() => {
+      try {
+        scope.get(name); // so its dependencies are known
+      } catch {}
+      return variablesRead(scope, name).has(changing);
+    });
+  }
+
+  valueTex(name, scope) {
+    try {
+      return toTex(scope.get(name), this._byName.get(name).format);
+    } catch {
+      return "\\text{?}";
+    }
+  }
+
+  renderCard(f, scope) {
+    const tex = cardTex(f, {
+      symbol: (n) => this._byName.get(n).symbol,
+      revealed: (n) => this.revealed(n, scope),
+      valueTex: (n) => this.valueTex(n, scope),
+      markers: (parts, text) => partsTex(parts, scope, text),
+    });
+    untracked(() => {
+      if (this._lastTex.get(f.name) === tex) return;
+      this._lastTex.set(f.name, tex);
+      const { tex: target } = this._cards.get(f.name);
+      // Remember which number had keyboard focus; rendering replaces it.
+      const focused = document.activeElement;
+      const refocus = target.contains(focused) && focused.matches(PARAM) ? occurrence(focused) : null;
+      try {
+        this._katex.render(tex, target, DAG_KATEX);
+        target.classList.remove("is-error");
+        target.title = "";
+      } catch (error) {
+        target.textContent = f.tex;
+        target.classList.add("is-error");
+        target.title = error.message;
+        console.error(`t-formula-dag: formula "${f.name}": ${error.message}`, this);
+      }
+      this.decorateCard(f, target, scope);
+      if (refocus) relocate(refocus, focused.dataset.tangleParam)?.focus({ preventScroll: true });
+      this.relayoutSoon();
+    });
+  }
+
+  /** Color and wire up the markers in a freshly rendered card. */
+  decorateCard(f, target, scope) {
+    const html = target.querySelector(".katex-html");
+    if (!html) return;
+    const out = html.querySelector("[data-fdag-out]");
+    if (out) {
+      out.dataset.tangleHover = keyOf(scope, f.name);
+      if (f.color) out.style.setProperty("--tangle-dag-c", f.color);
+    }
+    for (const use of html.querySelectorAll("[data-fdag-use]")) {
+      const producer = this._byName.get(use.dataset.fdagUse);
+      use.dataset.tangleHover = keyOf(scope, producer.name);
+      if (producer.color) use.style.setProperty("--tangle-dag-c", producer.color);
+    }
+    for (const el of html.querySelectorAll(PARAM)) {
+      decorate(el, scope, el.dataset.tangleParam);
+      syncClasses(el, scope, el.dataset.tangleParam);
+    }
+    for (const term of html.querySelectorAll("[data-note]")) {
+      const note = this._model.notes[term.dataset.note];
+      term.classList.add("tangle-dag-term");
+      term.tabIndex = 0;
+      term.setAttribute("aria-label", note.text);
+    }
+    this.colorNotes(scope);
+    this.syncLinks(scope);
+    this.spaceNumbersAfterDigits(html);
+  }
+
+  /** A note takes its own color, else the color of the number it wraps, else the note gray. */
+  noteColor(note, scope) {
+    if (note.color) return note.color;
+    if (note.param) return scope.meta(note.param).color ?? "currentColor";
+    return "var(--tangle-dag-note)";
+  }
+
+  colorNotes(scope) {
+    for (const el of this._root.querySelectorAll("[data-note]")) {
+      const note = this._model.notes[el.dataset.note];
+      if (note) el.style.setProperty("--tangle-dag-c", this.noteColor(note, scope));
+    }
+  }
+
+  // A number shown right after a digit reads as one number (2σ with σ = 1.7
+  // shows as "21.7"): give such a number a small gap.
+  spaceNumbersAfterDigits(html) {
+    const walker = document.createTreeWalker(html, NodeFilter.SHOW_TEXT);
+    const seen = new Set();
+    let previous = "";
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const text = node.textContent.trim();
+      if (!text) continue;
+      const marker = node.parentElement.closest("[data-tangle-param], [data-fdag-use], [data-fdag-out]");
+      if (marker && !seen.has(marker)) {
+        seen.add(marker);
+        marker.classList.toggle("tangle-dag-gap", /[0-9.]$/.test(previous) && /^[0-9.]/.test(text));
+      }
+      previous = text;
+    }
+  }
+
+  /** Light up what's under the pointer everywhere it shows: a number, or a formula's output. */
+  syncLinks(scope) {
+    if (!this._root) return;
+    const key = hover.peek();
+    for (const el of this._root.querySelectorAll(".katex-html [data-tangle-param]")) {
+      syncClasses(el, scope, el.dataset.tangleParam);
+    }
+    for (const el of this._root.querySelectorAll("[data-tangle-hover]")) {
+      el.classList.toggle("is-hot", key === el.dataset.tangleHover);
+    }
+    this.applyNoteHover();
+  }
+
+  // ---- notes --------------------------------------------------------------
+
+  /** The note that explains a number: the one wrapping exactly that \tangle. */
+  noteForParam(param) {
+    return Object.entries(this._model.notes).find(([, note]) => note.param === param)?.[0] ?? null;
+  }
+
+  noteHoverAt(target) {
+    const label = target.closest?.(".tangle-dag-note");
+    if (label) return this.setNoteHover(label.dataset.note);
+    const param = target.closest?.(PARAM);
+    const paramNote = param ? this.noteForParam(param.dataset.tangleParam) : null;
+    if (paramNote) return this.setNoteHover(paramNote);
+    this.setNoteHover(target.closest?.(".katex-html [data-note]")?.dataset.note ?? null);
+  }
+
+  setNoteHover(name) {
+    this._noteHover = name;
+    this.applyNoteHover();
+  }
+
+  /** The highlighted note (a dragged number's beats the hovered one) lifts; the others fade. */
+  applyNoteHover() {
+    if (!this._board) return;
+    const changing = untracked(() => this.activeName(this.scope));
+    const name = (changing && this.noteForParam(changing)) || this._noteHover;
+    const on = Boolean(name) && name in this._model.notes;
+    this._root.classList.toggle("has-note-hover", on);
+    for (const el of this._board.querySelectorAll("[data-note]")) {
+      el.classList.toggle("is-hovered", on && el.dataset.note === name);
+    }
+  }
+
+  /** Lay out the notes of card `id` around the arrow columns in this._blocks. */
+  layoutNotes(id) {
+    const { stage, tex, tints, noteArrows, labels } = this._cards.get(id);
+    tints.replaceChildren();
+    noteArrows.replaceChildren();
+    stage.style.padding = "";
+    if (!labels.size) return;
+    const notes = this._model.notes;
+    const scope = this.scope;
+    const blocks = this._blocks[id] ?? { top: [], bottom: [] };
+
+    const base = () => stage.getBoundingClientRect();
+    const rel = (r, b = base()) => ({
+      left: r.left - b.left,
+      right: r.right - b.left,
+      top: r.top - b.top,
+      bottom: r.bottom - b.top,
+      cx: r.left - b.left + (r.right - r.left) / 2,
+      cy: r.top - b.top + (r.bottom - r.top) / 2,
+    });
+    const html = tex.querySelector(".katex-html");
+    const termOf = (name) => html?.querySelector(`[data-note="${name}"]`);
+    const termBox = (term) => rel(rectUnion(glyphLeaves(term).map(inkRect)) ?? term.getBoundingClientRect());
+
+    // 1. A side per note: parts above the formula's middle go up, parts below
+    //    go down, and a note on the output symbol goes left (arrows come in
+    //    above it and leave below it). The rest take the side fewer arrows
+    //    cross, then balance.
+    const texBox = rel(tex.getBoundingClientRect());
+    // The formula's own width: the tex box stretches with the card.
+    const ink = html && rectUnion(glyphLeaves(html).map(inkRect));
+    const formulaW = ink ? rel(ink).right - texBox.left : texBox.right - texBox.left;
+    const out = html?.querySelector("[data-fdag-out]");
+    const items = [];
+    const counts = { top: 0, bottom: 0 };
+    const undecided = [];
+    for (const [name, label] of labels) {
+      const term = termOf(name);
+      // A live value can stand in for a noted part: hide its note meanwhile.
+      label.style.display = term ? "" : "none";
+      if (!term) continue;
+      label.style.setProperty("--tangle-dag-c", this.noteColor(notes[name], scope));
+      const box = termBox(term);
+      const item = {
+        name,
+        side: notes[name].side,
+        label,
+        cx: box.cx - texBox.left,
+        leftRel: box.left - texBox.left,
+        cyRel: box.cy - texBox.top,
+      };
+      if (item.side === "auto" && out?.contains(term)) item.side = "left";
+      label.classList.toggle("is-left", item.side === "left");
+      item.w = label.offsetWidth;
+      item.h = label.offsetHeight;
+      items.push(item);
+      if (item.side === "auto") {
+        const offset = box.cy - texBox.cy;
+        if (offset < -4) item.side = "top";
+        else if (offset > 4) item.side = "bottom";
+        else undecided.push(item);
+      }
+      if (item.side === "top" || item.side === "bottom") counts[item.side]++;
+    }
+    const crossing = (item, side) =>
+      blocks[side].filter(
+        (x) => x > item.cx - item.w / 2 - DAG_LANE_CLEARANCE && x < item.cx + item.w / 2 + DAG_LANE_CLEARANCE,
+      ).length;
+    for (const item of undecided) {
+      const top = crossing(item, "top");
+      const bottom = crossing(item, "bottom");
+      item.side = top !== bottom ? (top < bottom ? "top" : "bottom") : counts.top <= counts.bottom ? "top" : "bottom";
+      counts[item.side]++;
+    }
+
+    // 2. One row of labels per side, clear of the DAG arrows passing through
+    //    it (x relative to the formula's left edge).
+    const heights = {};
+    let minX = 0;
+    let maxX = formulaW;
+    for (const side of ["top", "bottom"]) {
+      const row = items.filter((item) => item.side === side).sort((a, b) => a.cx - b.cx);
+      const sideBlocks = blocks[side].map((x) => ({ left: x - DAG_LANE_CLEARANCE, right: x + DAG_LANE_CLEARANCE }));
+      packRow(row, sideBlocks, DAG_NOTE_GAP);
+      heights[side] = row.length ? Math.max(...row.map((item) => item.h)) : 0;
+      for (const item of row) {
+        minX = Math.min(minX, item.x);
+        maxX = Math.max(maxX, item.x + item.w);
+      }
+    }
+    // Left-hand labels stack, centered on their terms' height.
+    const lefts = items.filter((item) => item.side === "left");
+    let needTop = 0;
+    let needBottom = 0;
+    if (lefts.length) {
+      const stack = lefts.reduce((sum, item) => sum + item.h, 0) + (DAG_NOTE_GAP / 2) * (lefts.length - 1);
+      const cy = lefts.reduce((sum, item) => sum + item.cyRel, 0) / lefts.length;
+      const edge = Math.min(...lefts.map((item) => item.leftRel)) - DAG_NOTE_SIDE_SPACE;
+      let y = cy - stack / 2;
+      for (const item of lefts) {
+        item.x = edge - item.w;
+        item.yRel = y;
+        y += item.h + DAG_NOTE_GAP / 2;
+        minX = Math.min(minX, item.x);
+      }
+      const texH = texBox.bottom - texBox.top;
+      needTop = Math.max(0, -(cy - stack / 2)) + (cy - stack / 2 < 0 ? DAG_NOTE_PAD_Y : 0);
+      needBottom = Math.max(0, cy + stack / 2 - texH) + (cy + stack / 2 > texH ? DAG_NOTE_PAD_Y : 0);
+    }
+    const band = (side) => (heights[side] ? DAG_NOTE_ARROW_SPACE + heights[side] + DAG_NOTE_PAD_Y : 0);
+    // Labels wider than the formula widen the card instead of spilling out.
+    stage.style.paddingTop = `${Math.max(band("top"), needTop)}px`;
+    stage.style.paddingBottom = `${Math.max(band("bottom"), needBottom)}px`;
+    stage.style.paddingLeft = `${-minX}px`;
+    stage.style.paddingRight = `${maxX - formulaW}px`;
+
+    // 3. The padding moved the formula: measure again and place the labels.
+    const formula = rel(tex.getBoundingClientRect());
+    for (const item of items) {
+      const top =
+        item.side === "left"
+          ? formula.top + item.yRel
+          : item.side === "top"
+            ? formula.top - DAG_NOTE_ARROW_SPACE - item.h
+            : formula.bottom + DAG_NOTE_ARROW_SPACE;
+      item.label.style.left = `${formula.left + item.x}px`;
+      item.label.style.top = `${top}px`;
+    }
+
+    // 4. A soft tint behind every noted part.
+    for (const node of html?.querySelectorAll("[data-note]") ?? []) {
+      const note = notes[node.dataset.note];
+      if (!note) continue;
+      const box = termBox(node);
+      const rect = svgNode("rect", {
+        class: "tangle-dag-tint",
+        x: box.left - 3,
+        y: box.top - 3,
+        width: box.right - box.left + 6,
+        height: box.bottom - box.top + 6,
+        rx: 4,
+      });
+      rect.dataset.note = node.dataset.note;
+      rect.style.setProperty("--tangle-dag-c", this.noteColor(note, scope));
+      tints.append(rect);
+    }
+
+    // 5. A gentle curve from each label to its term, with an open chevron, so
+    //    notes read differently from the DAG's filled arrows.
+    for (const item of items) {
+      const term = termBox(termOf(item.name));
+      const label = rel(item.label.getBoundingClientRect());
+      let paths;
+      if (item.side === "left") {
+        const from = { x: label.right + DAG_NOTE_CLEARANCE, y: (label.top + label.bottom) / 2 };
+        const to = { x: term.left - DAG_NOTE_CLEARANCE - 2, y: term.cy };
+        const midX = (from.x + to.x) / 2;
+        const backX = to.x - DAG_NOTE_HEAD_LEN;
+        paths = [
+          `M ${from.x} ${from.y} C ${midX} ${from.y} ${midX} ${to.y} ${to.x} ${to.y}`,
+          `M ${backX} ${to.y - DAG_NOTE_HEAD_HALF} L ${to.x} ${to.y} L ${backX} ${to.y + DAG_NOTE_HEAD_HALF}`,
+        ];
+      } else {
+        const top = item.side === "top";
+        const fromX = Math.max(label.left + 8, Math.min(term.cx, label.right - 8));
+        const from = { x: fromX, y: top ? label.bottom + DAG_NOTE_CLEARANCE : label.top - DAG_NOTE_CLEARANCE };
+        const to = { x: term.cx, y: top ? term.top - DAG_NOTE_CLEARANCE - 3 : term.bottom + DAG_NOTE_CLEARANCE + 3 };
+        const midY = (from.y + to.y) / 2;
+        const backY = to.y - (Math.sign(to.y - from.y) || 1) * DAG_NOTE_HEAD_LEN;
+        paths = [
+          `M ${from.x} ${from.y} C ${from.x} ${midY} ${to.x} ${midY} ${to.x} ${to.y}`,
+          `M ${to.x - DAG_NOTE_HEAD_HALF} ${backY} L ${to.x} ${to.y} L ${to.x + DAG_NOTE_HEAD_HALF} ${backY}`,
+        ];
+      }
+      const group = svgNode("g", { class: "tangle-dag-note-arrow" });
+      group.dataset.note = item.name;
+      group.style.setProperty("--tangle-dag-c", this.noteColor(notes[item.name], scope));
+      for (const d of paths) group.append(svgNode("path", { d }));
+      noteArrows.append(group);
+    }
+  }
+
+  // ---- layout -----------------------------------------------------------------
+
+  // Notes move formulas and arrows move notes: lay the notes out around the
+  // last known arrow columns, draw the arrows, and again if the columns moved.
+  relayout() {
+    if (!this._board || !this.isConnected) return;
+    const before = JSON.stringify(this._blocks);
+    for (const id of this._cards.keys()) this.layoutNotes(id);
+    this.draw();
+    if (JSON.stringify(this._blocks) !== before) {
+      for (const id of this._cards.keys()) this.layoutNotes(id);
+      this.draw();
+    }
+    this.applyNoteHover();
+  }
+
+  relayoutSoon() {
+    if (this._relayoutQueued) return;
+    this._relayoutQueued = true;
+    requestAnimationFrame(() => {
+      this._relayoutQueued = false;
+      this.relayout();
+    });
+  }
+
+  draw() {
+    const svg = this._svg;
+    svg.replaceChildren();
+    this._edgeEls = [];
+    const base = this._board.getBoundingClientRect();
+    const rel = (r) => ({ left: r.left - base.left, right: r.right - base.left, top: r.top - base.top, bottom: r.bottom - base.top });
+    const box = (node) => rel(node.getBoundingClientRect());
+    const cards = this._cards;
+    const producers = this._producers;
+    const rowBoxes = this._rows.map(box);
+    const htmlOf = (id) => cards.get(id).tex.querySelector(".katex-html");
+
+    // Per card: the ink box of every glyph, and of the formula as a whole.
+    const glyphs = new Map();
+    const formulaInk = new Map();
+    const texLeft = new Map();
+    for (const [id, parts] of cards) {
+      const html = htmlOf(id);
+      const g = html ? glyphLeaves(html).map((el) => ({ el, ...rel(inkRect(el)) })) : [];
+      glyphs.set(id, g);
+      formulaInk.set(id, rectUnion(g) ?? box(parts.card));
+      texLeft.set(id, box(parts.tex).left);
+    }
+    const inkOf = (id, node) => rectUnion(glyphs.get(id).filter((g) => node.contains(g.el))) ?? box(node);
+
+    // A formula's outgoing arrows share one stem, dropping from under its output symbol.
+    const stems = new Map();
+    for (const id of cards.keys()) {
+      const out = htmlOf(id)?.querySelector("[data-fdag-out]");
+      const sym = out ? inkOf(id, out) : formulaInk.get(id);
+      stems.set(id, { x: (sym.left + sym.right) / 2, top: sym.bottom + DAG_LAND_GAP, width: sym.right - sym.left });
+    }
+    // A caption sits right of its formula's stem, never across it.
+    for (const id of producers) {
+      const { card, caption } = cards.get(id);
+      const pad = parseFloat(getComputedStyle(card).paddingLeft) || 0;
+      const margin = `${Math.max(0, Math.round(stems.get(id).x - box(card).left - pad + 8))}px`;
+      if (caption.style.marginLeft !== margin) caption.style.marginLeft = margin;
+    }
+    const blocks = {};
+    const block = (id, side, x) => (blocks[id] ??= { top: [], bottom: [] })[side].push(Math.round(x - texLeft.get(id)));
+    for (const id of producers) block(id, "bottom", stems.get(id).x);
+
+    // 1. Every arrow's columns: the x it holds in each row it passes.
+    const arrows = [];
+    for (const route of this._model.routes) {
+      const src = route[0];
+      const dst = route[route.length - 1];
+      const ink = formulaInk.get(dst);
+      const uses = [...(htmlOf(dst)?.querySelectorAll(`[data-fdag-use="${src}"]`) ?? [])];
+      for (const use of uses.length ? uses : [null]) {
+        let landing;
+        if (!use) {
+          // The use is hidden (a live value stands in): land on the formula.
+          const x = (ink.left + ink.right) / 2;
+          landing = { side: "top", x, tip: { x, y: ink.top - DAG_LAND_GAP } };
+        } else {
+          const sym = inkOf(dst, use);
+          const cx = (sym.left + sym.right) / 2;
+          const cy = (sym.top + sym.bottom) / 2;
+          // Keep clear of the target's other glyphs and of its own stem.
+          const others = glyphs.get(dst).filter((g) => !use.contains(g.el));
+          if (producers.has(dst)) {
+            const st = stems.get(dst);
+            others.push({ left: st.x - st.width / 2, right: st.x + st.width / 2, top: st.top, bottom: box(cards.get(dst).card).bottom });
+          }
+          const side = landingSide(sym, others, stems.get(src).x, DAG_SIDE_PAD);
+          if (side === "top") landing = { side, x: cx, tip: { x: cx, y: sym.top - DAG_LAND_GAP } };
+          else if (side === "right") landing = { side, x: ink.right + DAG_SIDE_GAP, tip: { x: sym.right + DAG_LAND_GAP, y: cy } };
+          else landing = { side, x: ink.left - DAG_SIDE_GAP, tip: { x: sym.left - DAG_LAND_GAP, y: cy } };
+        }
+        block(dst, "top", landing.x);
+        // A long edge threads one lane per row it skips. Lanes sit at
+        // different x in each row: straighten them into one vertical line
+        // when that line clears every formula in those rows.
+        const waypoints = route.slice(1, -1);
+        let laneXs = waypoints.map((wp) => {
+          const lane = box(this._lanes.get(wp));
+          return (lane.left + lane.right) / 2;
+        });
+        if (laneXs.length > 1) {
+          const passed = waypoints
+            .flatMap((wp) => [...this._rows[this._rowOf.get(wp)].children])
+            .filter((n) => n.classList.contains("tangle-dag-card"))
+            .map(box);
+          const clear = (x) => passed.every((b) => x < b.left - 6 || x > b.right + 6);
+          const straight = [Math.max(...laneXs), Math.min(...laneXs)].find(clear);
+          if (straight !== undefined) laneXs = laneXs.map(() => straight);
+        }
+        arrows.push({ src, dst, row: this._rowOf.get(src), xs: [stems.get(src).x, ...laneXs, landing.x], landing });
+      }
+    }
+    this._blocks = blocks;
+
+    // 2. Each gap between two rows gets one horizontal track per producer that
+    //    jogs sideways there, shared by its arrows. Stack them with the fewest crossings.
+    const segs = new Map(); // gap -> Map(src -> [{ from, to }])
+    for (const a of arrows) {
+      a.xs.forEach((x, k) => {
+        if (k === a.xs.length - 1 || Math.abs(a.xs[k + 1] - x) < 1) return;
+        const gap = a.row + k;
+        if (!segs.has(gap)) segs.set(gap, new Map());
+        const bySrc = segs.get(gap);
+        if (!bySrc.has(a.src)) bySrc.set(a.src, []);
+        bySrc.get(a.src).push({ from: x, to: a.xs[k + 1] });
+      });
+    }
+    const tracks = new Map();
+    for (const [gap, bySrc] of segs) {
+      const seed = [...bySrc.keys()].sort((p, q) => stems.get(p).x - stems.get(q).x);
+      tracks.set(gap, trackOrder(seed, bySrc));
+    }
+    const trackY = (gap, src) => {
+      const top = rowBoxes[gap].bottom;
+      const list = tracks.get(gap);
+      return top + ((rowBoxes[gap + 1].top - top) * (list.indexOf(src) + 1)) / (list.length + 1);
+    };
+
+    // 3. Draw: down, a rounded jog along the track, down again; then into the
+    //    symbol from above or, when something covers it, from the side.
+    for (const a of arrows) {
+      const { tip, side } = a.landing;
+      let d = `M ${a.xs[0]} ${stems.get(a.src).top}`;
+      a.xs.forEach((x, k) => {
+        if (k === a.xs.length - 1) return;
+        const next = a.xs[k + 1];
+        if (Math.abs(next - x) < 1) return;
+        const ty = trackY(a.row + k, a.src);
+        const s = Math.sign(next - x);
+        const r = Math.min(DAG_CORNER, Math.abs(next - x) / 2);
+        d += ` L ${x} ${ty - r} Q ${x} ${ty}, ${x + s * r} ${ty}`;
+        d += ` L ${next - s * r} ${ty} Q ${next} ${ty}, ${next} ${ty + r}`;
+      });
+      const last = a.xs[a.xs.length - 1];
+      let dir = { x: 0, y: 1 };
+      if (side !== "top") {
+        const s = side === "right" ? -1 : 1; // the direction of travel into the symbol
+        d += ` L ${last} ${tip.y - DAG_CORNER} Q ${last} ${tip.y}, ${last + s * DAG_CORNER} ${tip.y}`;
+        dir = { x: s, y: 0 };
+      }
+      // Stop the line at the arrowhead's base so it doesn't poke through.
+      d += ` L ${tip.x - dir.x * DAG_HEAD_LEN * 0.8} ${tip.y - dir.y * DAG_HEAD_LEN * 0.8}`;
+      const bx = tip.x - dir.x * DAG_HEAD_LEN;
+      const by = tip.y - dir.y * DAG_HEAD_LEN;
+      const head =
+        `M ${tip.x} ${tip.y} L ${bx - dir.y * DAG_HEAD_HALF} ${by + dir.x * DAG_HEAD_HALF} ` +
+        `L ${bx + dir.y * DAG_HEAD_HALF} ${by - dir.x * DAG_HEAD_HALF} Z`;
+      const color = this._byName.get(a.src).color;
+      const els = [svgNode("path", { d, class: "tangle-dag-edge" }), svgNode("path", { d: head, class: "tangle-dag-head" })];
+      for (const el of els) el.style.setProperty("--tangle-dag-c", color);
+      svg.append(...els);
+      this._edgeEls.push({ src: a.src, dst: a.dst, els });
+    }
+    this.focus(this._focused);
+  }
+
+  // ---- hover --------------------------------------------------------------
+
+  /** Hovering a card keeps it, everything upstream and everything downstream; the rest dims. */
+  focus(name) {
+    this._focused = name;
+    const dim = (el, on) => el.classList.toggle("is-dim", on);
+    if (!name) {
+      for (const { card } of this._cards.values()) dim(card, false);
+      for (const e of this._edgeEls) e.els.forEach((el) => dim(el, false));
+      return;
+    }
+    const ups = dagReach(name, this.adjacency(1, 0)).add(name);
+    const downs = dagReach(name, this.adjacency(0, 1)).add(name);
+    for (const [id, { card }] of this._cards) dim(card, !ups.has(id) && !downs.has(id));
+    for (const e of this._edgeEls) {
+      const keep = (ups.has(e.src) && ups.has(e.dst)) || (downs.has(e.src) && downs.has(e.dst));
+      e.els.forEach((el) => dim(el, !keep));
+    }
   }
 }
 
@@ -3285,6 +4865,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-debug": TDebug,
     "t-tag": TTag,
     "t-math": TMath,
+    "t-formula-dag": TFormulaDag,
     "t-vega": TVega,
     "t-obsplot": TObsplot,
     "t-jsxgraph": TJsxgraph,

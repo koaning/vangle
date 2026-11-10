@@ -1,17 +1,8 @@
 import { untracked } from "../core/signals.js";
 import { scopeOf } from "../core/scope.js";
-import { parseTex, toTex } from "../core/tex.js";
+import { parseTex, partsTex } from "../core/tex.js";
 import { loadKatex } from "../core/load.js";
-import {
-  hover,
-  active,
-  PARAM,
-  syncClasses,
-  keyOf,
-  occurrence,
-  decorate,
-  relocate,
-} from "../core/interaction.js";
+import { hover, active, PARAM, syncClasses, occurrence, decorate, relocate } from "../core/interaction.js";
 import { TangleElement } from "../core/element.js";
 
 // <t-math display>f(x) = \tangle{a} x^2 + \tangle[b]{b} x = \val[%.2f]{a + b}</t-math>
@@ -68,28 +59,7 @@ export class TMath extends TangleElement {
   }
 
   render(katex, scope) {
-    let tex = "";
-    for (const part of this._parts) {
-      if (typeof part === "string") {
-        tex += part;
-      } else if (part.type === "param") {
-        const meta = scope.meta(part.name);
-        const value = scope.get(part.name);
-        const shown =
-          !part.symbol || active.value === keyOf(scope, part.name)
-            ? toTex(value, meta.format, meta.step)
-            : part.symbol;
-        tex += `\\htmlData{tangle-param=${part.name}}{${shown}}`;
-      } else {
-        let shown;
-        try {
-          shown = toTex(scope.eval(part.expr), part.format);
-        } catch {
-          shown = "\\text{?}";
-        }
-        tex += `\\htmlClass{tangle-val}{${shown}}`;
-      }
-    }
+    const tex = partsTex(this._parts, scope);
 
     untracked(() => {
       // Remember which marker had keyboard focus; rendering replaces it.

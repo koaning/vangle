@@ -1,11 +1,13 @@
 import { NAME_RE, compile } from "./scope.js";
 import { formatValue } from "./format.js";
+import { active, keyOf } from "./interaction.js";
 
 // ---------------------------------------------------------------------------
 // TeX markers: \tangle[symbol]{name} and \val[format]{expression}
 // ---------------------------------------------------------------------------
 
-function matchClose(src, start, open, close) {
+/** The index of the bracket that closes the one at `start` (skipping backslash escapes). */
+export function matchClose(src, start, open, close) {
   let depth = 0;
   for (let i = start; i < src.length; i++) {
     const ch = src[i];
@@ -19,7 +21,7 @@ function matchClose(src, start, open, close) {
   throw new Error(`Unbalanced "${open}" at position ${start}`);
 }
 
-function skipSpace(src, i) {
+export function skipSpace(src, i) {
   while (i < src.length && /\s/.test(src[i])) i++;
   return i;
 }
@@ -71,4 +73,36 @@ export function toTex(value, fmt, step) {
     .replace(/[\\{}$%#&_~^]/g, (c) => (c === "~" || c === "^" ? "" : `\\${c}`))
     .replace(/,/g, "{,}")
     .replace(/∞/g, "\\infty ");
+}
+
+/**
+ * The TeX for parsed parts (from parseTex) right now: \tangle markers show
+ * their variable's value (or their symbol, unless being dragged or edited) and
+ * \val markers their result. `text` maps the literal strings in between.
+ * Reactive: inside an effect, re-runs when a value it showed changes.
+ */
+export function partsTex(parts, scope, text = (s) => s) {
+  let tex = "";
+  for (const part of parts) {
+    if (typeof part === "string") {
+      tex += text(part);
+    } else if (part.type === "param") {
+      const meta = scope.meta(part.name);
+      const value = scope.get(part.name);
+      const shown =
+        !part.symbol || active.value === keyOf(scope, part.name)
+          ? toTex(value, meta.format, meta.step)
+          : part.symbol;
+      tex += `\\htmlData{tangle-param=${part.name}}{${shown}}`;
+    } else {
+      let shown;
+      try {
+        shown = toTex(scope.eval(part.expr), part.format);
+      } catch {
+        shown = "\\text{?}";
+      }
+      tex += `\\htmlClass{tangle-val}{${shown}}`;
+    }
+  }
+  return tex;
 }

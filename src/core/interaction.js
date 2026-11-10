@@ -24,7 +24,7 @@ function paramOf(el) {
 }
 
 export function occurrence(el) {
-  const host = el.closest("t-math");
+  const host = el.closest("t-math, t-formula-dag");
   if (!host) return { el, host: null, index: -1 };
   const all = [...host.querySelectorAll(`.katex-html [data-tangle-param="${el.dataset.tangleParam}"]`)];
   return { el, host, index: all.indexOf(el) };

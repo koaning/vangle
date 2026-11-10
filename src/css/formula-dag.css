@@ -1,0 +1,368 @@
+/* Formula DAGs ------------------------------------------------------------ */
+
+t-formula-dag {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+/* As wide as the diagram, centered. The legend wraps to that width rather than widening it. */
+.tangle-dag {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(min(100%, 420px), max-content);
+  justify-content: safe center;
+  --tangle-dag-muted: color-mix(in srgb, currentColor 55%, transparent);
+}
+
+.tangle-dag.is-loading {
+  color: var(--tangle-dag-muted);
+  font: 0.85em ui-sans-serif, system-ui, sans-serif;
+}
+
+.tangle-dag-board {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 72px;
+  box-sizing: border-box;
+  min-width: 100%;
+  padding: 12px 24px;
+}
+
+.tangle-dag-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 40px;
+}
+
+/* An empty lane, kept free for an arrow that skips this row. */
+.tangle-dag-lane {
+  flex: 0 0 14px;
+  align-self: stretch;
+}
+
+.tangle-dag-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 12px 4px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: opacity 120ms ease, border-color 120ms ease, background-color 120ms ease;
+}
+
+.tangle-dag-card:hover {
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+.tangle-dag-card.is-pickable {
+  cursor: pointer;
+}
+
+.tangle-dag-card.is-selected {
+  border-color: color-mix(in srgb, var(--tangle-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--tangle-accent) 6%, transparent);
+}
+
+.tangle-dag-stage {
+  position: relative;
+}
+
+.tangle-dag-tex {
+  position: relative;
+  z-index: 1;
+  padding-bottom: 3px;
+}
+
+.tangle-dag-tex .katex-display {
+  margin: 0;
+}
+
+/* Left-aligned, so a formula never moves with its card's width (captions and
+   notes can widen it); arrows and notes measure from it. */
+.tangle-dag-tex .katex-display > .katex {
+  text-align: left;
+}
+
+.tangle-dag-tex .katex {
+  font-size: 1.1em;
+}
+
+.tangle-dag-tex.is-error {
+  color: var(--tangle-error);
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+}
+
+.tangle-dag-caption {
+  align-self: flex-end;
+  margin-top: 4px;
+  white-space: nowrap;
+  color: var(--tangle-dag-muted);
+  font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* KaTeX lays struts and glyphs over each other; only the markers take the pointer. */
+.tangle-dag-tex .katex-html * {
+  pointer-events: none;
+}
+
+.tangle-dag-tex .katex-html [data-tangle-param],
+.tangle-dag-tex .katex-html [data-note],
+.tangle-dag-tex .katex-html [data-tangle-hover] {
+  pointer-events: auto;
+}
+
+/* A formula's output, and every place it's used, in that formula's color. */
+.tangle-dag [data-fdag-out],
+.tangle-dag [data-fdag-use] {
+  color: var(--tangle-dag-c, inherit);
+  border-radius: 0.16em;
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}
+
+.tangle-dag .katex-html [data-tangle-hover].is-hot {
+  --tangle-dag-glow: color-mix(in srgb, var(--tangle-dag-c, currentColor) 18%, transparent);
+  background: var(--tangle-dag-glow);
+  box-shadow: 0 0 0 0.14em var(--tangle-dag-glow);
+}
+
+/* The value closing a formula without a left-hand side: there, but quieter. */
+.tangle-dag .katex-html [data-fdag-value] {
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
+
+/* In a DAG, color means "came from that formula", so numbers are ink unless they have a color. */
+.tangle-dag [data-tangle-param] {
+  --tangle-c: var(--tangle-color, currentColor);
+  position: relative;
+  z-index: 1;
+  background: color-mix(in srgb, var(--tangle-c) var(--tangle-tint), transparent);
+}
+
+.tangle-dag .tangle-dag-gap {
+  margin-left: 0.22em;
+}
+
+/* Arrows ------------------------------------------------------------------- */
+
+.tangle-dag-edges,
+.tangle-dag-tints,
+.tangle-dag-note-arrows {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.tangle-dag-edge {
+  fill: none;
+  stroke: var(--tangle-dag-c);
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity 120ms ease;
+}
+
+.tangle-dag-head {
+  fill: var(--tangle-dag-c);
+  stroke: var(--tangle-dag-c);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+  transition: opacity 120ms ease;
+}
+
+.tangle-dag .is-dim {
+  opacity: 0.18;
+}
+
+/* Notes -------------------------------------------------------------------- */
+
+.tangle-dag .katex-html .tangle-dag-term {
+  color: var(--tangle-dag-c);
+  outline: none;
+}
+
+.tangle-dag-note {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 2;
+  width: max-content;
+  max-width: 190px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  color: var(--tangle-dag-c);
+  font: 500 0.78rem/1.3 ui-sans-serif, system-ui, sans-serif;
+  text-align: center;
+  transition: background-color 120ms ease, opacity 160ms ease;
+}
+
+.tangle-dag-note.is-left {
+  max-width: 160px;
+  text-align: right;
+}
+
+.tangle-dag-note strong {
+  font-weight: 750;
+}
+
+.tangle-dag-note .katex {
+  font-size: 1.05em;
+}
+
+.tangle-dag-tint {
+  fill: color-mix(in srgb, var(--tangle-dag-c) 12%, transparent);
+  transition: fill 120ms ease, opacity 160ms ease;
+}
+
+.tangle-dag-note-arrow {
+  fill: none;
+  stroke: var(--tangle-dag-c);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: opacity 160ms ease, stroke-width 120ms ease;
+}
+
+/* Hovering a note (or dragging the number it explains) lifts it and fades the others. */
+.tangle-dag.has-note-hover .tangle-dag-note,
+.tangle-dag.has-note-hover .tangle-dag-note-arrow,
+.tangle-dag.has-note-hover .tangle-dag-tint {
+  opacity: 0.28;
+}
+
+.tangle-dag.has-note-hover .tangle-dag-note.is-hovered,
+.tangle-dag.has-note-hover .tangle-dag-note-arrow.is-hovered,
+.tangle-dag.has-note-hover .tangle-dag-tint.is-hovered {
+  opacity: 1;
+}
+
+.tangle-dag-note.is-hovered {
+  background: color-mix(in srgb, var(--tangle-dag-c) 14%, transparent);
+}
+
+.tangle-dag-note-arrow.is-hovered {
+  stroke-width: 1.8;
+}
+
+.tangle-dag-tint.is-hovered {
+  fill: color-mix(in srgb, var(--tangle-dag-c) 30%, transparent);
+}
+
+/* Legend and Reset ---------------------------------------------------------- */
+
+.tangle-dag-footer {
+  contain: inline-size;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 4px 8px;
+  font: 0.8rem/1.2 ui-sans-serif, system-ui, sans-serif;
+}
+
+.tangle-dag-legend {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tangle-dag-legend-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 8px;
+}
+
+.tangle-dag-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 10px 4px;
+  border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+  border-radius: 999px;
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.tangle-dag-chip[data-tangle-param] {
+  --tangle-c: currentColor;
+  background: none;
+}
+
+.tangle-dag-chip[data-tangle-param].is-hot,
+.tangle-dag-chip[data-tangle-param].is-active,
+.tangle-dag-chip[data-tangle-param]:focus-visible {
+  border-color: color-mix(in srgb, var(--tangle-accent) 60%, transparent);
+  background: color-mix(in srgb, var(--tangle-accent) var(--tangle-tint), transparent);
+  box-shadow: none;
+}
+
+.tangle-dag-chip-symbol .katex {
+  font-size: 1.12em;
+}
+
+.tangle-dag-chip.is-output .tangle-dag-chip-symbol {
+  color: var(--tangle-dag-c, inherit);
+}
+
+.tangle-dag-chip-label {
+  color: var(--tangle-dag-muted);
+}
+
+.tangle-dag-chip-label:empty {
+  display: none;
+}
+
+.tangle-dag-chip-value {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.tangle-dag-chip[data-tangle-param] .tangle-dag-chip-value {
+  color: var(--tangle-color, inherit);
+}
+
+.tangle-dag-chip.is-output {
+  border-style: dashed;
+}
+
+.tangle-dag-chip.is-output.is-hot {
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.tangle-dag-chip.is-error .tangle-dag-chip-value {
+  color: var(--tangle-error);
+}
+
+.tangle-dag-reset {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--tangle-dag-muted);
+  font: 700 0.74rem/1 ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+  opacity: 0.5;
+}
+
+.tangle-dag-reset.is-changed {
+  opacity: 1;
+}
+
+.tangle-dag-reset:hover {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.tangle-dag-error {
+  color: var(--tangle-error);
+  font: 0.85em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+}

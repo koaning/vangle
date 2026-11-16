@@ -9,7 +9,7 @@
 //
 // Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>
 // or a <t-formula-dag>; likewise Vega, only if it has a <t-vega>, Observable Plot
-// for <t-obsplot>, and JSXGraph for <t-jsxgraph>.
+// for <t-obsplot>, JSXGraph for <t-jsxgraph>, and CodeMirror for <t-codecell>.
 // MIT license.
 
 // The entry point of the source: `make build` bundles it, and every module it
@@ -23,6 +23,7 @@ export { parseTex, toTex } from "./core/tex.js";
 export { formulaDag } from "./core/formulas.js";
 export { parseParams } from "./core/params.js";
 export { configure } from "./core/load.js";
+export { registerEngine } from "./core/engines.js";
 import { listen } from "./core/interaction.js";
 export { TangleElement } from "./core/element.js";
 import { TScope } from "./elements/t-scope.js";
@@ -37,6 +38,7 @@ import { TSelect } from "./elements/t-select.js";
 import { TText } from "./elements/t-text.js";
 import { TCall } from "./elements/t-call.js";
 import { TFetch, buildRequest } from "./elements/t-fetch.js";
+import { TCodeCell } from "./elements/t-codecell.js";
 import { TDebug, inspectScope, layoutGraph } from "./elements/t-debug.js";
 import { TTag } from "./elements/t-tag.js";
 import { TMath } from "./elements/t-math.js";
@@ -62,6 +64,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-text": TText,
     "t-call": TCall,
     "t-fetch": TFetch,
+    "t-codecell": TCodeCell,
     "t-debug": TDebug,
     "t-tag": TTag,
     "t-math": TMath,

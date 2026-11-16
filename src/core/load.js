@@ -1,10 +1,14 @@
 // ---------------------------------------------------------------------------
-// Lazy loading: KaTeX for <t-math>, Vega for <t-vega>, Plot for <t-obsplot>. Each
+// Lazy loading: KaTeX for <t-math>, Vega for <t-vega>, Plot for <t-obsplot>,
+// CodeMirror for <t-codecell>. Each
 // loads only if the page has such an element, and a copy the page already loaded is reused.
 // ---------------------------------------------------------------------------
 
 const KATEX_VERSION = "0.19.0";
 const CDN = "https://cdn.jsdelivr.net/npm/";
+// CodeMirror's packages must share one copy of @codemirror/state and view, so
+// they come from esm.sh with the shared ones pinned.
+const CM_DEPS = "?deps=@codemirror/state@6.7.6,@codemirror/view@6.43.15,@codemirror/language@6.13.1,@lezer/highlight@1.2.5";
 export const config = {
   katexUrl: `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.mjs`,
   katexCssUrl: `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.css`,
@@ -14,12 +18,17 @@ export const config = {
   d3Url: `${CDN}d3@7.9.0/dist/d3.min.js`,
   plotUrl: `${CDN}@observablehq/plot@0.6.17/dist/plot.umd.min.js`,
   jsxgraphUrl: `${CDN}jsxgraph@1.14.0/distrib/jsxgraphcore.js`,
+  codemirrorUrl: `https://esm.sh/codemirror@6.0.2${CM_DEPS}`,
+  codemirrorJsUrl: `https://esm.sh/@codemirror/lang-javascript@6.2.5${CM_DEPS}`,
+  codemirrorLanguageUrl: `https://esm.sh/@codemirror/language@6.13.1${CM_DEPS}`,
+  lezerHighlightUrl: "https://esm.sh/@lezer/highlight@1.2.5",
   pixelsPerStep: 5,
 };
 
 /**
  * Override defaults: { katexUrl, katexCssUrl, vegaUrl, vegaLiteUrl, vegaEmbedUrl, d3Url,
- * plotUrl, jsxgraphUrl, pixelsPerStep }. Call before KaTeX, Vega, Plot or JSXGraph loads.
+ * plotUrl, jsxgraphUrl, codemirrorUrl, codemirrorJsUrl, codemirrorLanguageUrl,
+ * lezerHighlightUrl, pixelsPerStep }. Call before KaTeX, Vega, Plot, JSXGraph or CodeMirror loads.
  */
 export function configure(options) {
   Object.assign(config, options);
@@ -86,5 +95,28 @@ export function loadJsxgraph() {
     if (globalThis.TangleConfig) Object.assign(config, globalThis.TangleConfig);
     if (!globalThis.JXG) await loadScript(config.jsxgraphUrl);
     return globalThis.JXG;
+  })());
+}
+
+// CodeMirror 6 is ES modules. Returns { EditorView, basicSetup, javascript,
+// syntaxHighlighting, classHighlighter }.
+let codemirrorPromise = null;
+export function loadCodemirror() {
+  return (codemirrorPromise ??= (async () => {
+    await null; // let a same-module configure() call run first
+    if (globalThis.TangleConfig) Object.assign(config, globalThis.TangleConfig);
+    const [cm, js, language, highlight] = await Promise.all([
+      import(config.codemirrorUrl),
+      import(config.codemirrorJsUrl),
+      import(config.codemirrorLanguageUrl),
+      import(config.lezerHighlightUrl),
+    ]);
+    return {
+      EditorView: cm.EditorView,
+      basicSetup: cm.basicSetup,
+      javascript: js.javascript,
+      syntaxHighlighting: language.syntaxHighlighting,
+      classHighlighter: highlight.classHighlighter,
+    };
   })());
 }

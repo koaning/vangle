@@ -49,6 +49,7 @@ t-debug {
 }
 
 .t-debug-node.is-fetch rect,
+.t-debug-node.is-codecell rect,
 .t-debug-node.is-loading rect {
   stroke: var(--tangle-accent);
   stroke-dasharray: 4 3;

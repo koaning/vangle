@@ -9,7 +9,7 @@ import { Base } from "../core/element.js";
 
 /**
  * The variables of `scope` as data, which is what <t-debug> shows: one row per
- * variable with its `value` (or `error`), its `kind` ("value", "formula", "fetch",
+ * variable with its `value` (or `error`), its `kind` ("value", "formula", "fetch", "codecell",
  * or "unset" if something reads it but nothing sets it), whether it's `pending`,
  * how many times it has `runs`, the variables it `reads` and is `readBy`, and the
  * `elements` whose effects read it.
@@ -128,8 +128,8 @@ export function svgNode(tag, attrs, text) {
   return node;
 }
 
-/** A short, one-line version of any value, for <t-debug>. */
-function preview(value, max = 48) {
+/** A short, one-line version of any value, for <t-debug> and <t-codecell>. */
+export function preview(value, max = 48) {
   if (typeof value === "function") return `ƒ ${value.name || "anonymous"}`;
   if (typeof value === "number" || typeof value === "boolean" || value == null) return String(value);
   let s;

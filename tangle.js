@@ -9,7 +9,7 @@
 //
 // Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>
 // or a <t-formula-dag>; likewise Vega, only if it has a <t-vega>, Observable Plot
-// for <t-obsplot>, and JSXGraph for <t-jsxgraph>.
+// for <t-obsplot>, JSXGraph for <t-jsxgraph>, and CodeMirror for <t-codecell>.
 // MIT license.
 //
 // Built by `make build` from src/. Edit the files there, not this one.
@@ -493,12 +493,16 @@ export function filterOptions(options, query) {
 }
 
 // ---------------------------------------------------------------------------
-// Lazy loading: KaTeX for <t-math>, Vega for <t-vega>, Plot for <t-obsplot>. Each
+// Lazy loading: KaTeX for <t-math>, Vega for <t-vega>, Plot for <t-obsplot>,
+// CodeMirror for <t-codecell>. Each
 // loads only if the page has such an element, and a copy the page already loaded is reused.
 // ---------------------------------------------------------------------------
 
 const KATEX_VERSION = "0.19.0";
 const CDN = "https://cdn.jsdelivr.net/npm/";
+// CodeMirror's packages must share one copy of @codemirror/state and view, so
+// they come from esm.sh with the shared ones pinned.
+const CM_DEPS = "?deps=@codemirror/state@6.7.6,@codemirror/view@6.43.15,@codemirror/language@6.13.1,@lezer/highlight@1.2.5";
 const config = {
   katexUrl: `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.mjs`,
   katexCssUrl: `https://cdn.jsdelivr.net/npm/katex@${KATEX_VERSION}/dist/katex.min.css`,
@@ -508,12 +512,17 @@ const config = {
   d3Url: `${CDN}d3@7.9.0/dist/d3.min.js`,
   plotUrl: `${CDN}@observablehq/plot@0.6.17/dist/plot.umd.min.js`,
   jsxgraphUrl: `${CDN}jsxgraph@1.14.0/distrib/jsxgraphcore.js`,
+  codemirrorUrl: `https://esm.sh/codemirror@6.0.2${CM_DEPS}`,
+  codemirrorJsUrl: `https://esm.sh/@codemirror/lang-javascript@6.2.5${CM_DEPS}`,
+  codemirrorLanguageUrl: `https://esm.sh/@codemirror/language@6.13.1${CM_DEPS}`,
+  lezerHighlightUrl: "https://esm.sh/@lezer/highlight@1.2.5",
   pixelsPerStep: 5,
 };
 
 /**
  * Override defaults: { katexUrl, katexCssUrl, vegaUrl, vegaLiteUrl, vegaEmbedUrl, d3Url,
- * plotUrl, jsxgraphUrl, pixelsPerStep }. Call before KaTeX, Vega, Plot or JSXGraph loads.
+ * plotUrl, jsxgraphUrl, codemirrorUrl, codemirrorJsUrl, codemirrorLanguageUrl,
+ * lezerHighlightUrl, pixelsPerStep }. Call before KaTeX, Vega, Plot, JSXGraph or CodeMirror loads.
  */
 export function configure(options) {
   Object.assign(config, options);
@@ -580,6 +589,29 @@ function loadJsxgraph() {
     if (globalThis.TangleConfig) Object.assign(config, globalThis.TangleConfig);
     if (!globalThis.JXG) await loadScript(config.jsxgraphUrl);
     return globalThis.JXG;
+  })());
+}
+
+// CodeMirror 6 is ES modules. Returns { EditorView, basicSetup, javascript,
+// syntaxHighlighting, classHighlighter }.
+let codemirrorPromise = null;
+function loadCodemirror() {
+  return (codemirrorPromise ??= (async () => {
+    await null; // let a same-module configure() call run first
+    if (globalThis.TangleConfig) Object.assign(config, globalThis.TangleConfig);
+    const [cm, js, language, highlight] = await Promise.all([
+      import(config.codemirrorUrl),
+      import(config.codemirrorJsUrl),
+      import(config.codemirrorLanguageUrl),
+      import(config.lezerHighlightUrl),
+    ]);
+    return {
+      EditorView: cm.EditorView,
+      basicSetup: cm.basicSetup,
+      javascript: js.javascript,
+      syntaxHighlighting: language.syntaxHighlighting,
+      classHighlighter: highlight.classHighlighter,
+    };
   })());
 }
 
@@ -1720,6 +1752,220 @@ export function parseParams(fn) {
 }
 
 // ---------------------------------------------------------------------------
+// Engines run the code of a <t-codecell>. A language's engine is a factory that
+// gives each cell its own runner: { run(code, inputs, { timeout }), dispose() }.
+// run resolves to { value, logs } or rejects with an Error that may carry a
+// `line` and `logs`. The built-in "js" engine runs code in a Web Worker, away
+// from the page: no DOM, no page variables, and it's stopped if it runs too long.
+// ---------------------------------------------------------------------------
+
+
+const engines = new Map();
+// Bumped by registerEngine, so a cell waiting on its engine runs once it's there.
+const enginesVersion = new Signal(0);
+
+/**
+ * Teach <t-codecell lang="…"> a language. `factory()` is called once per cell and
+ * returns { run(code, inputs, { timeout }) → Promise<{ value, logs }>, dispose?() }.
+ * `inputs` maps the page variables the code mentions to their values.
+ */
+export function registerEngine(lang, factory) {
+  engines.set(lang, factory);
+  enginesVersion.value = enginesVersion.peek() + 1;
+}
+
+/** A runner for one cell, or null if no engine knows `lang`. */
+function createRunner(lang) {
+  const factory = engines.get(lang);
+  return factory ? factory() : null;
+}
+
+/**
+ * The body of the async function a JS cell runs: the code itself if it's a
+ * function body (with `return`), or `return (code)` if it's one expression.
+ * Runs inside the worker too, so it's written to stand alone.
+ */
+function wrapCode(code) {
+  const AsyncFunction = (async () => {}).constructor;
+  const expression = `return (${code}\n);`;
+  try {
+    new AsyncFunction(expression);
+    return expression;
+  } catch {
+    return code;
+  }
+}
+
+/**
+ * `code` with its comments, strings and the text of template literals blanked
+ * out (the ${…} parts stay), so what's left are names and punctuation.
+ */
+function stripCode(code) {
+  let out = "";
+  let i = 0;
+  const templates = []; // for each open ${…}, how many { deep it is
+  const skipText = (end) => {
+    while (i < code.length && !end()) i += code[i] === "\\" ? 2 : 1;
+  };
+  while (i < code.length) {
+    const c = code[i];
+    const next = code[i + 1];
+    if (c === "/" && next === "/") {
+      skipText(() => code[i] === "\n");
+      out += " ";
+    } else if (c === "/" && next === "*") {
+      const end = code.indexOf("*/", i + 2);
+      i = end < 0 ? code.length : end + 2;
+      out += " ";
+    } else if (c === '"' || c === "'") {
+      i++;
+      skipText(() => code[i] === c || code[i] === "\n");
+      i++;
+      out += " ";
+    } else if (c === "`" || (c === "}" && templates.at(-1) === 0)) {
+      if (c === "}") templates.pop();
+      i++;
+      skipText(() => code[i] === "`" || (code[i] === "$" && code[i + 1] === "{"));
+      if (code[i] === "$") {
+        templates.push(0);
+        i += 2;
+      } else i++;
+      out += " ";
+    } else {
+      if (templates.length && c === "{") templates[templates.length - 1]++;
+      if (templates.length && c === "}") templates[templates.length - 1]--;
+      out += c;
+      i++;
+    }
+  }
+  return out;
+}
+
+/** The names in `names` that `code` mentions, outside strings, comments and property access. */
+function cellInputs(code, names) {
+  const known = new Set(names);
+  const found = new Set();
+  for (const [, dot, name] of stripCode(code).matchAll(/(\.\s*)?(?<![\w$])([A-Za-z_$][\w$]*)/g)) {
+    if (!dot && known.has(name)) found.add(name);
+  }
+  return [...found];
+}
+
+// The worker's side. Code runs as an async function inside `with (inputs)`, so
+// page variables read like globals, and the code's own `let x` can shadow them.
+// The sourceURL comment names the code in stack traces, which gives error lines.
+const WORKER_SOURCE = `
+const AsyncFunction = (async () => {}).constructor;
+${wrapCode}
+const CELL = "tangle-cell";
+const lineOf = (error) => Number(String(error?.stack).match(new RegExp(CELL + ":(\\\\d+)"))?.[1]);
+let offset = 0; // how many lines the engine puts before the body
+try {
+  new Function("throw new Error()\\n//# sourceURL=" + CELL)();
+} catch (error) {
+  offset = (lineOf(error) || 1) - 1;
+}
+const show = (value) => {
+  if (typeof value === "string") return value;
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+};
+let logs = [];
+for (const level of ["log", "info", "warn", "error", "debug"]) {
+  console[level] = (...args) => logs.push({ level, text: args.map(show).join(" ") });
+}
+onmessage = async ({ data: { id, code, inputs } }) => {
+  logs = [];
+  try {
+    const run = new AsyncFunction("$inputs", "with ($inputs) {" + wrapCode(code) + "\\n}\\n//# sourceURL=" + CELL);
+    const value = await run(inputs);
+    try {
+      postMessage({ id, value, logs });
+    } catch (error) {
+      postMessage({ id, logs, error: { message: "The result can't leave the sandbox: " + error.message } });
+    }
+  } catch (error) {
+    const line = lineOf(error) - offset;
+    postMessage({ id, logs, error: { message: String(error?.name ? error.name + ": " + error.message : error), line: line > 0 ? line : null } });
+  }
+};
+`;
+
+let workerUrl = null;
+
+/** The built-in "js" engine: one worker per cell, replaced when a run is cut short. */
+function jsEngine() {
+  let worker = null;
+  let current = null; // { id, timer, reject } of the run in progress
+  let ids = 0;
+  const kill = () => {
+    worker?.terminate();
+    worker = null;
+  };
+  const finish = () => {
+    clearTimeout(current?.timer);
+    current = null;
+  };
+  return {
+    run(code, inputs, { timeout = 2000 } = {}) {
+      // A newer run replaces one still going: stop it rather than queue behind it.
+      if (current) {
+        current.reject(Object.assign(new Error("replaced by a newer run"), { name: "AbortError" }));
+        finish();
+        kill();
+      }
+      workerUrl ??= URL.createObjectURL(new Blob([WORKER_SOURCE], { type: "text/javascript" }));
+      worker ??= new Worker(workerUrl);
+      const id = ++ids;
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          finish();
+          kill();
+          reject(new Error(`Stopped after ${timeout} ms. Is there an endless loop?`));
+        }, timeout);
+        current = { id, timer, reject };
+        // Errors outside the run (a worker that fails to start, say) end the run in progress.
+        worker.onerror = (event) => {
+          event.preventDefault();
+          if (current?.id !== id) return;
+          finish();
+          reject(new Error(event.message || "The sandbox failed."));
+        };
+        worker.onmessage = ({ data }) => {
+          if (data.id !== current?.id) return;
+          finish();
+          if (data.error) reject(Object.assign(new Error(data.error.message), { line: data.error.line, logs: data.logs }));
+          else resolve({ value: data.value, logs: data.logs });
+        };
+        try {
+          worker.postMessage({ id, code, inputs });
+        } catch (error) {
+          finish();
+          const name = Object.keys(inputs).find((key) => {
+            try {
+              structuredClone(inputs[key]);
+              return false;
+            } catch {
+              return true;
+            }
+          });
+          reject(new Error(name ? `${name} can't be sent to the sandbox: ${error.message}` : error.message));
+        }
+      });
+    },
+    dispose() {
+      finish();
+      kill();
+    },
+  };
+}
+
+registerEngine("js", jsEngine);
+
+// ---------------------------------------------------------------------------
 // Custom elements
 // ---------------------------------------------------------------------------
 
@@ -2846,7 +3092,7 @@ class TFetch extends TangleElement {
 
 /**
  * The variables of `scope` as data, which is what <t-debug> shows: one row per
- * variable with its `value` (or `error`), its `kind` ("value", "formula", "fetch",
+ * variable with its `value` (or `error`), its `kind` ("value", "formula", "fetch", "codecell",
  * or "unset" if something reads it but nothing sets it), whether it's `pending`,
  * how many times it has `runs`, the variables it `reads` and is `readBy`, and the
  * `elements` whose effects read it.
@@ -2965,7 +3211,7 @@ function svgNode(tag, attrs, text) {
   return node;
 }
 
-/** A short, one-line version of any value, for <t-debug>. */
+/** A short, one-line version of any value, for <t-debug> and <t-codecell>. */
 function preview(value, max = 48) {
   if (typeof value === "function") return `ƒ ${value.name || "anonymous"}`;
   if (typeof value === "number" || typeof value === "boolean" || value == null) return String(value);
@@ -3126,6 +3372,288 @@ class TDebug extends Base {
     for (const el of this._outlined) if (!elements.has(el)) el.classList.remove("t-debug-target");
     for (const el of elements) el.classList.add("t-debug-target");
     this._outlined = elements;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Code cells: <t-codecell> is code the reader edits, run in a sandbox, with its
+// result in a variable.
+// ---------------------------------------------------------------------------
+
+/** `text` without the indentation its lines share, and without blank lines at either end. */
+function dedent(text) {
+  const lines = text.replace(/^\s*\n/, "").trimEnd().split("\n");
+  const indent = Math.min(...lines.filter((l) => l.trim()).map((l) => l.match(/^[ \t]*/)[0].length));
+  return lines.map((l) => l.slice(Number.isFinite(indent) ? indent : 0)).join("\n");
+}
+
+const sameInputs = (a, b) => {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((key) => Object.is(a[key], b[key]));
+};
+
+// <t-codecell name="total"><script type="text/plain">return prices.reduce((a, b) => a + b, 0)</script></t-codecell>
+// Code the reader can edit. It runs in a Web Worker whenever it, or a page
+// variable it mentions, changes, and its result goes into the variable `name`.
+// While it runs, the old result stays and elements that show it dim. Below the
+// editor are anything it logged and errors, and with `output` the result too.
+// With `copy`, a button puts the code on the clipboard.
+class TCodeCell extends TangleElement {
+  connectedCallback() {
+    this._name = this.hasAttribute("name") ? validName(this) : null;
+    if (this.hasAttribute("name") && !this._name) return;
+    if (!this._editor) this.build();
+    if (this._name) this.scope.slot(this._name).kind = "codecell";
+    this._last = null;
+    this.watch((scope) => {
+      this._force.value;
+      const engines = this._runner ? null : enginesVersion.value; // waiting on its engine
+      graphVersion.value; // so a variable declared after the cell is still found
+      const code = this._code.value;
+      const names = cellInputs(code, [...scope.slots.keys()].filter((n) => n !== this._name));
+      const inputs = {};
+      for (const name of names) {
+        try {
+          const value = scope.get(name);
+          if (value !== undefined) inputs[name] = value;
+        } catch {} // a formula that fails is left out, so the code sees it as not defined
+      }
+      // graphVersion also changes when nothing this cell reads did: skip those.
+      const run = { code, inputs, engines, force: this._force.peek() };
+      const last = this._last;
+      const same = last && last.code === code && (engines === null || last.engines === engines) && last.force === run.force;
+      if (same && sameInputs(last.inputs, inputs)) return;
+      this._last = run;
+      untracked(() => this.run(code, inputs));
+    });
+  }
+
+  disconnectedCallback() {
+    this.stop();
+    this._runner?.dispose?.();
+    this._runner = null;
+    super.disconnectedCallback();
+  }
+
+  build() {
+    const script = this.querySelector('script[type="text/plain"]');
+    if (!script) {
+      // Code written straight into the element: take it out, to show it in the editor instead.
+      this._text = this.textContent;
+      this.replaceChildren();
+    }
+    this._initial = dedent(script ? script.textContent : this._text);
+    this._code = new Signal(this._initial);
+    this._force = new Signal(0);
+
+    this._editor = document.createElement("div");
+    this._editor.className = "t-codecell-editor";
+    const pre = document.createElement("pre");
+    pre.className = "t-codecell-pre";
+    pre.textContent = this._initial;
+    this._editor.append(pre);
+
+    const bar = (this._bar = document.createElement("div"));
+    bar.hidden = true;
+    bar.className = "t-codecell-bar";
+    this._status = document.createElement("span");
+    this._status.className = "t-codecell-status";
+    this._reset = document.createElement("button");
+    this._reset.type = "button";
+    this._reset.className = "t-codecell-reset";
+    this._reset.textContent = "Reset";
+    this._reset.hidden = true;
+    this._reset.addEventListener("click", () => this.setText(this._initial));
+    this._copy = document.createElement("button");
+    this._copy.type = "button";
+    this._copy.className = "t-codecell-copy";
+    this._copy.textContent = "Copy";
+    this._copy.addEventListener("click", () => this.copy());
+    bar.append(this._status, this._reset, this._copy);
+
+    this._output = document.createElement("div");
+    this._output.className = "t-codecell-output";
+    this._output.setAttribute("aria-live", "polite");
+    this.append(this._editor, bar, this._output);
+    this.syncBar();
+
+    // Mod-Enter runs now, without waiting for the pause after typing. Capture it
+    // before CodeMirror, which would insert a blank line.
+    this.addEventListener(
+      "keydown",
+      (event) => {
+        if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        clearTimeout(this._typing);
+        this._code.value = this.text();
+        this._force.value++;
+      },
+      true,
+    );
+
+    loadCodemirror().then(
+      (cm) => this.mount(cm),
+      (error) => {
+        console.error("tangle: <t-codecell> could not load CodeMirror, using a plain text area", error);
+        this.mountTextarea();
+      },
+    );
+  }
+
+  /** The editor: CodeMirror, with the theme's colors. */
+  mount({ EditorView, basicSetup, javascript, syntaxHighlighting, classHighlighter }) {
+    const lang = this.getAttribute("lang") ?? "js";
+    this._view = new EditorView({
+      doc: this._code.peek(),
+      extensions: [
+        basicSetup,
+        lang === "js" ? javascript() : [],
+        syntaxHighlighting(classHighlighter),
+        EditorView.contentAttributes.of({ "aria-label": this.getAttribute("label") ?? `${this._name ?? "code"} (${lang})` }),
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged) this.edited();
+        }),
+        EditorView.theme({
+          "&": { color: "inherit", backgroundColor: "transparent" },
+          "&.cm-focused": { outline: "none" },
+          ".cm-content": { caretColor: "var(--tangle-accent)" },
+          ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--tangle-accent)" },
+          "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+            { backgroundColor: "color-mix(in srgb, var(--tangle-accent) 25%, transparent)" },
+          ".cm-gutters": { backgroundColor: "transparent", color: "inherit", border: "none", opacity: "0.45" },
+          ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "color-mix(in srgb, var(--tangle-accent) 6%, transparent)" },
+          ".cm-matchingBracket, &.cm-focused .cm-matchingBracket": {
+            backgroundColor: "color-mix(in srgb, var(--tangle-accent) 20%, transparent)",
+            outline: "none",
+          },
+          ".cm-tooltip": { backgroundColor: "var(--tangle-surface)", color: "inherit" },
+        }),
+      ],
+    });
+    this._editor.replaceChildren(this._view.dom);
+  }
+
+  /** Without CodeMirror (offline, say), a plain text area does the job. */
+  mountTextarea() {
+    const area = (this._area = document.createElement("textarea"));
+    area.className = "t-codecell-textarea";
+    area.spellcheck = false;
+    area.value = this._code.peek();
+    area.rows = Math.max(3, area.value.split("\n").length);
+    area.setAttribute("aria-label", this.getAttribute("label") ?? this._name ?? "code");
+    area.addEventListener("input", () => this.edited());
+    this._editor.replaceChildren(area);
+  }
+
+  text() {
+    return this._view ? this._view.state.doc.toString() : this._area ? this._area.value : this._code.peek();
+  }
+
+  setText(text) {
+    if (this._view) this._view.dispatch({ changes: { from: 0, to: this._view.state.doc.length, insert: text } });
+    else if (this._area) {
+      this._area.value = text;
+      this.edited();
+    }
+  }
+
+  /** After a pause in typing, the new code runs. */
+  edited() {
+    const text = this.text();
+    this._reset.hidden = text === this._initial;
+    this.syncBar();
+    clearTimeout(this._typing);
+    const wait = Number(this.getAttribute("debounce") ?? 400);
+    this._typing = setTimeout(() => (this._code.value = text), Number.isFinite(wait) ? Math.max(0, wait) : 400);
+  }
+
+  run(code, inputs) {
+    this.stop();
+    const lang = this.getAttribute("lang") ?? "js";
+    this._runner ??= createRunner(lang);
+    if (!this._runner) return this.settle({ error: new Error(`No engine for lang="${lang}". See registerEngine.`) });
+    const token = (this._token = {});
+    this.setPending(true);
+    const timeout = Number(this.getAttribute("timeout") ?? 2000);
+    const started = performance.now();
+    const runner = this._runner;
+    // In a promise, so an engine that throws instead of rejecting is handled the same way.
+    new Promise((resolve) => resolve(runner.run(code, inputs, { timeout: Number.isFinite(timeout) ? timeout : 2000 }))).then(
+      ({ value, logs }) => {
+        if (this._token !== token) return;
+        if (this._name) this.scope.set(this._name, value);
+        this.settle({ value, logs, ms: performance.now() - started });
+      },
+      (error) => {
+        if (this._token !== token || error?.name === "AbortError") return;
+        this.settle({ error, logs: error?.logs });
+      },
+    );
+  }
+
+  stop() {
+    this._token = null;
+    this.setPending(false);
+  }
+
+  /** Show how the run went: what it logged, then its value or its error. */
+  settle({ value, error, logs = [], ms }) {
+    this._token = null;
+    this.setPending(false);
+    this.classList.toggle("is-error", Boolean(error));
+    const lines = logs.map(({ level, text }) => {
+      const line = document.createElement("div");
+      line.className = `t-codecell-log is-${level}`;
+      line.textContent = text;
+      return line;
+    });
+    // The value shows with `output`, or when it has nowhere else to go. Errors and logs always show.
+    const showValue = this.hasAttribute("output") || !this._name;
+    let result = document.createElement("div");
+    if (error) {
+      result.className = "t-codecell-error";
+      result.textContent = error.line ? `Line ${error.line}: ${error.message}` : error.message;
+      console.error(`tangle: <t-codecell${this._name ? ` name="${this._name}"` : ""}>`, result.textContent);
+    } else if (showValue) {
+      result.className = "t-codecell-value";
+      result.textContent = preview(value, 400);
+    } else result = null;
+    this._output.replaceChildren(...lines, ...(result ? [result] : []));
+    this._status.textContent = showValue && !error && ms != null ? `ran in ${ms < 10 ? ms.toFixed(1) : Math.round(ms)} ms` : "";
+    this.syncBar();
+    const name = this.getAttribute("error");
+    if (name) this.scope.set(name, error ? result.textContent : null);
+  }
+
+  /** The bar under the editor only takes up room when it has something in it. */
+  syncBar() {
+    this._copy.hidden = !this.hasAttribute("copy");
+    this._bar.hidden = this._reset.hidden && this._copy.hidden && !this._status.textContent;
+  }
+
+  static observedAttributes = ["copy"];
+  attributeChangedCallback() {
+    if (this._bar) this.syncBar();
+  }
+
+  /** Puts the code, as edited, on the clipboard, and says so on the button for a moment. */
+  async copy() {
+    let done = false;
+    try {
+      await navigator.clipboard.writeText(this.text());
+      done = true;
+    } catch (error) {
+      console.error("tangle: <t-codecell> could not copy", error);
+    }
+    this._copy.textContent = done ? "Copied" : "Copy failed";
+    clearTimeout(this._copied);
+    this._copied = setTimeout(() => (this._copy.textContent = "Copy"), 1500);
+  }
+
+  setPending(on) {
+    this.classList.toggle("is-running", on);
+    if (this._name) this.scope.setPending(this._name, on);
   }
 }
 
@@ -4862,6 +5390,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-text": TText,
     "t-call": TCall,
     "t-fetch": TFetch,
+    "t-codecell": TCodeCell,
     "t-debug": TDebug,
     "t-tag": TTag,
     "t-math": TMath,

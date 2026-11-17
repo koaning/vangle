@@ -12,6 +12,7 @@ import { TangleElement } from "../core/element.js";
 const GRAPH_KEYS = ["nodes", "edges", "directed"];
 const GRAPH_RADIUS = 8; // a node's radius without a size
 const GRAPH_PAD = 4; // between the box's edge and a node
+const GRAPH_LABEL = 14; // room for the label under a node
 const GRAPH_HEAD = 7; // arrowhead length
 const GRAPH_HEAD_HALF = 3.5;
 
@@ -104,6 +105,8 @@ function graphColor(color, fallback) {
   return parts.length === 2 ? `light-dark(${parts[0]}, ${parts[1]})` : color;
 }
 
+const reducedMotion = () => Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+
 const radiusOf = (n) => Math.max(2, Number(n.size) || GRAPH_RADIUS);
 
 /** Whether two values hold the same node data, to stop a graph that reads its own pick from looping. */
@@ -159,6 +162,7 @@ export class TGraph extends TangleElement {
     this._token = null;
     this._resize?.disconnect();
     this._sim?.stop();
+    cancelAnimationFrame(this._fitFrame);
     super.disconnectedCallback();
   }
 
@@ -201,10 +205,13 @@ export class TGraph extends TangleElement {
     this._edgeLayer = svgEl("g", { class: "tangle-graph-edges" });
     this._labelLayer = svgEl("g", { class: "tangle-graph-edge-labels" });
     this._nodeLayer = svgEl("g", { class: "tangle-graph-nodes" });
-    // The view holds everything, so zooming moves it all at once.
+    // The view is what the reader zooms. Inside it, the fit scales the layout to the box.
     this._view = svgEl("g", { class: "tangle-graph-view" });
-    this._view.append(this._edgeLayer, this._labelLayer, this._nodeLayer);
+    this._fit = svgEl("g", { class: "tangle-graph-fit" });
+    this._fit.append(this._edgeLayer, this._labelLayer, this._nodeLayer);
+    this._view.append(this._fit);
     this._svg.append(this._view);
+    this._bounded = this.hasAttribute("bounded");
     this._tip = Object.assign(document.createElement("div"), { className: "tangle-graph-tooltip", hidden: true });
     this._box.append(this._svg, this._tip);
     if (this.hasAttribute("zoom")) this.makeZoomable(d3);
@@ -234,7 +241,6 @@ export class TGraph extends TangleElement {
    * A plain wheel still scrolls the page, and shows a hint. Reset goes back to the whole graph.
    */
   makeZoomable(d3) {
-    const reduced = () => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const mac = /Mac|iPhone|iPad/.test(navigator.platform ?? "");
     this._reset = Object.assign(document.createElement("button"), {
       type: "button",
@@ -259,7 +265,7 @@ export class TGraph extends TangleElement {
       });
     const svg = d3.select(this._svg).call(this._zoom).on("dblclick.zoom", null);
     this._reset.addEventListener("click", () => {
-      (reduced() ? svg : svg.transition().duration(300)).call(this._zoom.transform, d3.zoomIdentity);
+      (reducedMotion() ? svg : svg.transition().duration(300)).call(this._zoom.transform, d3.zoomIdentity);
     });
     this._svg.addEventListener(
       "wheel",
@@ -334,14 +340,15 @@ export class TGraph extends TangleElement {
     this.render();
     this.size(width);
     if (moved) {
-      // A mostly new graph gets a full layout; a few new nodes or edges only nudge the rest.
+      // A mostly new graph is laid out before it's shown, so it appears settled and fitted.
+      // A few new nodes or edges animate, nudging the rest.
       const fresh = 1 - kept / Math.max(1, this._nodes.length);
-      const alpha = fresh > 0.5 ? 1 : Math.max(0.3, fresh);
-      if (globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-        sim.alpha(alpha);
+      if (fresh > 0.5 || reducedMotion()) {
+        sim.alpha(fresh > 0.5 ? 1 : Math.max(0.3, fresh));
         for (let i = 0; i < 300 && sim.alpha() > sim.alphaMin(); i++) sim.tick();
-        this.tick();
-      } else sim.alpha(alpha).restart();
+        sim.stop();
+        this.settled(false);
+      } else this.relayout(Math.max(0.3, fresh));
     } else this.tick();
 
     // The variables follow the new spec: a node that's gone is null, one that changed is its
@@ -394,6 +401,7 @@ export class TGraph extends TangleElement {
       .clickDistance(4)
       .on("start", (event, d) => {
         if (!event.active) this._sim.alphaTarget(0.2).restart();
+        this._dragging = true;
         d.fx = d.x;
         d.fy = d.y;
       })
@@ -403,6 +411,8 @@ export class TGraph extends TangleElement {
       })
       .on("end", (event, d) => {
         if (!event.active) this._sim.alphaTarget(0);
+        this._dragging = false;
+        this._refit = true; // a node dragged out of view is brought back in
         d.fx = d.fy = null;
       });
     d3.select(this._nodeLayer)
@@ -470,16 +480,37 @@ export class TGraph extends TangleElement {
   resize() {
     if (!this._data) return;
     this.size(this.clientWidth);
-    this._sim.alpha(0.3).restart();
+    if (this._bounded) this.relayout(0.3);
+    else this.fitTo(this.fitFor(), false); // the layout doesn't depend on the width: only the fit does
+  }
+
+  /** Animates the layout from `alpha`. The fit holds still until the motion has died down. */
+  relayout(alpha) {
+    this._refit = true;
+    this._sim.alpha(alpha).restart();
+  }
+
+  /** Draws the layout as it is, and fits the view to it: at once, or eased. */
+  settled(ease) {
+    this._refit = false;
+    this.tick();
+    if (!this._bounded) this.fitTo(this.fitFor(), ease && !reducedMotion());
   }
 
   tick() {
-    const w = this._width;
-    const h = this._height;
-    for (const n of this._nodes) {
-      const r = radiusOf(n.spec) + GRAPH_PAD;
-      n.x = Math.max(r, Math.min(w - r, n.x));
-      n.y = Math.max(r, Math.min(h - r - 14, n.y)); // room for the label under the node
+    if (this._bounded) {
+      const w = this._width;
+      const h = this._height;
+      for (const n of this._nodes) {
+        const r = radiusOf(n.spec) + GRAPH_PAD;
+        n.x = Math.max(r, Math.min(w - r, n.x));
+        n.y = Math.max(r, Math.min(h - r - GRAPH_LABEL, n.y));
+      }
+    } else if (this._refit && !this._dragging && this._sim.alpha() < 0.05) {
+      // Refitting on every tick would shake the whole view as the layout wobbles. Fit once,
+      // when most of the motion is over.
+      this._refit = false;
+      this.fitTo(this.fitFor(), !reducedMotion());
     }
     const directed = this._data.directed;
     for (const g of this._edgeLayer.children) {
@@ -519,6 +550,45 @@ export class TGraph extends TangleElement {
       const d = g.__data__;
       g.setAttribute("transform", `translate(${d.x},${d.y})`);
     }
+  }
+
+  /**
+   * The transform that scales the layout down until all of it fits in the box, and centers
+   * it. A graph that already fits keeps its size. Strokes keep their width (non-scaling-stroke).
+   */
+  fitFor() {
+    if (!this._nodes.length) return { k: 1, x: 0, y: 0 };
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const n of this._nodes) {
+      const r = radiusOf(n.spec);
+      x0 = Math.min(x0, n.x - r);
+      x1 = Math.max(x1, n.x + r);
+      y0 = Math.min(y0, n.y - r);
+      y1 = Math.max(y1, n.y + r + GRAPH_LABEL);
+    }
+    const w = this._width - 2 * GRAPH_PAD - 24; // labels stick out sideways
+    const h = this._height - 2 * GRAPH_PAD;
+    const k = Math.min(1, w / Math.max(1, x1 - x0), h / Math.max(1, y1 - y0));
+    return { k, x: this._width / 2 - (k * (x0 + x1)) / 2, y: this._height / 2 - (k * (y0 + y1)) / 2 };
+  }
+
+  /** Moves the view to a fit, easing over 400 ms or at once. */
+  fitTo(to, ease) {
+    cancelAnimationFrame(this._fitFrame);
+    const set = ({ k, x, y }) => {
+      this._fitNow = { k, x, y };
+      this._fit.setAttribute("transform", `translate(${x},${y}) scale(${k})`);
+    };
+    const from = this._fitNow;
+    if (!ease || !from) return set(to);
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / 400);
+      const e = t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2; // cubic in-out
+      set({ k: from.k + (to.k - from.k) * e, x: from.x + (to.x - from.x) * e, y: from.y + (to.y - from.y) * e });
+      if (t < 1) this._fitFrame = requestAnimationFrame(step);
+    };
+    this._fitFrame = requestAnimationFrame(step);
   }
 
   /** A tooltip with the node's or edge's data, if it has any. */

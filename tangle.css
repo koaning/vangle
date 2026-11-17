@@ -1060,6 +1060,7 @@ t-obsplot figure {
 /* An edge is a line, and an arrowhead when the graph is directed. --edge is its color. */
 .tangle-graph-line {
   fill: none;
+  vector-effect: non-scaling-stroke; /* the same width however much the graph is scaled to fit */
   stroke: var(--edge, color-mix(in srgb, currentColor 35%, transparent));
 }
 
@@ -1089,6 +1090,7 @@ t-obsplot figure {
 
 .tangle-graph-node circle {
   fill: var(--node, var(--tangle-accent));
+  vector-effect: non-scaling-stroke;
   stroke: var(--tangle-surface);
   stroke-width: 1.5px;
 }

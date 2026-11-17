@@ -15,7 +15,7 @@ goes back into variables. d3 loads only on pages that have a `<t-graph>`.
   <t-let name="readout" expr="!picked?.name ? ''
     : hovered && hovered.id !== picked.id ? `${hovered.name} is ${apart(picked, hovered)} edges from ${picked.name}, one for each bit they differ in.`
     : `All ${n} neighbours of ${picked.name} differ from it in one bit.`"></t-let>
-  <t-graph name="picked" hover="hovered" height="420" zoom>
+  <t-graph name="picked" hover="hovered" height="560" zoom>
     <script type="text/plain">
     {
       nodes: d3.range(2 ** n).map((i) => ({ id: i, name: i.toString(2).padStart(n, "0"), size: 6 })),
@@ -111,10 +111,22 @@ hypercube above:
 - A **Reset zoom** button appears in the corner once the view has moved.
 
 The scroll wheel on its own still scrolls the page, so a graph never traps the reader halfway
-down it. Scrolling over the graph shows a short hint about the key instead. Zooming only
-changes the view: the layout stays inside the box, and you can't zoom out past it or pan away
-from it. On a touch screen, a zoomable graph takes one-finger drags for panning, so the page
+down it. Scrolling over the graph shows a short hint about the key instead. You can't zoom
+out past the whole graph or pan away from it. On a touch screen, a zoomable graph takes one-finger drags for panning, so the page
 scrolls from outside the graph.
+
+## Fitting the box {#fit}
+
+The layout spreads out as far as the graph needs, and the view scales it down until all of it
+fits in the box, then centers it. A graph that already fits keeps its size. The view holds
+still while the layout moves, and eases to the new fit once the motion has died down, so a
+wobbling chain of nodes doesn't shake the whole graph. Lines and outlines
+keep their width when the graph is scaled down, but nodes and labels get smaller, so a big
+graph reads best with [`zoom`](#zoom) or a taller `height`.
+
+With the `bounded` attribute, the graph is drawn at full size instead, and nodes that would
+leave the box are held at its edge. That suits a small graph whose node and label sizes
+matter, but a graph that needs more room than the box gives it piles up along the edges.
 
 ## When the graph changes {#updates}
 
@@ -122,11 +134,11 @@ The expression runs again whenever a variable it read changes, and the graph kee
 
 - **Nodes with the same id stay where they are.** A new node starts next to a neighbour that's
   already placed, and the simulation nudges the rest to make room. If most of the nodes are new,
-  the graph is laid out from scratch.
+  as on the first draw, the graph is laid out before it's shown, and appears settled.
 - **Only new nodes or edges move things.** A change of color, size, name or data redraws in place.
 - **Dragging a node** pulls the graph along with it. When you let go, the simulation settles again.
-- **With reduced motion** turned on in the system settings, the graph settles before it's drawn,
-  without animating.
+- **With reduced motion** turned on in the system settings, every change settles before it's
+  drawn, without animating.
 
 Give nodes ids that mean something, like the numbers in the hypercube, so the same node keeps
 the same id from one run to the next.
@@ -165,6 +177,7 @@ The labels use `--tangle-chart-font`, like the charts.
 | `distance` | `60` | How long the layout tries to make each edge, in pixels. |
 | `charge` | `-160` | How hard nodes push each other apart. More negative spreads the graph out. |
 | `zoom` | | Let the reader zoom and pan. See [Zooming](#zoom). |
+| `bounded` | | Keep the nodes inside the box at full size, instead of scaling the graph to fit. See [Fitting the box](#fit). |
 | `src` | | A URL to load the expression from, instead of the `<script>` inside. |
 | `name` | | A variable for the picked node. See [Picking and hovering](#name). |
 | `hover` | | A variable for the node under the pointer. |

@@ -199,5 +199,5 @@ stop();
 | `vegaUrl`, `vegaLiteUrl`, `vegaEmbedUrl` | jsDelivr: Vega 6.4.0, Vega-Lite 6.4.3, vega-embed 7.3.0 | The three Vega scripts, loaded in order. Each is skipped if its global (`vega`, `vegaLite`, `vegaEmbed`) already exists. |
 | `d3Url`, `plotUrl` | jsDelivr: d3 7.9.0, Observable Plot 0.6.17 | The two Plot scripts, loaded in order. Each is skipped if its global (`d3`, `Plot`) already exists. |
 | `jsxgraphUrl` | jsDelivr, JSXGraph 1.14.0 | The JSXGraph script, skipped if `JXG` already exists. |
-| `codemirrorUrl`, `codemirrorJsUrl`, `codemirrorLanguageUrl`, `lezerHighlightUrl` | esm.sh: codemirror 6.0.2, @codemirror/lang-javascript 6.2.5, @codemirror/language 6.13.1, @lezer/highlight 1.2.5 | The ES modules of the [`<t-codecell>`](t-codecell.md) editor. They must share one copy of `@codemirror/state` and `@codemirror/view`. |
+| `codemirrorUrl`, `codemirrorViewUrl`, `codemirrorJsUrl`, `codemirrorLanguageUrl`, `lezerHighlightUrl` | esm.sh: codemirror 6.0.2, @codemirror/view 6.43.15, @codemirror/lang-javascript 6.2.5, @codemirror/language 6.13.1, @lezer/highlight 1.2.5 | The ES modules of the [`<t-codecell>`](t-codecell.md) editor. They must share one copy of `@codemirror/state` and `@codemirror/view`. |
 | `pixelsPerStep` | `5` | The default drag sensitivity. |

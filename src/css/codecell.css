@@ -131,6 +131,13 @@ t-codecell .tok-comment {
   color: color-mix(in srgb, currentColor var(--tangle-muted), transparent);
 }
 
+/* Names that come from the page get the tint of the values the reader changes. No
+   padding, so the columns of the code stay put. */
+t-codecell .t-codecell-page {
+  border-radius: 0.18em;
+  background: color-mix(in srgb, var(--tangle-accent) var(--tangle-soft), transparent);
+}
+
 t-codecell .tok-variableName.tok-definition,
 t-codecell .tok-propertyName.tok-definition {
   color: var(--tangle-accent);

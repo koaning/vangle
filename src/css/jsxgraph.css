@@ -18,3 +18,9 @@
   font-family: inherit;
   white-space: nowrap;
 }
+
+/* While a point is held, the hand stays closed wherever the pointer goes. */
+:root.tangle-grabbing,
+:root.tangle-grabbing * {
+  cursor: grabbing !important;
+}

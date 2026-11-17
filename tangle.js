@@ -7,9 +7,10 @@
 //   When you eat <t-num name="cookies" min="0" max="20">3</t-num> cookies,
 //   you consume <t-out expr="cookies * 50"></t-out> calories.
 //
-// Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>
-// or a <t-formula-dag>; likewise Vega, only if it has a <t-vega>, Observable Plot
-// for <t-obsplot>, JSXGraph for <t-jsxgraph>, and CodeMirror for <t-codecell>.
+// Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>,
+// a <t-formula-dag> or math in a <t-flow> note; likewise Vega, only if it has a
+// <t-vega>, Observable Plot for <t-obsplot>, JSXGraph for <t-jsxgraph>, and
+// CodeMirror for <t-codecell>.
 // MIT license.
 //
 // Built by `make build` from src/. Edit the files there, not this one.
@@ -513,6 +514,8 @@ const config = {
   plotUrl: `${CDN}@observablehq/plot@0.6.17/dist/plot.umd.min.js`,
   jsxgraphUrl: `${CDN}jsxgraph@1.14.0/distrib/jsxgraphcore.js`,
   codemirrorUrl: `https://esm.sh/codemirror@6.0.2${CM_DEPS}`,
+  // With state as its only pinned dependency, esm.sh gives the copy of view the others use.
+  codemirrorViewUrl: "https://esm.sh/@codemirror/view@6.43.15?deps=@codemirror/state@6.7.6",
   codemirrorJsUrl: `https://esm.sh/@codemirror/lang-javascript@6.2.5${CM_DEPS}`,
   codemirrorLanguageUrl: `https://esm.sh/@codemirror/language@6.13.1${CM_DEPS}`,
   lezerHighlightUrl: "https://esm.sh/@lezer/highlight@1.2.5",
@@ -521,7 +524,7 @@ const config = {
 
 /**
  * Override defaults: { katexUrl, katexCssUrl, vegaUrl, vegaLiteUrl, vegaEmbedUrl, d3Url,
- * plotUrl, jsxgraphUrl, codemirrorUrl, codemirrorJsUrl, codemirrorLanguageUrl,
+ * plotUrl, jsxgraphUrl, codemirrorUrl, codemirrorViewUrl, codemirrorJsUrl, codemirrorLanguageUrl,
  * lezerHighlightUrl, pixelsPerStep }. Call before KaTeX, Vega, Plot, JSXGraph or CodeMirror loads.
  */
 export function configure(options) {
@@ -592,24 +595,28 @@ function loadJsxgraph() {
   })());
 }
 
-// CodeMirror 6 is ES modules. Returns { EditorView, basicSetup, javascript,
-// syntaxHighlighting, classHighlighter }.
+// CodeMirror 6 is ES modules. Returns { EditorView, ViewPlugin, Decoration, basicSetup,
+// javascript, syntaxHighlighting, syntaxTree, classHighlighter }.
 let codemirrorPromise = null;
 function loadCodemirror() {
   return (codemirrorPromise ??= (async () => {
     await null; // let a same-module configure() call run first
     if (globalThis.TangleConfig) Object.assign(config, globalThis.TangleConfig);
-    const [cm, js, language, highlight] = await Promise.all([
+    const [cm, view, js, language, highlight] = await Promise.all([
       import(config.codemirrorUrl),
+      import(config.codemirrorViewUrl),
       import(config.codemirrorJsUrl),
       import(config.codemirrorLanguageUrl),
       import(config.lezerHighlightUrl),
     ]);
     return {
       EditorView: cm.EditorView,
+      ViewPlugin: view.ViewPlugin,
+      Decoration: view.Decoration,
       basicSetup: cm.basicSetup,
       javascript: js.javascript,
       syntaxHighlighting: language.syntaxHighlighting,
+      syntaxTree: language.syntaxTree,
       classHighlighter: highlight.classHighlighter,
     };
   })());
@@ -1159,8 +1166,10 @@ function dagBest(candidates, score) {
  * `layers` top to bottom, each a list of ids (names or waypoints), and one
  * route [src, ...waypoints, dst] per edge. Layers wider than `cap` keep their
  * seeded order instead of trying every permutation. Empty layers are dropped.
+ * Edges whose index is in `direct` still count for ordering but get no
+ * waypoints: their route is just [src, dst], for arrows routed freely.
  */
-function dagOrder(names, layerOf, edges, { sweeps = 8, cap = 6 } = {}) {
+function dagOrder(names, layerOf, edges, { sweeps = 8, cap = 6, direct = new Set() } = {}) {
   const deepest = Math.max(0, ...names.map((n) => layerOf.get(n)));
   const layers = Array.from({ length: deepest + 1 }, () => []);
   for (const n of names) layers[layerOf.get(n)].push(n);
@@ -1169,7 +1178,12 @@ function dagOrder(names, layerOf, edges, { sweeps = 8, cap = 6 } = {}) {
   const link = (a, b) => (below.has(a) ? below.get(a).push(b) : below.set(a, [b]));
   const routes = [];
   let waypoints = 0;
-  for (const [src, dst] of edges) {
+  edges.forEach(([src, dst], i) => {
+    if (direct.has(i)) {
+      link(src, dst);
+      routes.push([src, dst]);
+      return;
+    }
     let prev = src;
     const chain = [src];
     for (let l = layerOf.get(src) + 1; l < layerOf.get(dst); l++) {
@@ -1182,7 +1196,7 @@ function dagOrder(names, layerOf, edges, { sweeps = 8, cap = 6 } = {}) {
     link(prev, dst);
     chain.push(dst);
     routes.push(chain);
-  }
+  });
 
   const crossings = (upper, lower) => {
     const pos = new Map(lower.map((n, i) => [n, i]));
@@ -3410,7 +3424,9 @@ class TCodeCell extends TangleElement {
       const engines = this._runner ? null : enginesVersion.value; // waiting on its engine
       graphVersion.value; // so a variable declared after the cell is still found
       const code = this._code.value;
-      const names = cellInputs(code, [...scope.slots.keys()].filter((n) => n !== this._name));
+      const page = [...scope.slots.keys()].filter((n) => n !== this._name);
+      untracked(() => this.markPage(scope, page));
+      const names = cellInputs(code, page);
       const inputs = {};
       for (const name of names) {
         try {
@@ -3445,6 +3461,7 @@ class TCodeCell extends TangleElement {
     this._initial = dedent(script ? script.textContent : this._text);
     this._code = new Signal(this._initial);
     this._force = new Signal(0);
+    this._page = new Set(); // the page's variables, which the editor marks in the code
 
     this._editor = document.createElement("div");
     this._editor.className = "t-codecell-editor";
@@ -3502,13 +3519,14 @@ class TCodeCell extends TangleElement {
   }
 
   /** The editor: CodeMirror, with the theme's colors. */
-  mount({ EditorView, basicSetup, javascript, syntaxHighlighting, classHighlighter }) {
+  mount(cm) {
+    const { EditorView, basicSetup, javascript, syntaxHighlighting, classHighlighter } = cm;
     const lang = this.getAttribute("lang") ?? "js";
     this._view = new EditorView({
       doc: this._code.peek(),
       extensions: [
         basicSetup,
-        lang === "js" ? javascript() : [],
+        lang === "js" ? [javascript(), this.pageMarks(cm)] : [],
         syntaxHighlighting(classHighlighter),
         EditorView.contentAttributes.of({ "aria-label": this.getAttribute("label") ?? `${this._name ?? "code"} (${lang})` }),
         EditorView.updateListener.of((update) => {
@@ -3521,7 +3539,12 @@ class TCodeCell extends TangleElement {
           ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--tangle-accent)" },
           "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
             { backgroundColor: "color-mix(in srgb, var(--tangle-accent) 25%, transparent)" },
-          ".cm-gutters": { backgroundColor: "transparent", color: "inherit", border: "none", opacity: "0.45" },
+          // Opaque, so code scrolled sideways doesn't show through the sticky gutter.
+          ".cm-gutters": {
+            backgroundColor: "var(--tangle-surface)",
+            color: "color-mix(in srgb, currentColor 45%, transparent)",
+            border: "none",
+          },
           ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "color-mix(in srgb, var(--tangle-accent) 6%, transparent)" },
           ".cm-matchingBracket, &.cm-focused .cm-matchingBracket": {
             backgroundColor: "color-mix(in srgb, var(--tangle-accent) 20%, transparent)",
@@ -3532,6 +3555,51 @@ class TCodeCell extends TangleElement {
       ],
     });
     this._editor.replaceChildren(this._view.dom);
+  }
+
+  /** Keeps the names of the page's variables, and has the editor mark them again when they change. */
+  markPage(scope, names) {
+    const page = new Set(names.filter((name) => scope.slots.get(name).def.peek() !== undefined));
+    if (page.size === this._page.size && [...page].every((name) => this._page.has(name))) return;
+    this._page = page;
+    this._view?.dispatch({});
+  }
+
+  /**
+   * Marks the names in the code that come from the page, tinted like the values the reader
+   * changes in the prose. A name the code declares itself is its own, and isn't marked.
+   */
+  pageMarks({ ViewPlugin, Decoration, syntaxTree }) {
+    const cell = this;
+    const mark = Decoration.mark({ class: "t-codecell-page" });
+    const build = (state) => {
+      const own = new Set();
+      const uses = [];
+      syntaxTree(state).iterate({
+        enter({ name, from, to }) {
+          if (name === "VariableDefinition") own.add(state.sliceDoc(from, to));
+          else if (name === "VariableName") uses.push({ from, to, text: state.sliceDoc(from, to) });
+        },
+      });
+      const marks = uses.filter(({ text }) => cell._page.has(text) && !own.has(text));
+      return Decoration.set(marks.map(({ from, to }) => mark.range(from, to)));
+    };
+    return ViewPlugin.fromClass(
+      class {
+        constructor(view) {
+          this.page = cell._page;
+          this.decorations = build(view.state);
+        }
+        update(update) {
+          // The tree grows as the parser catches up, so a new tree is a reason too.
+          const tree = syntaxTree(update.state) !== syntaxTree(update.startState);
+          if (!update.docChanged && !tree && this.page === cell._page) return;
+          this.page = cell._page;
+          this.decorations = build(update.state);
+        }
+      },
+      { decorations: (plugin) => plugin.decorations },
+    );
   }
 
   /** Without CodeMirror (offline, say), a plain text area does the job. */
@@ -4782,6 +4850,1345 @@ class TFormulaDag extends TangleElement {
 }
 
 // ---------------------------------------------------------------------------
+// <t-flow>, without the DOM: checking the spec, inferring the arrows from what
+// each node reads and defines, layering, placing the nodes, and the geometry
+// of the arrows. Boxes are { left, right, top, bottom } in px, in a "frame"
+// where the layers stack top to bottom: for direction "right" the element
+// swaps x and y on the way in and out, so one router serves both directions.
+// ---------------------------------------------------------------------------
+
+const FLOW_SIDES = ["top", "bottom", "left", "right"];
+const FLOW_KEYS = ["direction", "align", "nodes", "edges", "groups", "infer", "edgeLabels"];
+const FLOW_NODE_KEYS = ["label", "note", "fold", "row", "beside", "width"];
+const FLOW_EDGE_KEYS = ["label", "exit", "enter", "color", "dashed"];
+const FLOW_GROUP_KEYS = ["label", "nodes", "collapsed"];
+const FLOW_ALIGNS = { down: ["center", "left", "right"], right: ["center", "top", "bottom"] };
+// Where an arrow leaves and lands when nothing says otherwise: out the far side, in at the near one.
+const FLOW_DEFAULT_SIDES = { down: ["bottom", "top"], right: ["right", "left"] };
+// A widget placed beside its anchor: [the widget's side facing the anchor, the anchor's side facing it].
+const FLOW_FACING = { down: ["left", "right"], right: ["top", "bottom"] };
+// A side's name in the transposed frame (and back: the map is its own inverse).
+const FLOW_FLIP = { top: "left", left: "top", bottom: "right", right: "bottom" };
+
+const flowFail = (message) => {
+  throw new Error(`t-flow: ${message}`);
+};
+const flowPlain = (v) => v != null && typeof v === "object" && !Array.isArray(v);
+const flowList = (items) => items.map((s) => `"${s}"`).join(", ");
+
+function flowKeys(obj, allowed, where) {
+  const extra = Object.keys(obj).filter((k) => !allowed.includes(k));
+  if (extra.length) flowFail(`${where} has unknown ${extra.length > 1 ? "keys" : "key"} ${flowList(extra)}; use ${flowList(allowed)}`);
+}
+
+/** One end of an arrow, `"left"` or `["left", 0.3]`, as { side, at } (at is null for "spread out"). */
+function flowPort(value, where) {
+  const [side, at = null] = Array.isArray(value) ? value : [value];
+  if (!FLOW_SIDES.includes(side)) flowFail(`${where} must be one of ${flowList(FLOW_SIDES)}, got ${JSON.stringify(side)}`);
+  if (at !== null && !(typeof at === "number" && at >= 0 && at <= 1)) {
+    flowFail(`${where}: the position must be a number from 0 to 1, got ${JSON.stringify(at)}`);
+  }
+  return { side, at };
+}
+
+/**
+ * Check a <t-flow> spec against the ids of its nodes, and fill in the
+ * defaults. Throws an Error that says what's wrong. Returns { direction,
+ * align, infer, edgeLabels, nodes: Map(id -> options), edges, groups }.
+ */
+function flowSpec(spec, ids) {
+  spec ??= {};
+  if (!flowPlain(spec)) flowFail("the spec must be an object");
+  flowKeys(spec, FLOW_KEYS, "the spec");
+  const known = new Set(ids);
+  const node = (id, where) => {
+    if (!known.has(id)) {
+      flowFail(`${where} names "${id}", which isn't a node. The nodes are ${ids.length ? flowList(ids) : "(none)"}`);
+    }
+    return id;
+  };
+
+  const direction = spec.direction ?? "down";
+  if (!(direction in FLOW_ALIGNS)) flowFail(`direction must be "down" or "right", got ${JSON.stringify(direction)}`);
+  const align = spec.align ?? "center";
+  if (!FLOW_ALIGNS[direction].includes(align)) {
+    flowFail(`with direction "${direction}", align must be one of ${flowList(FLOW_ALIGNS[direction])}, got ${JSON.stringify(align)}`);
+  }
+  for (const key of ["infer", "edgeLabels"]) {
+    if (spec[key] !== undefined && typeof spec[key] !== "boolean") flowFail(`${key} must be true or false`);
+  }
+
+  const nodes = new Map(ids.map((id) => [id, { label: null, note: null, fold: null, row: null, beside: null, width: null }]));
+  if (spec.nodes !== undefined && !flowPlain(spec.nodes)) flowFail("nodes must be an object, keyed by node id");
+  for (const [id, raw] of Object.entries(spec.nodes ?? {})) {
+    node(id, "nodes");
+    const c = typeof raw === "string" ? { label: raw } : raw;
+    if (!flowPlain(c)) flowFail(`nodes.${id} must be an object (or a string, its label)`);
+    flowKeys(c, FLOW_NODE_KEYS, `nodes.${id}`);
+    const n = nodes.get(id);
+    if (c.label != null) n.label = String(c.label);
+    if (c.note != null) n.note = String(c.note);
+    if (c.fold != null && c.fold !== false) {
+      if (![true, "open", "closed"].includes(c.fold)) flowFail(`nodes.${id}.fold must be true, "open" or "closed"`);
+      n.fold = c.fold === "closed" ? "closed" : "open";
+    }
+    if (c.row != null) {
+      if (!Number.isInteger(c.row) || c.row < 0) flowFail(`nodes.${id}.row must be a whole number from 0, got ${JSON.stringify(c.row)}`);
+      n.row = c.row;
+    }
+    if (c.beside != null) {
+      const [anchor, side = "after"] = Array.isArray(c.beside) ? c.beside : [c.beside];
+      node(anchor, `nodes.${id}.beside`);
+      if (side !== "before" && side !== "after") flowFail(`nodes.${id}.beside: the side must be "before" or "after"`);
+      if (anchor === id) flowFail(`nodes.${id} can't sit beside itself`);
+      n.beside = { anchor, before: side === "before" };
+    }
+    if (c.width != null) {
+      if (typeof c.width === "number") n.width = `${c.width}px`;
+      else if (typeof c.width === "string") n.width = c.width;
+      else flowFail(`nodes.${id}.width must be a number of pixels or a CSS length`);
+    }
+  }
+  for (const [id, n] of nodes) {
+    if (!n.beside) continue;
+    if (nodes.get(n.beside.anchor).beside) {
+      flowFail(`nodes.${id} sits beside "${n.beside.anchor}", which itself sits beside another node; anchor it on one that doesn't`);
+    }
+    if (n.row != null) flowFail(`nodes.${id} sits beside "${n.beside.anchor}", so it takes that row; give the row to "${n.beside.anchor}" instead`);
+  }
+
+  if (spec.edges !== undefined && !Array.isArray(spec.edges)) flowFail("edges must be a list of [from, to] or [from, to, options]");
+  const edges = [];
+  const seen = new Set();
+  for (const e of spec.edges ?? []) {
+    if (!Array.isArray(e) || e.length < 2 || e.length > 3) flowFail(`each edge must be [from, to] or [from, to, options], got ${JSON.stringify(e)}`);
+    const [src, dst, raw] = e;
+    const name = `[${JSON.stringify(src)}, ${JSON.stringify(dst)}]`;
+    node(src, `the edge ${name}`);
+    node(dst, `the edge ${name}`);
+    if (src === dst) flowFail(`the edge ${name} goes from a node to itself`);
+    if (seen.has(`${src} ${dst}`)) flowFail(`the edge ${name} is given twice`);
+    seen.add(`${src} ${dst}`);
+    if (raw === false) {
+      edges.push({ src, dst, drop: true, opts: {} });
+      continue;
+    }
+    const c = raw == null ? {} : typeof raw === "string" ? { label: raw } : raw;
+    if (!flowPlain(c)) flowFail(`the edge ${name}: options must be a label, an object, or false to drop it`);
+    flowKeys(c, FLOW_EDGE_KEYS, `the edge ${name}`);
+    const opts = {};
+    if (c.label != null) opts.label = String(c.label);
+    if (c.color != null) opts.color = String(c.color);
+    if (c.dashed) opts.dashed = true;
+    for (const k of ["exit", "enter"]) if (c[k] != null) opts[k] = flowPort(c[k], `the edge ${name}: ${k}`);
+    edges.push({ src, dst, drop: false, opts });
+  }
+
+  if (spec.groups !== undefined && !Array.isArray(spec.groups)) flowFail("groups must be a list of { label, nodes }");
+  const grouped = new Map();
+  const groups = (spec.groups ?? []).map((g, i) => {
+    if (!flowPlain(g)) flowFail(`groups[${i}] must be an object: { label, nodes, collapsed }`);
+    flowKeys(g, FLOW_GROUP_KEYS, `groups[${i}]`);
+    const label = String(g.label ?? `group ${i + 1}`);
+    if (!Array.isArray(g.nodes) || !g.nodes.length) flowFail(`the group "${label}" needs a list of nodes`);
+    const members = new Set(g.nodes.map((id) => node(id, `the group "${label}"`)));
+    for (const id of members) {
+      if (grouped.has(id)) flowFail(`"${id}" is in both the group "${grouped.get(id)}" and the group "${label}"`);
+      grouped.set(id, label);
+    }
+    return { id: `!g${i}`, label, members: ids.filter((id) => members.has(id)), collapsed: Boolean(g.collapsed) };
+  });
+
+  return { direction, align, infer: spec.infer ?? true, edgeLabels: spec.edgeLabels ?? false, nodes, edges, groups };
+}
+
+/**
+ * The arrows the data implies. `nodes` is [{ id, defines, reads }] (lists or
+ * Sets of variable names); `formulaReads` maps each formula variable to the
+ * variables it reads. A → B when B reads something A defines, also through
+ * formulas no node defines, and through the formulas B defines itself.
+ * Returns Map("src dst" -> Set of the variables of A it carries).
+ */
+function flowInfer(nodes, formulaReads = new Map()) {
+  const owner = new Map();
+  for (const n of nodes) for (const name of n.defines) if (!owner.has(name)) owner.set(name, n.id);
+  const edges = new Map();
+  for (const n of nodes) {
+    const seen = new Set();
+    const visit = (name) => {
+      if (seen.has(name)) return;
+      seen.add(name);
+      const o = owner.get(name);
+      if (o !== undefined) {
+        if (o !== n.id) {
+          const key = `${o} ${n.id}`;
+          if (!edges.has(key)) edges.set(key, new Set());
+          edges.get(key).add(name);
+        }
+        return;
+      }
+      for (const m of formulaReads.get(name) ?? []) visit(m);
+    };
+    for (const name of n.reads) visit(name);
+    for (const name of n.defines) {
+      seen.add(name);
+      for (const m of formulaReads.get(name) ?? []) visit(m);
+    }
+  }
+  return edges;
+}
+
+/** `edges` (a Map keyed "src dst") without the ones a longer path already implies. */
+function flowReduce(edges) {
+  const next = new Map();
+  for (const key of edges.keys()) {
+    const [s, d] = key.split(" ");
+    if (!next.has(s)) next.set(s, []);
+    next.get(s).push(d);
+  }
+  const out = new Map();
+  for (const [key, value] of edges) {
+    const [s, d] = key.split(" ");
+    const others = (next.get(s) ?? []).filter((c) => c !== d);
+    const implied = others.some((c) => c === d || dagReach(c, next).has(d));
+    if (!implied) out.set(key, value);
+  }
+  return out;
+}
+
+/**
+ * Every arrow to draw: the inferred ones (unless the spec says infer: false),
+ * with the spec's edges laid over them, in node order. Each is { src, dst,
+ * label, exit, enter, color, dashed, inferred }.
+ */
+function flowEdges(inferred, model, ids) {
+  const at = new Map(ids.map((id, i) => [id, i]));
+  const out = new Map();
+  if (model.infer) {
+    for (const [key, names] of inferred) {
+      const [src, dst] = key.split(" ");
+      out.set(key, { src, dst, label: model.edgeLabels ? [...names].join(", ") : null, inferred: true });
+    }
+  }
+  for (const e of model.edges) {
+    const key = `${e.src} ${e.dst}`;
+    if (e.drop) out.delete(key);
+    else out.set(key, { src: e.src, dst: e.dst, label: null, inferred: false, ...out.get(key), ...e.opts });
+  }
+  return [...out.values()].sort((p, q) => at.get(p.src) - at.get(q.src) || at.get(p.dst) - at.get(q.dst));
+}
+
+const flowCycleText = (cycle) => cycle.map((id) => `"${id}"`).join(" → ");
+
+/**
+ * Lay the graph out in rows, with the groups in `folded` folded to one pill
+ * each. Returns { rows, routes, rowOf, hidden }: `rows` top to bottom, each a
+ * list of cells { id, before, after, lane } (lane for an arrow skipping the
+ * row, before/after for nodes placed beside it); `routes` one per arrow,
+ * { edge, src, dst, chain, ported, exit, enter } with sides in real (not frame) terms.
+ * Throws when the arrows go round in a circle, or a group can't be folded.
+ */
+function flowGraph(ids, edges, model, folded = new Set()) {
+  const cycle = dagCycle(ids, edges.map((e) => [e.src, e.dst]));
+  if (cycle) flowFail(`the arrows go round in a circle: ${flowCycleText(cycle)}. Drop one with [from, to, false]`);
+  // A group folds into one pill, so nothing outside it may sit on a path between two of its nodes.
+  const down = new Map();
+  const up = new Map();
+  for (const e of edges) {
+    (down.get(e.src) ?? down.set(e.src, []).get(e.src)).push(e.dst);
+    (up.get(e.dst) ?? up.set(e.dst, []).get(e.dst)).push(e.src);
+  }
+  for (const g of model.groups) {
+    const reach = (next) => new Set(g.members.flatMap((m) => [...dagReach(m, next)]));
+    const below = reach(down);
+    const between = [...reach(up)].filter((id) => below.has(id) && !g.members.includes(id));
+    if (between.length) {
+      flowFail(`the group "${g.label}" must include "${between[0]}": it sits on a path between two of the group's nodes`);
+    }
+  }
+
+  const pillOf = new Map();
+  for (const g of model.groups) if (folded.has(g.id)) for (const m of g.members) pillOf.set(m, g.id);
+  const shown = (id) => pillOf.get(id) ?? id;
+  const visible = [];
+  for (const id of ids) {
+    const v = shown(id);
+    if (!visible.includes(v)) visible.push(v);
+  }
+  const hidden = new Set(pillOf.keys());
+
+  const beside = new Map();
+  for (const [id, n] of model.nodes) {
+    if (n.beside && !hidden.has(id) && !hidden.has(n.beside.anchor)) beside.set(id, n.beside);
+  }
+  const anchorOf = (id) => beside.get(id)?.anchor ?? id;
+  const [defaultExit, defaultEnter] = FLOW_DEFAULT_SIDES[model.direction];
+  const facing = FLOW_FACING[model.direction];
+
+  // Arrows into or out of a folded group land on its pill; two that now join the same pair are drawn once.
+  const routes = [];
+  const joined = new Set();
+  for (const e of edges) {
+    const src = shown(e.src);
+    const dst = shown(e.dst);
+    if (src === dst || joined.has(`${src} ${dst}`)) continue;
+    joined.add(`${src} ${dst}`);
+    let exit = src === e.src ? e.exit : undefined;
+    let enter = dst === e.dst ? e.enter : undefined;
+    if (exit && exit.side === defaultExit && exit.at === null) exit = undefined;
+    if (enter && enter.side === defaultEnter && enter.at === null) enter = undefined;
+    // An arrow between a node and the one it sits beside joins their facing sides.
+    let sides = null;
+    if (beside.get(src)?.anchor === dst) sides = beside.get(src).before ? [...facing].reverse() : facing;
+    else if (beside.get(dst)?.anchor === src) sides = beside.get(dst).before ? facing : [...facing].reverse();
+    if (sides) {
+      exit ??= { side: sides[0], at: null };
+      enter ??= { side: sides[1], at: null };
+    }
+    routes.push({ edge: e, src, dst, chain: null, ported: Boolean(exit || enter), exit, enter });
+  }
+
+  const layered = visible.filter((id) => !beside.has(id));
+  const layerEdges = [];
+  for (const r of routes) {
+    const s = anchorOf(r.src);
+    const d = anchorOf(r.dst);
+    if (s !== d) layerEdges.push({ r, pair: [s, d] });
+  }
+  const tied = dagCycle(layered, layerEdges.map((l) => l.pair));
+  if (tied) {
+    flowFail(`beside puts a node in its anchor's row, but the arrows then run in a circle (${flowCycleText(tied)}), so one would have to sit above the other`);
+  }
+  const minRows = new Map();
+  for (const id of layered) if (model.nodes.get(id)?.row != null) minRows.set(id, model.nodes.get(id).row);
+  const layerOf = dagLayers(layered, layerEdges.map((l) => l.pair), minRows);
+  const direct = new Set();
+  layerEdges.forEach((l, i) => l.r.ported && direct.add(i));
+  const { layers, routes: chains } = dagOrder(layered, layerOf, layerEdges.map((l) => l.pair), { direct });
+  layerEdges.forEach((l, i) => {
+    l.r.chain = [l.r.src, ...chains[i].slice(1, -1), l.r.dst];
+  });
+  for (const r of routes) r.chain ??= [r.src, r.dst];
+
+  const rowOf = new Map();
+  const rows = layers.map((layer, i) =>
+    layer.map((id) => {
+      rowOf.set(id, i);
+      return { id, lane: id.startsWith(DAG_WAYPOINT), before: [], after: [] };
+    }),
+  );
+  for (const [id, b] of beside) {
+    const row = rows[rowOf.get(b.anchor)];
+    row.find((c) => c.id === b.anchor)[b.before ? "before" : "after"].push(id);
+    rowOf.set(id, rowOf.get(b.anchor));
+  }
+  for (const row of rows) for (const c of row) c.before.reverse(); // nearest the anchor first, as given
+  return { rows, routes, rowOf, hidden };
+}
+
+/**
+ * Where each node goes, in frame coordinates. `size(id)` is { w, h }: w across
+ * the flow, h along it. Rows stack with `layerGap` between them; within a
+ * row, cells sit `nodeGap` apart. "center" centers each row on its own; any
+ * other align puts the k-th cell of every row in one column (counted from
+ * the far end for "right" and "bottom"), with the anchor on the column's
+ * center line, so a chain down a column gets straight arrows. Returns
+ * { pos: Map(id -> box), rowBoxes, width, height }.
+ */
+function flowPlace(rows, size, { align = "center", nodeGap = 40, layerGap = 64, lane = 14 } = {}) {
+  const sz = (cell, id) => (cell.lane ? { w: lane, h: 0 } : size(id));
+  const span = (ids) => ids.reduce((sum, id) => sum + size(id).w + nodeGap, 0);
+  const heights = rows.map((row) => Math.max(0, ...row.flatMap((c) => [c.id, ...c.before, ...c.after].map((id) => sz(c, id).h))));
+  const rowBoxes = [];
+  let y = 0;
+  for (const h of heights) {
+    rowBoxes.push({ top: y, bottom: y + h });
+    y += h + layerGap;
+  }
+  const height = Math.max(0, y - layerGap);
+  const pos = new Map();
+  const put = (cell, id, left, r) => {
+    const { w, h } = sz(cell, id);
+    const box = rowBoxes[r];
+    const top = cell.lane ? box.top : box.top + (box.bottom - box.top - h) / 2;
+    pos.set(id, { left, right: left + w, top, bottom: cell.lane ? box.bottom : top + h });
+  };
+  // Lay out one cell with its anchor's left edge at x: the before nodes run leftwards from it.
+  const putCell = (cell, x, r) => {
+    let left = x;
+    for (const id of cell.before) {
+      left -= nodeGap + size(id).w;
+      put(cell, id, left, r);
+    }
+    put(cell, cell.id, x, r);
+    let right = x + sz(cell, cell.id).w;
+    for (const id of cell.after) {
+      put(cell, id, right + nodeGap, r);
+      right += nodeGap + size(id).w;
+    }
+  };
+
+  let width = 0;
+  if (align === "center") {
+    const widths = rows.map((row) => row.reduce((sum, c) => sum + span(c.before) + sz(c, c.id).w + span(c.after), 0) + nodeGap * (row.length - 1));
+    width = Math.max(0, ...widths);
+    rows.forEach((row, r) => {
+      let x = (width - widths[r]) / 2;
+      for (const c of row) {
+        putCell(c, x + span(c.before), r);
+        x += span(c.before) + sz(c, c.id).w + span(c.after) + nodeGap;
+      }
+    });
+  } else {
+    const cols = Math.max(0, ...rows.map((row) => row.length));
+    const fromEnd = align === "right" || align === "bottom";
+    const colOf = (row, k) => (fromEnd ? cols - row.length + k : k);
+    const anchorW = Array(cols).fill(0);
+    const sideW = Array(cols).fill(0);
+    rows.forEach((row) =>
+      row.forEach((c, k) => {
+        const col = colOf(row, k);
+        anchorW[col] = Math.max(anchorW[col], sz(c, c.id).w);
+        sideW[col] = Math.max(sideW[col], span(c.before), span(c.after));
+      }),
+    );
+    const colX = [];
+    for (let k = 0; k < cols; k++) {
+      colX.push(width);
+      width += anchorW[k] + 2 * sideW[k] + (k < cols - 1 ? nodeGap : 0);
+    }
+    rows.forEach((row, r) =>
+      row.forEach((c, k) => {
+        const col = colOf(row, k);
+        const center = colX[col] + sideW[col] + anchorW[col] / 2;
+        putCell(c, center - sz(c, c.id).w / 2, r);
+      }),
+    );
+  }
+  return { pos, rowBoxes, width, height };
+}
+
+// ---- arrow geometry -----------------------------------------------------
+
+const FLOW_CORNER = 8;
+const FLOW_HEAD_LEN = 7;
+const FLOW_HEAD_HALF = 3.6;
+const FLOW_STUB = 16;
+const FLOW_CLEAR = 10;
+const FLOW_SLOT_GAP = 16; // closest an arrow tip may land to another arrow's straight drop
+const FLOW_SLOT_INSET = 6; // closest an arrow tip may land to a node's corner
+const FLOW_NORMAL = { top: [0, -1], bottom: [0, 1], left: [-1, 0], right: [1, 0] };
+
+const flowDist = (p, q) => Math.hypot(q.x - p.x, q.y - p.y);
+const flowDir = (p, q) => [Math.sign(Math.round(q.x - p.x)), Math.sign(Math.round(q.y - p.y))];
+const flowSame = (u, v) => u[0] === v[0] && u[1] === v[1];
+const flowFlat = (p, q) => Math.abs(p.y - q.y) < 0.5;
+const flowOverlap = (a0, a1, b0, b1) => Math.min(Math.max(a0, a1), Math.max(b0, b1)) - Math.max(Math.min(a0, a1), Math.min(b0, b1));
+const flowMid = (b) => (b.left + b.right) / 2;
+const flowPad = (b, pad) => ({ left: b.left - pad, right: b.right + pad, top: b.top - pad, bottom: b.bottom + pad });
+const flowOverlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+/** Does the axis-aligned segment p→q pass through box `o`? */
+function flowHits(p, q, o) {
+  if (flowFlat(p, q)) return p.y > o.top && p.y < o.bottom && Math.max(p.x, q.x) > o.left && Math.min(p.x, q.x) < o.right;
+  return p.x > o.left && p.x < o.right && Math.max(p.y, q.y) > o.top && Math.min(p.y, q.y) < o.bottom;
+}
+
+// How the leg p→q meets the polylines already drawn: legs it runs on top of, and legs it crosses.
+function flowMeets(p, q, lines) {
+  let along = 0;
+  let cross = 0;
+  for (const line of lines) {
+    for (let i = 1; i < line.length; i++) {
+      const [u, v] = [line[i - 1], line[i]];
+      if (flowFlat(p, q) === flowFlat(u, v)) {
+        const near = flowFlat(p, q)
+          ? Math.abs(p.y - u.y) < 6 && flowOverlap(p.x, q.x, u.x, v.x) > 2
+          : Math.abs(p.x - u.x) < 6 && flowOverlap(p.y, q.y, u.y, v.y) > 2;
+        if (near) along++;
+      } else {
+        const [h0, h1, w] = flowFlat(p, q) ? [p, q, u] : [u, v, p];
+        const [w0, w1] = flowFlat(p, q) ? [u, v] : [p, q];
+        if (w.x > Math.min(h0.x, h1.x) && w.x < Math.max(h0.x, h1.x) && h0.y > Math.min(w0.y, w1.y) && h0.y < Math.max(w0.y, w1.y)) cross++;
+      }
+    }
+  }
+  return { along, cross };
+}
+
+function flowSimplify(pts) {
+  const out = [];
+  for (const p of pts) {
+    const last = out[out.length - 1];
+    if (last && flowDist(last, p) < 0.5) continue;
+    if (last && Math.abs(last.x - p.x) > 0.5 && Math.abs(last.y - p.y) > 0.5) return null;
+    if (out.length > 1 && flowSame(flowDir(out[out.length - 2], last), flowDir(last, p))) out.pop();
+    out.push(p);
+  }
+  return out.length > 1 ? out : null;
+}
+
+/** Where an arrow end sits on a box: { x, y, nx, ny }, `out` px off the side, along its outward normal. */
+function flowPortPoint(box, side, at, out = 0) {
+  const [nx, ny] = FLOW_NORMAL[side];
+  const x = side === "left" ? box.left : side === "right" ? box.right : box.left + at * (box.right - box.left);
+  const y = side === "top" ? box.top : side === "bottom" ? box.bottom : box.top + at * (box.bottom - box.top);
+  return { x: x + nx * out, y: y + ny * out, nx, ny };
+}
+
+/**
+ * An axis-aligned route from exit point `a` to arrow tip `b` (each with its
+ * outward normal): the elbow shape with the fewest bends that leaves `a`
+ * along its normal and enters `b` against its own, preferring shapes clear of
+ * the `obstacles` and of the arrows already drawn (`lines`).
+ */
+function flowOrthoRoute(a, b, obstacles = [], lines = []) {
+  const d0 = [a.nx, a.ny];
+  const d1 = [-b.nx, -b.ny];
+  const p1 = { x: a.x + a.nx * FLOW_STUB, y: a.y + a.ny * FLOW_STUB };
+  const p2 = { x: b.x + b.nx * FLOW_STUB, y: b.y + b.ny * FLOW_STUB };
+  const legs = lines.flatMap((l) => l.slice(1).map((q, i) => [l[i], q]));
+  const yms = [
+    (p1.y + p2.y) / 2,
+    ...obstacles.flatMap((o) => [o.top - FLOW_CLEAR, o.bottom + FLOW_CLEAR]),
+    ...legs.filter(([u, v]) => flowFlat(u, v)).flatMap(([u]) => [u.y - FLOW_CLEAR, u.y + FLOW_CLEAR]),
+  ];
+  const xms = [
+    (p1.x + p2.x) / 2,
+    ...obstacles.flatMap((o) => [o.left - FLOW_CLEAR, o.right + FLOW_CLEAR]),
+    ...legs.filter(([u, v]) => !flowFlat(u, v)).flatMap(([u]) => [u.x - FLOW_CLEAR, u.x + FLOW_CLEAR]),
+  ];
+  const shapes = [
+    [],
+    [{ x: a.x, y: b.y }],
+    [{ x: b.x, y: a.y }],
+    [p1, { x: p1.x, y: p2.y }, p2],
+    [p1, { x: p2.x, y: p1.y }, p2],
+    ...yms.map((ym) => [p1, { x: p1.x, y: ym }, { x: p2.x, y: ym }, p2]),
+    ...xms.map((xm) => [p1, { x: xm, y: p1.y }, { x: xm, y: p2.y }, p2]),
+  ];
+  let best = null;
+  for (const mid of shapes) {
+    const pts = flowSimplify([a, ...mid, b]);
+    if (!pts) continue;
+    const dirs = pts.slice(1).map((q, i) => flowDir(pts[i], q));
+    if (!flowSame(dirs[0], d0) || !flowSame(dirs[dirs.length - 1], d1)) continue;
+    if (dirs.some((d, i) => i && d[0] === -dirs[i - 1][0] && d[1] === -dirs[i - 1][1])) continue;
+    if (flowDist(pts[pts.length - 2], b) < FLOW_HEAD_LEN + 3) continue;
+    let len = 0;
+    let blocked = 0;
+    let along = 0;
+    let cross = 0;
+    for (let i = 1; i < pts.length; i++) {
+      len += flowDist(pts[i - 1], pts[i]);
+      for (const o of obstacles) if (flowHits(pts[i - 1], pts[i], o)) blocked++;
+      const m = flowMeets(pts[i - 1], pts[i], lines);
+      along += m.along;
+      cross += m.cross;
+    }
+    const score = blocked * 1e6 + along * 1e5 + (pts.length - 2) * 1000 + cross * 300 + len;
+    if (!best || score < best.score) best = { pts, score };
+  }
+  return best ? best.pts : [a, p1, { x: p1.x, y: p2.y }, p2, b];
+}
+
+/** An SVG path through `pts` with rounded corners. */
+function flowRounded(pts) {
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [p, c, n] = [pts[i - 1], pts[i], pts[i + 1]];
+    const r = Math.min(FLOW_CORNER, flowDist(p, c) / 2, flowDist(c, n) / 2);
+    const u = flowDir(p, c);
+    const v = flowDir(c, n);
+    d += ` L ${c.x - u[0] * r} ${c.y - u[1] * r} Q ${c.x} ${c.y} ${c.x + v[0] * r} ${c.y + v[1] * r}`;
+  }
+  const last = pts[pts.length - 1];
+  return `${d} L ${last.x} ${last.y}`;
+}
+
+/** A filled arrowhead with its tip at `b`, pointing along the unit vector `d`. */
+function flowHead(b, d) {
+  const bx = b.x - d[0] * FLOW_HEAD_LEN;
+  const by = b.y - d[1] * FLOW_HEAD_LEN;
+  const [qx, qy] = [-d[1] * FLOW_HEAD_HALF, d[0] * FLOW_HEAD_HALF];
+  return `M ${b.x} ${b.y} L ${bx + qx} ${by + qy} L ${bx - qx} ${by - qy} Z`;
+}
+
+/**
+ * Label spots beside the long legs of a polyline, longest first: { x, y, h, v }
+ * where h and v say which way the label extends ("after" = towards +x/+y).
+ */
+function flowAlong(line) {
+  const legs = line
+    .slice(1)
+    .map((q, i) => [line[i], q])
+    .filter(([p, q]) => flowDist(p, q) > 28);
+  legs.sort((u, v) => flowDist(v[0], v[1]) - flowDist(u[0], u[1]));
+  return legs.flatMap(([p, q]) => {
+    const [mx, my] = [(p.x + q.x) / 2, (p.y + q.y) / 2];
+    return flowFlat(p, q)
+      ? [{ x: mx, y: my - 4, h: "center", v: "before" }, { x: mx, y: my + 4, h: "center", v: "after" }]
+      : [{ x: mx + 6, y: my, h: "after", v: "center" }, { x: mx - 6, y: my, h: "before", v: "center" }];
+  });
+}
+
+/**
+ * Where the arrows landing on one edge of a box (from `left` to `right`)
+ * touch it, given where each comes from (`froms`, sorted): spread across the
+ * middle, except that an arrow whose source is right above drops straight
+ * down and the others make room for it.
+ */
+function flowSlots(froms, left, right) {
+  const n = froms.length;
+  const center = (left + right) / 2;
+  const span = Math.min((right - left) * 0.6, 40 * n);
+  const xs = froms.map((_, k) => center - span / 2 + (span * (k + 0.5)) / n);
+  const lo0 = left + FLOW_SLOT_INSET;
+  const hi0 = right - FLOW_SLOT_INSET;
+  const straight = [];
+  froms.forEach((from, k) => {
+    const ok = from - lo0 >= FLOW_SLOT_GAP * (k + 1) && hi0 - from >= FLOW_SLOT_GAP * (n - k);
+    if (ok && straight.every((j) => from - froms[j] >= 2 * FLOW_SLOT_GAP)) straight.push(k);
+  });
+  for (const k of straight) xs[k] = froms[k];
+  for (let k = 0; k < n; k++) {
+    if (straight.includes(k)) continue;
+    let e = k;
+    while (e + 1 < n && !straight.includes(e + 1)) e++;
+    const lo = k > 0 ? xs[k - 1] : lo0;
+    const hi = e + 1 < n ? xs[e + 1] : hi0;
+    const fits = xs.slice(k, e + 1).every((x) => x > lo + (k > 0 ? FLOW_SLOT_GAP : 0) && x < hi - (e + 1 < n ? FLOW_SLOT_GAP : 0));
+    if (!fits) for (let j = k; j <= e; j++) xs[j] = lo + ((hi - lo) * (j - k + 1)) / (e - k + 2);
+    k = e;
+  }
+  return xs;
+}
+
+/**
+ * The order to stack the horizontal tracks in one gap between rows, fewest
+ * crossings first. `bySrc` maps a source to its jogs [{ from, to }]; `seed`
+ * is the order to start from (and keep, past `cap` sources).
+ */
+function flowTracks(seed, bySrc, cap = 7) {
+  const inside = (x, s) => x > Math.min(s.from, s.to) + 0.5 && x < Math.max(s.from, s.to) - 0.5;
+  const above = (P, Q) => {
+    let n = 0;
+    for (const p of P) for (const q of Q) n += inside(q.from, p) + inside(p.to, q);
+    return n;
+  };
+  const cost = (order) => {
+    let n = 0;
+    for (let i = 0; i < order.length; i++) for (let j = i + 1; j < order.length; j++) n += above(bySrc.get(order[i]), bySrc.get(order[j]));
+    return n;
+  };
+  if (seed.length > cap) return seed;
+  let best = seed;
+  let bestCost = cost(seed);
+  for (const order of dagPermutations(seed)) {
+    if (bestCost === 0) break;
+    const c = cost(order);
+    if (c < bestCost) [best, bestCost] = [order, c];
+  }
+  return best;
+}
+
+// ---------------------------------------------------------------------------
+// <t-flow>: live elements laid out as a DAG. Each child is a node; an arrow
+// runs from one node to another when the second reads a variable the first
+// defines. A spec in a <script type="text/plain"> adds, restyles or drops
+// arrows, and places, labels, annotates and folds the nodes.
+// ---------------------------------------------------------------------------
+
+// Children that aren't nodes: they show nothing (t-var, t-let and t-fetch
+// still define variables, which the arrows look through).
+const FLOW_SKIP = new Set(["SCRIPT", "STYLE", "TEMPLATE", "LINK", "META", "T-VAR", "T-LET", "T-FETCH"]);
+const FLOW_PADDING = { across: 24, along: 14 }; // around the board, in frame terms
+const FLOW_GAP = 3; // between an arrow tip and the node it points at
+const FLOW_SHIFT = { after: "0", before: "-100%", center: "-50%" };
+const FLOW_CHEVRON = '<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2.5 3.75 L5 6.25 L7.5 3.75"/></svg>';
+const flowDiv = (className, text) => {
+  const el = Object.assign(document.createElement("div"), { className });
+  if (text != null) el.textContent = text;
+  return el;
+};
+const flowCalm = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/** The variables the elements in `root` define in `scope`, in document order. */
+function flowNamesIn(root, scope) {
+  const out = [];
+  const add = (name) => name && !out.includes(name) && out.push(name);
+  for (const el of [root, ...root.querySelectorAll("*")]) {
+    const tag = el.localName;
+    if (!tag.startsWith("t-") || tag === "t-out" || tag === "t-tag" || scopeOf(el) !== scope) continue;
+    add(el.getAttribute("name"));
+    if (tag === "t-fetch" || tag === "t-codecell") {
+      add(el.getAttribute("error"));
+      add(el.getAttribute("loading"));
+    }
+    if (tag === "t-formula-dag") {
+      for (const f of el._model?.formulas ?? []) if (f.value != null) add(f.name);
+      for (const p of el._model?.params ?? []) add(p.name);
+    }
+  }
+  return out;
+}
+
+// <t-flow>
+//   <p>Angle <t-num name="angle" min="5" max="85">35</t-num>°</p>
+//   <t-codecell name="path">…reads angle…</t-codecell>
+//   <t-obsplot>…reads path…</t-obsplot>
+//   <script type="text/plain">{ nodes: { path: { label: "simulate" } } }</script>
+// </t-flow>
+class TFlow extends TangleElement {
+  connectedCallback() {
+    // The children have to be there: wait for them if the page is still loading.
+    if (document.readyState === "loading" && this._model === undefined) {
+      document.addEventListener("DOMContentLoaded", () => this.isConnected && this.connectedCallback(), { once: true });
+      return;
+    }
+    if (this._model === undefined) {
+      try {
+        this.build();
+      } catch (error) {
+        this._model = null;
+        this.showError(error);
+      }
+    }
+    if (!this._model) return;
+    this._valueFx = new Map();
+    this._resize = new ResizeObserver(() => this.schedule("layout"));
+    for (const item of this._items.values()) this._resize.observe(item);
+    this._stopGraph = effect(() => {
+      graphVersion.value;
+      untracked(() => this.schedule("graph"));
+    });
+    this.schedule("graph");
+  }
+
+  disconnectedCallback() {
+    this._resize?.disconnect();
+    this._stopGraph?.();
+    for (const stop of this._valueFx?.values() ?? []) stop();
+    this._valueFx?.clear();
+    cancelAnimationFrame(this._frame);
+    this._frame = null;
+    super.disconnectedCallback();
+  }
+
+  showError(error) {
+    this._error ??= flowDiv("tangle-flow-error");
+    this._error.textContent = error.message;
+    if (!this._error.isConnected) this.prepend(this._error);
+  }
+
+  // ---- the arrows, as data --------------------------------------------------
+
+  /** [from, to] pairs: the arrows drawn, by node id. */
+  get edges() {
+    return (this._edges ?? []).map((e) => [e.src, e.dst]);
+  }
+  /** The nodes that feed `id`, directly or not. */
+  upstream(id) {
+    return [...dagReach(id, this.adjacency("dst", "src"))];
+  }
+  /** The nodes `id` feeds, directly or not. */
+  downstream(id) {
+    return [...dagReach(id, this.adjacency("src", "dst"))];
+  }
+  adjacency(from, to) {
+    const next = new Map();
+    for (const e of this._edges ?? []) {
+      if (!next.has(e[from])) next.set(e[from], []);
+      next.get(e[from]).push(e[to]);
+    }
+    return next;
+  }
+
+  // ---- building -------------------------------------------------------------
+
+  /** Read the spec, then wrap each child in an absolutely placed item. Runs once. */
+  build() {
+    const scope = this.scope;
+    const kids = [...this.children].filter((el) => !FLOW_SKIP.has(el.tagName) && !el.classList.contains("tangle-flow-error"));
+    const ids = kids.map((el, i) => {
+      if (el.id) return el.id;
+      const names = flowNamesIn(el, scope);
+      return names.length === 1 ? names[0] : `n${i}`;
+    });
+    const dup = ids.find((id, i) => ids.indexOf(id) !== i);
+    if (dup) throw new Error(`t-flow: two nodes are both "${dup}"; give one of them an id="…"`);
+    const source = this.querySelector(':scope > script[type="text/plain"]')?.textContent ?? "";
+    let spec = {};
+    if (source.trim()) {
+      try {
+        spec = untracked(() => evalWith(scope, source, {}));
+      } catch (error) {
+        throw new Error(`t-flow: the spec: ${error.message}`);
+      }
+    }
+    const model = flowSpec(spec, ids);
+    this._ids = ids;
+    this._edges = [];
+    this._defines = new Map();
+    this._folded = new Set([
+      ...ids.filter((id) => model.nodes.get(id).fold === "closed"),
+      ...model.groups.filter((g) => g.collapsed).map((g) => g.id),
+    ]);
+
+    const T = model.direction === "right";
+    const root = flowDiv("tangle-flow");
+    root.dataset.direction = model.direction;
+    const board = flowDiv("tangle-flow-board");
+    const svg = svgNode("svg", { class: "tangle-flow-svg", "aria-hidden": "true" });
+    const frame = svgNode("g", T ? { transform: "matrix(0 1 1 0 0 0)" } : {});
+    this._frames = svgNode("g", {});
+    this._canvas = svgNode("g", {});
+    frame.append(this._frames, this._canvas);
+    svg.append(frame);
+    board.append(svg);
+
+    this._items = new Map();
+    this._nodes = new Map();
+    this._bodies = new Map();
+    this._notes = new Map();
+    this._folds = new Map();
+    if (kids.length) kids[0].before(root);
+    else this.append(root);
+    kids.forEach((el, i) => {
+      const id = ids[i];
+      const opts = model.nodes.get(id);
+      const body = flowDiv("tangle-flow-body");
+      if (opts.width) body.style.width = opts.width;
+      body.append(el);
+      const node = flowDiv("tangle-flow-node");
+      node.append(body);
+      if (opts.label) node.append(flowDiv("tangle-flow-caption", opts.label));
+      if (opts.fold) {
+        // Folded, a node shows only its caption: the id stands in when it has none.
+        if (!opts.label) node.append(flowDiv("tangle-flow-caption tangle-flow-fold-label", id));
+        node.append(this.foldButton(id, opts.label ?? id));
+      }
+      const item = flowDiv("tangle-flow-item");
+      item.dataset.flowNode = id;
+      item.append(node);
+      if (opts.note) {
+        const note = flowDiv("tangle-flow-note");
+        this.noteContent(note, opts.note);
+        item.append(note);
+        this._notes.set(id, note);
+      }
+      board.append(item);
+      this._items.set(id, item);
+      this._nodes.set(id, node);
+      this._bodies.set(id, body);
+    });
+
+    // A group folds into a pill that waits, hidden, until it's needed; open, it has a tab.
+    this._tabs = new Map();
+    const tabs = flowDiv("tangle-flow-tabs");
+    for (const g of model.groups) {
+      const node = flowDiv("tangle-flow-node is-folded is-pill");
+      node.append(flowDiv("tangle-flow-caption", g.label), this.foldButton(g.id, g.label));
+      const item = flowDiv("tangle-flow-item");
+      item.dataset.flowNode = g.id;
+      item.append(node);
+      board.append(item);
+      this._items.set(g.id, item);
+      this._nodes.set(g.id, node);
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "tangle-flow-tab";
+      tab.innerHTML = FLOW_CHEVRON;
+      tab.append(g.label);
+      tab.setAttribute("aria-label", `Hide ${g.label}`);
+      tab.addEventListener("click", () => this.toggle(g.id));
+      tabs.append(tab);
+      this._tabs.set(g.id, tab);
+    }
+    this._labels = flowDiv("tangle-flow-labels");
+    board.append(this._labels, tabs);
+    root.append(board);
+    this._root = root;
+    this._board = board;
+    this._model = model;
+    this.applyFolds();
+  }
+
+  foldButton(id, label) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tangle-flow-fold";
+    button.innerHTML = FLOW_CHEVRON;
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.toggle(id);
+    });
+    this._folds.set(id, { button, label });
+    return button;
+  }
+
+  /** Note text: plain, with **bold** and $math$ (KaTeX loads only for notes that have some). */
+  noteContent(el, text) {
+    for (const part of noteParts(text)) {
+      if (part.math !== undefined) {
+        const span = document.createElement("span");
+        span.textContent = part.math;
+        el.append(span);
+        loadKatex().then((katex) => {
+          katex.render(part.math, span, { throwOnError: false });
+          this.schedule("layout");
+        }, () => {});
+      } else if (part.bold !== undefined) {
+        el.append(Object.assign(document.createElement("strong"), { textContent: part.bold }));
+      } else {
+        el.append(part.text);
+      }
+    }
+  }
+
+  // ---- what reads what ------------------------------------------------------
+
+  /** The id of the node `el` sits in (in this flow, not one nested in it). */
+  nodeOf(el) {
+    let item = el.closest?.(".tangle-flow-item");
+    while (item && item.parentElement !== this._board) item = item.parentElement?.closest(".tangle-flow-item");
+    return item?.dataset.flowNode;
+  }
+
+  /** Work out the arrows from what each node reads and defines right now; lay out again if they changed. */
+  updateGraph() {
+    const scope = this.scope;
+    const nodes = untracked(() => {
+      const names = new Map(); // a variable's def signal and cell -> its name
+      for (const [name, slot] of scope.slots) {
+        names.set(slot.def, name);
+        names.set(slot.cell, name);
+      }
+      const formulaReads = new Map();
+      for (const [name, slot] of scope.slots) {
+        if (!(slot.def.peek() instanceof Formula)) continue;
+        formulaReads.set(name, [...slot.cell.deps].map((d) => names.get(d)).filter((n) => n !== undefined && n !== name));
+      }
+      const reads = new Map(this._ids.map((id) => [id, new Set()]));
+      for (const el of watchers) {
+        const id = this.nodeOf(el);
+        if (!reads.has(id)) continue;
+        for (const e of el._effects ?? []) {
+          for (const d of e.deps) if (names.has(d)) reads.get(id).add(names.get(d));
+        }
+      }
+      const nodes = this._ids.map((id) => ({ id, defines: flowNamesIn(this._bodies.get(id), scope), reads: reads.get(id) }));
+      nodes.formulaReads = formulaReads;
+      return nodes;
+    });
+    this._defines = new Map(nodes.map((n) => [n.id, n.defines]));
+    this.watchValues();
+    const edges = flowEdges(flowReduce(flowInfer(nodes, nodes.formulaReads)), this._model, this._ids);
+    const key = JSON.stringify(edges);
+    if (key === this._edgesKey) return;
+    this._edgesKey = key;
+    this._edges = edges;
+    this.schedule("layout");
+  }
+
+  /** One effect per variable a node defines: what reads what can change with the values. */
+  watchValues() {
+    const scope = this.scope;
+    for (const names of this._defines.values()) {
+      for (const name of names) {
+        if (this._valueFx.has(name)) continue;
+        let first = true;
+        this._valueFx.set(name, effect(() => {
+          try {
+            scope.get(name);
+          } catch {} // a failing formula still counts as a change
+          if (first) {
+            first = false;
+            return;
+          }
+          untracked(() => this.schedule("graph"));
+        }));
+      }
+    }
+  }
+
+  /** Run updateGraph and/or relayout on the next frame, once however often it's asked. */
+  schedule(what) {
+    (this._need ??= new Set()).add(what);
+    if (this._frame) return;
+    this._frame = requestAnimationFrame(() => {
+      const need = this._need;
+      this._need = new Set();
+      if (this.isConnected && this._model) {
+        if (need.has("graph")) this.updateGraph();
+        if (this._need.delete("layout") || need.has("layout")) this.relayout();
+      }
+      this._frame = null;
+      // Whatever that asked for again waits for the next frame.
+      const rest = [...this._need];
+      this._need = new Set();
+      for (const w of rest) this.schedule(w);
+    });
+  }
+
+  // ---- folding ----------------------------------------------------------------
+
+  applyFolds() {
+    const model = this._model;
+    const away = new Set();
+    for (const g of model.groups) {
+      if (this._folded.has(g.id)) g.members.forEach((m) => away.add(m));
+      else away.add(g.id);
+    }
+    for (const [id, item] of this._items) {
+      item.classList.toggle("is-away", away.has(id));
+      const node = this._nodes.get(id);
+      if (!node.classList.contains("is-pill")) node.classList.toggle("is-folded", this._folded.has(id));
+    }
+    for (const [id, { button, label }] of this._folds) {
+      const open = !this._folded.has(id);
+      button.setAttribute("aria-expanded", String(open));
+      button.setAttribute("aria-label", `${open ? "Hide" : "Show"} ${label}`);
+    }
+  }
+
+  /** Fold `id` (a node or a group) if it's open, open it if it's folded. */
+  toggle(id) {
+    if (!this._model) return;
+    if (this._folded.has(id)) this._folded.delete(id);
+    else this._folded.add(id);
+    const wasAway = new Set([...this._items].filter(([, item]) => item.classList.contains("is-away")).map(([k]) => k));
+    const animate = !flowCalm();
+    if (animate) {
+      // The nodes that stay glide to their new places; the arrows fade out and back.
+      this._root.classList.add("is-moving");
+      clearTimeout(this._moving);
+      this._moving = setTimeout(() => this._root.classList.remove("is-moving"), 240);
+    }
+    this.applyFolds();
+    this.relayout();
+    if (animate) {
+      for (const [k, item] of this._items) {
+        if (wasAway.has(k) && !item.classList.contains("is-away")) {
+          item.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, delay: 40, easing: "ease-out", fill: "backwards" });
+        }
+      }
+    }
+  }
+
+  // ---- layout -----------------------------------------------------------------
+
+  relayout() {
+    if (!this._board || !this.isConnected) return;
+    const model = this._model;
+    const T = model.direction === "right";
+    let graph;
+    try {
+      graph = flowGraph(this._ids, this._edges, model, this._folded);
+      this._graphError?.remove();
+    } catch (error) {
+      this._graphError ??= flowDiv("tangle-flow-error");
+      this._graphError.textContent = error.message;
+      this._root.before(this._graphError);
+      graph = flowGraph(this._ids, [], model, this._folded);
+    }
+    this._graph = graph;
+    const style = getComputedStyle(this._root);
+    const px = (name, fallback) => {
+      const v = parseFloat(style.getPropertyValue(name));
+      return Number.isFinite(v) ? v : fallback;
+    };
+    const sizes = new Map();
+    const size = (id) => {
+      if (!sizes.has(id)) {
+        const item = this._items.get(id);
+        const [w, h] = [item.offsetWidth, item.offsetHeight];
+        sizes.set(id, T ? { w: h, h: w } : { w, h });
+      }
+      return sizes.get(id);
+    };
+    const place = flowPlace(graph.rows, size, {
+      align: model.align,
+      nodeGap: px("--tangle-flow-node-gap", 40),
+      layerGap: px("--tangle-flow-layer-gap", 56),
+    });
+    const { across, along } = FLOW_PADDING;
+    const shift = (b) => ({ left: b.left + across, right: b.right + across, top: b.top + along, bottom: b.bottom + along });
+    this._pos = new Map();
+    for (const [id, b] of place.pos) {
+      const f = shift(b);
+      this._pos.set(id, f);
+      if (id.startsWith(DAG_WAYPOINT)) continue;
+      const item = this._items.get(id);
+      item.style.left = `${T ? f.top : f.left}px`;
+      item.style.top = `${T ? f.left : f.top}px`;
+    }
+    this._rowBoxes = place.rowBoxes.map((r) => ({ top: r.top + along, bottom: r.bottom + along }));
+    const [w, h] = [place.width + 2 * across, place.height + 2 * along];
+    this._board.style.width = `${T ? h : w}px`;
+    this._board.style.height = `${T ? w : h}px`;
+    this.draw();
+  }
+
+  /** A box measured on the board, in frame terms. */
+  frameBox(left, top, width, height) {
+    const b = { left, right: left + width, top, bottom: top + height };
+    return this._model.direction === "right" ? { left: b.top, right: b.bottom, top: b.left, bottom: b.right } : b;
+  }
+
+  draw() {
+    const T = this._model.direction === "right";
+    const graph = this._graph;
+    this._canvas.replaceChildren();
+    this._frames.replaceChildren();
+    this._labels.replaceChildren();
+    const fside = (side) => (T ? FLOW_FLIP[side] : side);
+
+    // Every node's box (not its note's), every note's, every lane's.
+    const boxOf = new Map();
+    const noteBox = new Map();
+    for (const [id, f] of this._pos) {
+      if (id.startsWith(DAG_WAYPOINT)) {
+        boxOf.set(id, f);
+        continue;
+      }
+      const item = this._items.get(id);
+      const node = this._nodes.get(id);
+      const [x, y] = [parseFloat(item.style.left), parseFloat(item.style.top)];
+      boxOf.set(id, this.frameBox(x + node.offsetLeft, y + node.offsetTop, node.offsetWidth, node.offsetHeight));
+      const note = this._notes.get(id);
+      if (note) noteBox.set(id, this.frameBox(x + note.offsetLeft, y + note.offsetTop, note.offsetWidth, note.offsetHeight));
+    }
+    const rowOf = graph.rowOf;
+    const rowBoxes = this._rowBoxes;
+    const lines = []; // every polyline drawn, so later arrows and labels keep clear of them
+    const pending = []; // labels to place once every arrow is down
+
+    // Arrows are drawn one source at a time, each line over a halo of the
+    // background, so where a later arrow crosses an earlier one there's a gap.
+    const bySource = new Map();
+    const drawEdge = (r, d, head) => {
+      if (!bySource.has(r.src)) {
+        const g = svgNode("g", {});
+        const halos = svgNode("g", {});
+        const strokes = svgNode("g", {});
+        g.append(halos, strokes);
+        this._canvas.append(g);
+        bySource.set(r.src, { halos, strokes });
+      }
+      const { halos, strokes } = bySource.get(r.src);
+      const line = svgNode("path", { class: "tangle-flow-edge", d });
+      const tip = svgNode("path", { class: "tangle-flow-head", d: head });
+      if (r.edge.color) {
+        line.style.stroke = r.edge.color;
+        tip.style.fill = tip.style.stroke = r.edge.color;
+      }
+      if (r.edge.dashed) line.style.strokeDasharray = "5 4";
+      halos.append(svgNode("path", { class: "tangle-flow-halo", d }));
+      strokes.append(line, tip);
+    };
+
+    const shown = graph.routes.filter((r) => boxOf.has(r.src) && boxOf.has(r.dst));
+    const ported = shown.filter((r) => r.ported);
+    const arrows = shown
+      .filter((r) => !r.ported)
+      .map((r) => ({ r, xs: [flowMid(boxOf.get(r.src)), ...r.chain.slice(1, -1).map((w) => flowMid(boxOf.get(w)))] }));
+    const ends = ported.map((r) => ({
+      r,
+      exit: r.exit ? { side: fside(r.exit.side), at: r.exit.at } : { side: "bottom", at: null },
+      enter: r.enter ? { side: fside(r.enter.side), at: r.enter.at } : { side: "top", at: null },
+    }));
+
+    // 1. Each arrow landing on a node's top edge gets its own slot there, ordered by where it comes from.
+    const incoming = new Map();
+    const land = (dst, entry) => (incoming.get(dst) ?? incoming.set(dst, []).get(dst)).push(entry);
+    for (const a of arrows) land(a.r.dst, { a, from: a.xs.at(-1) });
+    for (const e of ends) {
+      if (e.enter.side !== "top" || e.enter.at != null) continue;
+      const s = boxOf.get(e.r.src);
+      const from = e.exit.side === "left" ? s.left : e.exit.side === "right" ? s.right : s.left + (e.exit.at ?? 0.5) * (s.right - s.left);
+      land(e.r.dst, { e, from });
+    }
+    for (const [dst, list] of incoming) {
+      const b = boxOf.get(dst);
+      list.sort((p, q) => p.from - q.from);
+      const xs = flowSlots(list.map((l) => l.from), b.left, b.right);
+      list.forEach((item, k) => {
+        if (item.e) item.e.enter.at = (xs[k] - b.left) / (b.right - b.left);
+        else {
+          item.a.xs.push(xs[k]);
+          item.a.labelLeft = list.length > 1 && k < (list.length - 1) / 2;
+        }
+      });
+    }
+
+    // 2. One horizontal track per source in each gap it jogs through, so the
+    //    arrows from one node share a bus, stacked with the fewest crossings.
+    const jogs = new Map();
+    for (const a of arrows) {
+      a.xs.forEach((x, k) => {
+        if (k === a.xs.length - 1 || Math.abs(a.xs[k + 1] - x) < 1) return;
+        const gap = rowOf.get(a.r.chain[k]);
+        if (!jogs.has(gap)) jogs.set(gap, new Map());
+        const bySrc = jogs.get(gap);
+        if (!bySrc.has(a.r.src)) bySrc.set(a.r.src, []);
+        bySrc.get(a.r.src).push({ from: x, to: a.xs[k + 1] });
+      });
+    }
+    const tracks = new Map();
+    for (const [gap, bySrc] of jogs) {
+      const seed = [...bySrc.keys()].sort((p, q) => flowMid(boxOf.get(p)) - flowMid(boxOf.get(q)));
+      tracks.set(gap, flowTracks(seed, bySrc));
+    }
+    const trackY = (gap, src) => {
+      const top = rowBoxes[gap].bottom;
+      const list = tracks.get(gap);
+      return top + ((rowBoxes[gap + 1].top - top) * (list.indexOf(src) + 1)) / (list.length + 1);
+    };
+
+    // 3. Down out of the source, along the track, down into the target.
+    for (const a of arrows) {
+      const y0 = boxOf.get(a.r.src).bottom;
+      let d = `M ${a.xs[0]} ${y0}`;
+      const line = [{ x: a.xs[0], y: y0 }];
+      let lastY = rowBoxes[rowOf.get(a.r.dst) - 1]?.bottom ?? y0;
+      a.xs.forEach((x, k) => {
+        if (k === a.xs.length - 1) return;
+        const next = a.xs[k + 1];
+        if (Math.abs(next - x) < 1) return;
+        const ty = trackY(rowOf.get(a.r.chain[k]), a.r.src);
+        const s = Math.sign(next - x);
+        const r = Math.min(FLOW_CORNER, Math.abs(next - x) / 2);
+        d += ` L ${x} ${ty - r} Q ${x} ${ty} ${x + s * r} ${ty}`;
+        d += ` L ${next - s * r} ${ty} Q ${next} ${ty} ${next} ${ty + r}`;
+        line.push({ x, y: ty }, { x: next, y: ty });
+        lastY = Math.max(lastY, ty);
+      });
+      const end = a.xs.at(-1);
+      const tip = { x: end, y: boxOf.get(a.r.dst).top - FLOW_GAP };
+      d += ` L ${end} ${tip.y - FLOW_HEAD_LEN * 0.8}`;
+      line.push(tip);
+      lines.push(line);
+      drawEdge(a.r, d, flowHead(tip, [0, 1]));
+      if (a.r.edge.label) {
+        const m = (lastY + tip.y) / 2;
+        const side = (left) => ({ x: left ? end - 6 : end + 6, y: m, h: left ? "before" : "after", v: "center" });
+        pending.push({ text: a.r.edge.label, options: [side(a.labelLeft), side(!a.labelLeft), ...flowAlong(line)] });
+      }
+    }
+
+    // 4. Arrows with ports: an elbow route between the named sides, around
+    //    every other node, note and arrow. Ends sharing a side spread along it.
+    const shared = new Map();
+    for (const e of ends) {
+      for (const [k, id, far] of [["exit", e.r.src, e.r.dst], ["enter", e.r.dst, e.r.src]]) {
+        if (e[k].at != null) continue;
+        const key = `${id} ${e[k].side}`;
+        (shared.get(key) ?? shared.set(key, []).get(key)).push({ end: e[k], far });
+      }
+    }
+    for (const list of shared.values()) {
+      const horiz = ["top", "bottom"].includes(list[0].end.side);
+      const c = (id) => (horiz ? flowMid(boxOf.get(id)) : (boxOf.get(id).top + boxOf.get(id).bottom) / 2);
+      list.sort((p, q) => c(p.far) - c(q.far));
+      list.forEach((x, k) => (x.end.at = list.length === 1 ? 0.5 : 0.2 + (0.6 * (k + 0.5)) / list.length));
+    }
+    const nodeBoxes = [...boxOf].filter(([id]) => !id.startsWith(DAG_WAYPOINT));
+    for (const e of ends) {
+      const a = flowPortPoint(boxOf.get(e.r.src), e.exit.side, e.exit.at, 0);
+      const b = flowPortPoint(boxOf.get(e.r.dst), e.enter.side, e.enter.at, FLOW_GAP);
+      const obstacles = [
+        ...nodeBoxes.filter(([id]) => id !== e.r.src && id !== e.r.dst).map(([, box]) => flowPad(box, 4)),
+        ...[...noteBox.values()].map((box) => flowPad(box, 4)),
+      ];
+      const pts = flowOrthoRoute(a, b, obstacles, lines);
+      lines.push(pts);
+      const dir = [-b.nx, -b.ny];
+      const stop = { x: b.x - dir[0] * FLOW_HEAD_LEN * 0.8, y: b.y - dir[1] * FLOW_HEAD_LEN * 0.8 };
+      drawEdge(e.r, flowRounded([...pts.slice(0, -1), stop]), flowHead(b, dir));
+      if (e.r.edge.label) pending.push({ text: e.r.edge.label, options: flowAlong(pts) });
+    }
+
+    // 5. Labels: the first spot that clears the arrows, nodes, notes and labels so far.
+    const base = this._board.getBoundingClientRect();
+    const measure = (el) => {
+      const r = el.getBoundingClientRect();
+      return this.frameBox(r.left - base.left, r.top - base.top, r.width, r.height);
+    };
+    const putLabel = (el, o) => {
+      const [x, y, h, v] = T ? [o.y, o.x, o.v, o.h] : [o.x, o.y, o.h, o.v];
+      Object.assign(el.style, { left: `${x}px`, top: `${y}px`, transform: `translate(${FLOW_SHIFT[h]}, ${FLOW_SHIFT[v]})` });
+    };
+    const blockers = [...nodeBoxes.map(([, box]) => box), ...noteBox.values()];
+    for (const { text, options } of pending) {
+      if (!options.length) continue;
+      const el = flowDiv("tangle-flow-label", text);
+      this._labels.append(el);
+      let pick = null;
+      for (const o of options) {
+        putLabel(el, o);
+        const r = flowPad(measure(el), 2);
+        const clash = blockers.some((b) => flowOverlaps(r, b)) || lines.some((l) => l.some((q, i) => i && flowHits(l[i - 1], q, r)));
+        if (!clash) {
+          pick = o;
+          break;
+        }
+      }
+      putLabel(el, pick ?? options[0]);
+      blockers.push(measure(el));
+    }
+
+    // 6. Open groups: a faint dashed frame around their nodes, and a tab on its top-right corner that folds them.
+    for (const g of this._model.groups) {
+      const tab = this._tabs.get(g.id);
+      const boxes = this._folded.has(g.id) ? [] : g.members.flatMap((id) => [boxOf.get(id), noteBox.get(id)]).filter(Boolean);
+      tab.classList.toggle("is-away", !boxes.length);
+      if (!boxes.length) continue;
+      const f = flowPad({
+        left: Math.min(...boxes.map((b) => b.left)),
+        right: Math.max(...boxes.map((b) => b.right)),
+        top: Math.min(...boxes.map((b) => b.top)),
+        bottom: Math.max(...boxes.map((b) => b.bottom)),
+      }, 12);
+      this._frames.append(svgNode("rect", {
+        class: "tangle-flow-frame", x: f.left, y: f.top, width: f.right - f.left, height: f.bottom - f.top, rx: 12,
+      }));
+      // The tab sits on a corner of the frame (on the real board): the first
+      // one, from the top right, that no arrow runs through.
+      const real = T ? { left: f.top, right: f.bottom, top: f.left, bottom: f.right } : f;
+      const corners = [
+        [real.right - 14, real.top, "-100%"], [real.right - 14, real.bottom, "-100%"],
+        [real.left + 14, real.top, "0"], [real.left + 14, real.bottom, "0"],
+      ];
+      let pick = corners[0];
+      for (const corner of corners) {
+        Object.assign(tab.style, { left: `${corner[0]}px`, top: `${corner[1]}px`, transform: `translate(${corner[2]}, -50%)` });
+        const r = flowPad(measure(tab), 3);
+        if (!lines.some((l) => l.some((q, i) => i && flowHits(l[i - 1], q, r)))) {
+          pick = corner;
+          break;
+        }
+      }
+      Object.assign(tab.style, { left: `${pick[0]}px`, top: `${pick[1]}px`, transform: `translate(${pick[2]}, -50%)` });
+      blockers.push(measure(tab));
+    }
+
+    // 7. Notes: a short arrow from the note onto its node.
+    for (const [id, n] of noteBox) {
+      const c = boxOf.get(id);
+      if (!c) continue;
+      const y = Math.max(c.top + 8, Math.min(c.bottom - 8, (n.top + n.bottom) / 2));
+      const [from, to] = [n.left - 6, c.right + 5];
+      if (from - to < 8) continue;
+      this._canvas.append(svgNode("path", {
+        class: "tangle-flow-note-arrow",
+        d: `M ${from} ${y} L ${to} ${y} M ${to + 5} ${y - 3.5} L ${to} ${y} L ${to + 5} ${y + 3.5}`,
+      }));
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Vega: <t-vega> renders a Vega-Lite (or Vega) spec, loading Vega on first use.
 // Spec params and named data sources with the name of a variable are bound to it.
 // ---------------------------------------------------------------------------
@@ -5265,6 +6672,16 @@ class TJsxgraph extends TangleElement {
     const point = (x, y, attributes = {}) => {
       const p = board.create("point", [read(x), read(y)], attributes);
       bound.push({ p, x, y });
+      // A point tied to a variable shows a hand you can grab. The style is inline, since
+      // JSXGraph swaps the class attribute on hover.
+      if ((typeof x === "string" || typeof y === "string") && !attributes.fixed && p.rendNode) {
+        p.rendNode.style.cursor = "grab";
+        p.on("down", () => {
+          const root = document.documentElement;
+          root.classList.add("tangle-grabbing");
+          addEventListener("pointerup", () => root.classList.remove("tangle-grabbing"), { once: true });
+        });
+      }
       // Variable → point, when something else on the page changes it.
       this.watch(() => {
         const at = [x, y].map((coord) => (typeof coord === "number" ? coord : scope.get(coord)));
@@ -5395,6 +6812,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-tag": TTag,
     "t-math": TMath,
     "t-formula-dag": TFormulaDag,
+    "t-flow": TFlow,
     "t-vega": TVega,
     "t-obsplot": TObsplot,
     "t-jsxgraph": TJsxgraph,

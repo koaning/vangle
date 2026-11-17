@@ -94,6 +94,9 @@ The code is either:
 
 It runs as an `async` function, so `await` works at the top level.
 
+In the editor, the names that come from the page are tinted, like the values the reader
+changes in the prose. A name the code declares itself isn't tinted.
+
 Page variables the code mentions are passed in as copies, so assigning to one doesn't change the
 page. The code can declare its own variable with the same name. The result goes back out the
 same way. Numbers, strings, arrays, plain objects, `Map`, `Set`, `Date` and typed arrays can

@@ -39,6 +39,7 @@ export const NAV = [
     ["t-tag", "<code>&lt;t-tag&gt;</code>"],
     ["t-math", "<code>&lt;t-math&gt;</code>"],
     ["t-formula-dag", "<code>&lt;t-formula-dag&gt;</code>"],
+    ["t-flow", "<code>&lt;t-flow&gt;</code>"],
     ["t-vega", "<code>&lt;t-vega&gt;</code>"],
     ["t-obsplot", "<code>&lt;t-obsplot&gt;</code>"],
     ["t-jsxgraph", "<code>&lt;t-jsxgraph&gt;</code>"],

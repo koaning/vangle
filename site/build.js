@@ -42,6 +42,7 @@ export const NAV = [
     ["t-vega", "<code>&lt;t-vega&gt;</code>"],
     ["t-obsplot", "<code>&lt;t-obsplot&gt;</code>"],
     ["t-jsxgraph", "<code>&lt;t-jsxgraph&gt;</code>"],
+    ["t-graph", "<code>&lt;t-graph&gt;</code>"],
     ["t-paint", "<code>&lt;t-paint&gt;</code>"],
     ["t-scope", "<code>&lt;t-scope&gt;</code>"],
     ["t-panel", "<code>&lt;t-panel&gt;</code>"],
@@ -57,6 +58,7 @@ export const NAV = [
     ["gallery-coaster-nausea", "Coaster nausea"],
     ["gallery-attention", "Attention"],
     ["gallery-projectile", "Projectile motion with wind"],
+    ["gallery-mcnugget", "McNugget numbers"],
   ]],
   ["Reference", [
     ["javascript", "JavaScript API"],

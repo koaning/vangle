@@ -2,6 +2,7 @@
 
 t-vega,
 t-obsplot,
+t-graph,
 t-jsxgraph {
   display: block;
   margin: 1rem 0;
@@ -13,6 +14,7 @@ t-jsxgraph {
 
 .tangle-vega.is-loading,
 .tangle-obsplot.is-loading,
+.tangle-graph.is-loading,
 .tangle-jsxgraph.is-loading {
   display: grid;
   place-items: center;

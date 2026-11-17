@@ -24,6 +24,7 @@ t-math .katex-html [data-tangle-param] {
 .tangle-math-error,
 .tangle-vega-error,
 .tangle-obsplot-error,
+.tangle-graph-error,
 .tangle-jsxgraph-error {
   color: var(--tangle-error);
   font: 0.85em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;

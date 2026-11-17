@@ -18,6 +18,7 @@ import {
   parseParams,
   evalWith,
   plotOptions,
+  graphData,
   TangleElement,
   scopeOf,
   buildRequest,
@@ -430,4 +431,41 @@ test("layoutGraph puts each formula a column right of what it reads, and keeps n
   for (const a of nodes) for (const b of nodes) {
     if (a !== b && a.x === b.x) assert.ok(a.y + a.height <= b.y || b.y + b.height <= a.y);
   }
+});
+
+test("graphData: shorthand nodes, unique ids, and endpoints by id, name or index", () => {
+  const g = graphData({
+    nodes: ["a", 7, "a", { name: "b", size: 12 }, { id: "c", name: "Sea" }],
+    edges: [["b", 7], { source: "Sea", target: 0, name: 3 }, [4, "c"]],
+  });
+  assert.deepEqual(g.nodes, [
+    { name: "a", id: "node-0" },
+    { name: "7", id: "7" },
+    { name: "a", id: "node-2" },
+    { name: "b", size: 12, id: "b" },
+    { id: "c", name: "Sea" },
+  ]);
+  assert.deepEqual(g.edges, [
+    { source: "b", target: "7", id: "edge-0" },
+    { source: "c", target: "node-0", name: "3", id: "edge-1" },
+    { source: "c", target: "c", id: "edge-2" },
+  ]);
+  assert.equal(g.directed, false);
+});
+
+test("graphData: an id wins over another node's name, and repeated ids get a suffix", () => {
+  const g = graphData({ nodes: [{ id: "x", name: "y" }, { id: "y" }, { id: "x" }], edges: [["y", "x"]] });
+  assert.deepEqual(g.nodes.map((n) => n.id), ["x", "y", "x-1"]);
+  assert.deepEqual(g.edges[0], { source: "y", target: "x", id: "edge-0" });
+  const e = graphData({ nodes: ["a", "b"], edges: [{ id: "e", source: "a", target: "b" }, { id: "e", source: "b", target: "a" }] });
+  assert.deepEqual(e.edges.map((x) => x.id), ["e", "e-1"]);
+});
+
+test("graphData: unknown endpoints, keys and shapes are errors", () => {
+  assert.throws(() => graphData({ nodes: ["a"], edges: [["a", "z"]] }), /"z", which isn't a node/);
+  assert.throws(() => graphData({ nodes: ["a"], edges: [["a", 5]] }), /isn't a node/);
+  assert.throws(() => graphData({ nodes: ["a"], edge: [] }), /unknown key edge/);
+  assert.throws(() => graphData({ nodes: ["a"], height: 300 }), /unknown key height/);
+  assert.throws(() => graphData({ nodes: ["a"], edges: ["a"] }), /pair/);
+  assert.throws(() => graphData([]), /nodes, edges/);
 });

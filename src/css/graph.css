@@ -1,0 +1,130 @@
+/* <t-graph> --------------------------------------------------------------- */
+
+/* The svg is as wide as the element: hidden overflow keeps it from widening the page while it resizes. */
+.tangle-graph {
+  position: relative;
+  overflow: hidden;
+  font: var(--tangle-chart-font);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tangle-graph-svg {
+  display: block;
+}
+
+/* An edge is a line, and an arrowhead when the graph is directed. --edge is its color. */
+.tangle-graph-line {
+  fill: none;
+  stroke: var(--edge, color-mix(in srgb, currentColor 35%, transparent));
+}
+
+.tangle-graph-head {
+  fill: var(--edge, color-mix(in srgb, currentColor 35%, transparent));
+}
+
+.tangle-graph-edge-label {
+  fill: color-mix(in srgb, currentColor var(--tangle-chart-text), transparent);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--tangle-surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* A node is a circle with its name underneath. --node is its color. */
+.tangle-graph-node {
+  cursor: grab;
+  outline: none;
+}
+
+.tangle-graph-node:active {
+  cursor: grabbing;
+}
+
+.tangle-graph-node circle {
+  fill: var(--node, var(--tangle-accent));
+  stroke: var(--tangle-surface);
+  stroke-width: 1.5px;
+}
+
+.tangle-graph-label {
+  fill: currentColor;
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--tangle-surface);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* The picked node, and the one with keyboard focus, get a ring. */
+.tangle-graph-node.is-picked circle,
+.tangle-graph-node:focus-visible circle {
+  stroke: currentColor;
+  stroke-width: 2.5px;
+}
+
+.tangle-graph-node.is-picked .tangle-graph-label {
+  font-weight: 600;
+}
+
+.tangle-graph-tooltip {
+  position: absolute;
+  z-index: 1;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  border-radius: 6px;
+  background: var(--tangle-surface);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.tangle-graph-tooltip[hidden] {
+  display: none;
+}
+
+.tangle-graph-tooltip .key {
+  opacity: 0.6;
+}
+
+/* With zoom: the background pans, there's a reset button, and a plain scroll shows a hint. */
+t-graph[zoom] .tangle-graph-svg {
+  cursor: grab;
+}
+
+t-graph[zoom] .tangle-graph-svg:active {
+  cursor: grabbing;
+}
+
+.tangle-graph-reset {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 6px;
+  background: var(--tangle-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tangle-graph-reset:hover {
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.tangle-graph-reset[hidden],
+.tangle-graph-hint[hidden] {
+  display: none;
+}
+
+.tangle-graph-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--tangle-surface) 70%, transparent);
+  pointer-events: none;
+}

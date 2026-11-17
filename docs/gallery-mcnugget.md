@@ -9,7 +9,7 @@ smaller count it's one box more than.
   <p>Boxes of <t-num name="box1" min="1" max="30" color="#246bce #75a7ff">6</t-num>,
     <t-num name="box2" min="1" max="30" color="#b45b1b #ffad66">9</t-num> and
     <t-num name="box3" min="1" max="30" color="#147a68 #5ed5bd">20</t-num>, counting up to
-    <t-num name="limit" min="1" max="100">50</t-num> nuggets, showing
+    <t-num name="limit" min="1" max="200">50</t-num> nuggets, showing
     <t-choice name="every" options="the way with the fewest boxes:false, every way:true">the way with the fewest boxes</t-choice>
     to each count. <t-out expr="recipe"></t-out></p>
   <t-let name="boxes" expr="[box1, box2, box3]"></t-let>
@@ -32,7 +32,7 @@ smaller count it's one box more than.
     return out.sort((a, b) => b - a);
   }"></t-let>
   <t-let name="recipe" expr="hovered ? `${hovered.name} = ${boxesFor(Number(hovered.id)).join(' + ') || 0}.` : ''"></t-let>
-  <t-graph hover="hovered" height="480" distance="32" charge="-70" zoom label="Counts of nuggets you can buy">
+  <t-graph hover="hovered" height="680" distance="32" charge="-70" zoom label="Counts of nuggets you can buy">
     <script type="text/plain">
     {
       directed: true,
@@ -97,7 +97,7 @@ it's 43.
 - **The graph keeps its shape.** The nodes' ids are the counts, so raising the limit adds nodes
   without moving the old ones. Changing a box size rewires the edges, and the graph settles again.
 - **Zoom for the labels.** With `zoom`, <kbd>⌘</kbd> or <kbd>Ctrl</kbd> and the scroll wheel
-  zoom in, which helps at 100 nuggets with every way shown.
+  zoom in, which helps at 200 nuggets with every way shown.
 - **The colors match.** Each `<t-num>` box has a `color`, and the edges use the same palette by
   number: `color: boxes.indexOf(way.box) + 1`.
 - **The largest gap** comes from a second table that runs to 1,000. With box sizes up to 30

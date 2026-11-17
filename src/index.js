@@ -9,7 +9,7 @@
 //
 // Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>
 // or a <t-formula-dag>; likewise Vega, only if it has a <t-vega>, Observable Plot
-// for <t-obsplot>, JSXGraph for <t-jsxgraph>, and CodeMirror for <t-codecell>.
+// for <t-obsplot>, d3 for <t-graph>, JSXGraph for <t-jsxgraph>, and CodeMirror for <t-codecell>.
 // MIT license.
 
 // The entry point of the source: `make build` bundles it, and every module it
@@ -46,9 +46,10 @@ import { TFormulaDag } from "./elements/t-formula-dag.js";
 import { TVega, vegaBindings, diffRows } from "./elements/t-vega.js";
 import { TObsplot, plotOptions } from "./elements/t-obsplot.js";
 import { TJsxgraph } from "./elements/t-jsxgraph.js";
+import { TGraph, graphData } from "./elements/t-graph.js";
 export { tangleCall } from "./call.js";
 
-export { buildRequest, inspectScope, layoutGraph, vegaBindings, diffRows, plotOptions };
+export { buildRequest, inspectScope, layoutGraph, vegaBindings, diffRows, plotOptions, graphData };
 
 if (typeof window !== "undefined" && window.customElements) {
   listen();
@@ -72,6 +73,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-vega": TVega,
     "t-obsplot": TObsplot,
     "t-jsxgraph": TJsxgraph,
+    "t-graph": TGraph,
     "t-panel": TPanel,
     "t-paint": TPaint,
   };

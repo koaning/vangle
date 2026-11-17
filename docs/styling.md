@@ -65,6 +65,7 @@ The stylesheet behind that example:
 | `t-panel::part(header)`, `::part(label)`, `::part(toggle)`, `::part(body)` | The pieces of a floating panel. `t-panel[collapsed]` while it's minimized. See [`<t-panel>`](t-panel.md#styling). |
 | `t-paint::part(toolbar)`, `::part(button)`, `::part(paper)`, `::part(canvas)` | The pieces of a drawing canvas. See [`<t-paint>`](t-paint.md#styling). |
 | `.tangle-vega` | A Vega chart. `.is-loading` until Vega has loaded; `.tangle-vega-error` replaces it on failure. See [`<t-vega>`](t-vega.md#how-vega-loads). |
+| `.tangle-graph`, `.tangle-graph-node`, `.tangle-graph-edge`, `.tangle-graph-label`, `.tangle-graph-tooltip` | The parts of a [`<t-graph>`](t-graph.md). `.is-picked` on the picked node; `--node` and `--edge` hold each one's color. See [`<t-graph>`](t-graph.md#styling). |
 | `.tangle-obsplot` | An Observable Plot chart. `.is-loading` until Plot has loaded; `.tangle-obsplot-error` replaces it when loading fails or the expression throws. See [`<t-obsplot>`](t-obsplot.md). |
 
 ### Recipes

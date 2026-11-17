@@ -96,6 +96,7 @@ RSS readers and no-JS browsers still get a readable sentence.
 | [`<t-call>`](t-call.md) | A function call whose arguments the reader can change, with the result as a variable. |
 | [`<t-tag>`](t-tag.md) | An HTML tag whose attributes the reader can change, with the live element below it. |
 | [`<t-math>`](t-math.md) | A KaTeX formula with draggable parameters and live results. |
+| [`<t-graph>`](t-graph.md) | A network of nodes and edges that changes with the variables, with the picked and hovered node as variables. |
 | [`<t-paint>`](t-paint.md) | A canvas the reader draws on, with the drawing as a variable. |
 | [`<t-scope>`](t-scope.md) | Giving part of the page its own variables. |
 

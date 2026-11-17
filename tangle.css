@@ -1133,6 +1133,46 @@ t-obsplot figure {
   opacity: 0.6;
 }
 
+/* With zoom: the background pans, there's a reset button, and a plain scroll shows a hint. */
+t-graph[zoom] .tangle-graph-svg {
+  cursor: grab;
+}
+
+t-graph[zoom] .tangle-graph-svg:active {
+  cursor: grabbing;
+}
+
+.tangle-graph-reset {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 8px;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 6px;
+  background: var(--tangle-surface);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.tangle-graph-reset:hover {
+  border-color: color-mix(in srgb, currentColor 45%, transparent);
+}
+
+.tangle-graph-reset[hidden],
+.tangle-graph-hint[hidden] {
+  display: none;
+}
+
+.tangle-graph-hint {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--tangle-surface) 70%, transparent);
+  pointer-events: none;
+}
+
 /* JSXGraph ---------------------------------------------------------------- */
 
 /* The board takes its size from this box. Set a different aspect-ratio or height to change it. */

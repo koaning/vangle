@@ -15,7 +15,7 @@ goes back into variables. d3 loads only on pages that have a `<t-graph>`.
   <t-let name="readout" expr="!picked?.name ? ''
     : hovered && hovered.id !== picked.id ? `${hovered.name} is ${apart(picked, hovered)} edges from ${picked.name}, one for each bit they differ in.`
     : `All ${n} neighbours of ${picked.name} differ from it in one bit.`"></t-let>
-  <t-graph name="picked" hover="hovered" height="420">
+  <t-graph name="picked" hover="hovered" height="420" zoom>
     <script type="text/plain">
     {
       nodes: d3.range(2 ** n).map((i) => ({ id: i, name: i.toString(2).padStart(n, "0"), size: 6 })),
@@ -100,6 +100,22 @@ sets them to `null`.
 The expression can read these variables itself, for example to color the neighbours of the
 picked node. Only the colors change then, and nothing moves.
 
+## Zooming {#zoom}
+
+With the `zoom` attribute, the reader can zoom in to read a crowded graph, as in the
+hypercube above:
+
+- <kbd>⌘</kbd> or <kbd>Ctrl</kbd> with the scroll wheel zooms, up to 8 times, and so does
+  pinching on a trackpad or a touch screen.
+- Dragging the background pans. Dragging a node still moves the node.
+- A **Reset zoom** button appears in the corner once the view has moved.
+
+The scroll wheel on its own still scrolls the page, so a graph never traps the reader halfway
+down it. Scrolling over the graph shows a short hint about the key instead. Zooming only
+changes the view: the layout stays inside the box, and you can't zoom out past it or pan away
+from it. On a touch screen, a zoomable graph takes one-finger drags for panning, so the page
+scrolls from outside the graph.
+
 ## When the graph changes {#updates}
 
 The expression runs again whenever a variable it read changes, and the graph keeps what it can:
@@ -126,6 +142,7 @@ The graph is plain SVG, with these classes:
 | `.tangle-graph-edge` | An edge: a `.tangle-graph-line` and a `.tangle-graph-head`. |
 | `.tangle-graph-edge-label` | An edge's name. |
 | `.tangle-graph-tooltip` | The tooltip with a node's or edge's `data`. |
+| `.tangle-graph-reset`, `.tangle-graph-hint` | With `zoom`: the Reset zoom button, and the hint a plain scroll shows. |
 | `.tangle-graph-error` | The message shown in place of the graph when the expression throws. |
 
 Each node and edge sets `--node` or `--edge` to its color, and the stylesheet draws with it. To
@@ -147,6 +164,7 @@ The labels use `--tangle-chart-font`, like the charts.
 | `height` | `400` | The height in pixels. The width is the element's, and follows it. |
 | `distance` | `60` | How long the layout tries to make each edge, in pixels. |
 | `charge` | `-160` | How hard nodes push each other apart. More negative spreads the graph out. |
+| `zoom` | | Let the reader zoom and pan. See [Zooming](#zoom). |
 | `src` | | A URL to load the expression from, instead of the `<script>` inside. |
 | `name` | | A variable for the picked node. See [Picking and hovering](#name). |
 | `hover` | | A variable for the node under the pointer. |

@@ -5532,9 +5532,13 @@ class TGraph extends TangleElement {
     this._edgeLayer = svgEl("g", { class: "tangle-graph-edges" });
     this._labelLayer = svgEl("g", { class: "tangle-graph-edge-labels" });
     this._nodeLayer = svgEl("g", { class: "tangle-graph-nodes" });
-    this._svg.append(this._edgeLayer, this._labelLayer, this._nodeLayer);
+    // The view holds everything, so zooming moves it all at once.
+    this._view = svgEl("g", { class: "tangle-graph-view" });
+    this._view.append(this._edgeLayer, this._labelLayer, this._nodeLayer);
+    this._svg.append(this._view);
     this._tip = Object.assign(document.createElement("div"), { className: "tangle-graph-tooltip", hidden: true });
     this._box.append(this._svg, this._tip);
+    if (this.hasAttribute("zoom")) this.makeZoomable(d3);
 
     // How it's shown is up to the attributes; the expression only says what the graph is.
     const attr = (name, fallback) => Number(this.getAttribute(name)) || fallback;
@@ -5554,6 +5558,50 @@ class TGraph extends TangleElement {
     this._svg.addEventListener("click", (event) => {
       if (event.target === this._svg) this.pick(null);
     });
+  }
+
+  /**
+   * Ctrl or Cmd with the wheel zooms, and so does a pinch. Dragging the background pans.
+   * A plain wheel still scrolls the page, and shows a hint. Reset goes back to the whole graph.
+   */
+  makeZoomable(d3) {
+    const reduced = () => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform ?? "");
+    this._reset = Object.assign(document.createElement("button"), {
+      type: "button",
+      className: "tangle-graph-reset",
+      textContent: "Reset zoom",
+      hidden: true,
+    });
+    this._hint = Object.assign(document.createElement("div"), {
+      className: "tangle-graph-hint",
+      textContent: `${mac ? "⌘" : "Ctrl"} + scroll to zoom`,
+      hidden: true,
+    });
+    this._box.append(this._reset, this._hint);
+    this._zoom = d3
+      .zoom()
+      .scaleExtent([1, 8])
+      .filter((event) => (event.type === "wheel" ? event.ctrlKey || event.metaKey : !event.ctrlKey && !event.button))
+      .on("zoom", ({ transform }) => {
+        this._view.setAttribute("transform", transform);
+        this._reset.hidden = transform.k === 1 && !transform.x && !transform.y;
+        this._hint.hidden = true;
+      });
+    const svg = d3.select(this._svg).call(this._zoom).on("dblclick.zoom", null);
+    this._reset.addEventListener("click", () => {
+      (reduced() ? svg : svg.transition().duration(300)).call(this._zoom.transform, d3.zoomIdentity);
+    });
+    this._svg.addEventListener(
+      "wheel",
+      (event) => {
+        if (event.ctrlKey || event.metaKey) return;
+        this._hint.hidden = false;
+        clearTimeout(this._hintTimer);
+        this._hintTimer = setTimeout(() => (this._hint.hidden = true), 1200);
+      },
+      { passive: true },
+    );
   }
 
   /** Puts a node, or null, in the name variable. */
@@ -5746,6 +5794,8 @@ class TGraph extends TangleElement {
     this._svg.setAttribute("viewBox", `0 0 ${width} ${h}`);
     this._sim.force("x").x(width / 2);
     this._sim.force("y").y(h / 2);
+    // Panning stops at the graph's edges: the layout never leaves the box.
+    this._zoom?.extent([[0, 0], [width, h]]).translateExtent([[0, 0], [width, h]]);
   }
 
   resize() {

@@ -11,7 +11,7 @@ examples. Besides the page, add it in two places (`make test` checks both):
 
 - the `Gallery` section of `NAV` in `site/build.js`: `["gallery-<slug>", "Title"]`;
 - the `## Gallery` list in `llms.txt`: one line saying what the page shows and which elements
-  it combines.
+  it combines, ending with `Keywords: a, b, c.` (words a reader might search for that the line lacks).
 
 Start from [template.md](template.md). `docs/gallery-coaster-nausea.md` is a finished example.
 

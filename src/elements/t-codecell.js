@@ -39,7 +39,9 @@ export class TCodeCell extends TangleElement {
       const engines = this._runner ? null : enginesVersion.value; // waiting on its engine
       graphVersion.value; // so a variable declared after the cell is still found
       const code = this._code.value;
-      const names = cellInputs(code, [...scope.slots.keys()].filter((n) => n !== this._name));
+      const page = [...scope.slots.keys()].filter((n) => n !== this._name);
+      untracked(() => this.markPage(scope, page));
+      const names = cellInputs(code, page);
       const inputs = {};
       for (const name of names) {
         try {
@@ -74,6 +76,7 @@ export class TCodeCell extends TangleElement {
     this._initial = dedent(script ? script.textContent : this._text);
     this._code = new Signal(this._initial);
     this._force = new Signal(0);
+    this._page = new Set(); // the page's variables, which the editor marks in the code
 
     this._editor = document.createElement("div");
     this._editor.className = "t-codecell-editor";
@@ -131,13 +134,14 @@ export class TCodeCell extends TangleElement {
   }
 
   /** The editor: CodeMirror, with the theme's colors. */
-  mount({ EditorView, basicSetup, javascript, syntaxHighlighting, classHighlighter }) {
+  mount(cm) {
+    const { EditorView, basicSetup, javascript, syntaxHighlighting, classHighlighter } = cm;
     const lang = this.getAttribute("lang") ?? "js";
     this._view = new EditorView({
       doc: this._code.peek(),
       extensions: [
         basicSetup,
-        lang === "js" ? javascript() : [],
+        lang === "js" ? [javascript(), this.pageMarks(cm)] : [],
         syntaxHighlighting(classHighlighter),
         EditorView.contentAttributes.of({ "aria-label": this.getAttribute("label") ?? `${this._name ?? "code"} (${lang})` }),
         EditorView.updateListener.of((update) => {
@@ -150,7 +154,12 @@ export class TCodeCell extends TangleElement {
           ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--tangle-accent)" },
           "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
             { backgroundColor: "color-mix(in srgb, var(--tangle-accent) 25%, transparent)" },
-          ".cm-gutters": { backgroundColor: "transparent", color: "inherit", border: "none", opacity: "0.45" },
+          // Opaque, so code scrolled sideways doesn't show through the sticky gutter.
+          ".cm-gutters": {
+            backgroundColor: "var(--tangle-surface)",
+            color: "color-mix(in srgb, currentColor 45%, transparent)",
+            border: "none",
+          },
           ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "color-mix(in srgb, var(--tangle-accent) 6%, transparent)" },
           ".cm-matchingBracket, &.cm-focused .cm-matchingBracket": {
             backgroundColor: "color-mix(in srgb, var(--tangle-accent) 20%, transparent)",
@@ -161,6 +170,51 @@ export class TCodeCell extends TangleElement {
       ],
     });
     this._editor.replaceChildren(this._view.dom);
+  }
+
+  /** Keeps the names of the page's variables, and has the editor mark them again when they change. */
+  markPage(scope, names) {
+    const page = new Set(names.filter((name) => scope.slots.get(name).def.peek() !== undefined));
+    if (page.size === this._page.size && [...page].every((name) => this._page.has(name))) return;
+    this._page = page;
+    this._view?.dispatch({});
+  }
+
+  /**
+   * Marks the names in the code that come from the page, tinted like the values the reader
+   * changes in the prose. A name the code declares itself is its own, and isn't marked.
+   */
+  pageMarks({ ViewPlugin, Decoration, syntaxTree }) {
+    const cell = this;
+    const mark = Decoration.mark({ class: "t-codecell-page" });
+    const build = (state) => {
+      const own = new Set();
+      const uses = [];
+      syntaxTree(state).iterate({
+        enter({ name, from, to }) {
+          if (name === "VariableDefinition") own.add(state.sliceDoc(from, to));
+          else if (name === "VariableName") uses.push({ from, to, text: state.sliceDoc(from, to) });
+        },
+      });
+      const marks = uses.filter(({ text }) => cell._page.has(text) && !own.has(text));
+      return Decoration.set(marks.map(({ from, to }) => mark.range(from, to)));
+    };
+    return ViewPlugin.fromClass(
+      class {
+        constructor(view) {
+          this.page = cell._page;
+          this.decorations = build(view.state);
+        }
+        update(update) {
+          // The tree grows as the parser catches up, so a new tree is a reason too.
+          const tree = syntaxTree(update.state) !== syntaxTree(update.startState);
+          if (!update.docChanged && !tree && this.page === cell._page) return;
+          this.page = cell._page;
+          this.decorations = build(update.state);
+        }
+      },
+      { decorations: (plugin) => plugin.decorations },
+    );
   }
 
   /** Without CodeMirror (offline, say), a plain text area does the job. */

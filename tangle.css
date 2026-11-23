@@ -470,6 +470,13 @@ t-codecell .tok-comment {
   color: color-mix(in srgb, currentColor var(--tangle-muted), transparent);
 }
 
+/* Names that come from the page get the tint of the values the reader changes. No
+   padding, so the columns of the code stay put. */
+t-codecell .t-codecell-page {
+  border-radius: 0.18em;
+  background: color-mix(in srgb, var(--tangle-accent) var(--tangle-soft), transparent);
+}
+
 t-codecell .tok-variableName.tok-definition,
 t-codecell .tok-propertyName.tok-definition {
   color: var(--tangle-accent);
@@ -877,6 +884,264 @@ t-formula-dag {
   white-space: pre-wrap;
 }
 
+/* Flows -------------------------------------------------------------------- */
+
+t-flow {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+
+/* As wide as the diagram, centered. */
+.tangle-flow {
+  --tangle-flow-edge: color-mix(in srgb, currentColor 42%, var(--tangle-flow-bg));
+  --tangle-flow-note: color-mix(in srgb, currentColor 62%, transparent);
+  --tangle-flow-rule: color-mix(in srgb, currentColor 16%, transparent);
+  --tangle-flow-bg: var(--tangle-surface);
+  --tangle-flow-layer-gap: 56px;
+  --tangle-flow-node-gap: 40px;
+  display: flex;
+  justify-content: safe center;
+}
+
+.tangle-flow-board {
+  position: relative;
+  flex: none;
+}
+
+/* Each node is placed by the layout: the item holds the node and its note. */
+.tangle-flow-item {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 26px;
+  width: max-content;
+}
+
+.tangle-flow[data-direction="right"] > .tangle-flow-board > .tangle-flow-item {
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tangle-flow.is-moving > .tangle-flow-board > .tangle-flow-item {
+  transition: left 200ms cubic-bezier(0.2, 0.7, 0.2, 1), top 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.tangle-flow-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.tangle-flow-body > * {
+  margin-block: 0;
+}
+
+.tangle-flow-caption {
+  color: var(--tangle-flow-note);
+  font: 10.5px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+
+.tangle-flow-note {
+  max-width: 190px;
+  color: var(--tangle-flow-note);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.tangle-flow .is-away {
+  display: none !important;
+}
+
+/* Folding: a round button on the node's corner (on hover) folds it to a pill with just its caption. */
+.tangle-flow .tangle-flow-fold {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--tangle-flow-rule);
+  border-radius: 999px;
+  background: var(--tangle-flow-bg);
+  color: var(--tangle-flow-note);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.tangle-flow-node:hover > .tangle-flow-fold,
+.tangle-flow .tangle-flow-fold:focus-visible {
+  opacity: 1;
+}
+
+.tangle-flow .tangle-flow-fold:hover {
+  border-color: var(--tangle-flow-edge);
+  color: inherit;
+}
+
+.tangle-flow-fold svg,
+.tangle-flow-tab svg {
+  width: 10px;
+  height: 10px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tangle-flow-fold-label {
+  display: none;
+}
+
+.tangle-flow-node.is-folded {
+  flex-direction: row;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border: 1px dashed color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 999px;
+  background: var(--tangle-flow-bg);
+}
+
+.tangle-flow-node.is-folded > .tangle-flow-body {
+  display: none;
+}
+
+.tangle-flow-node.is-folded > .tangle-flow-fold-label {
+  display: block;
+}
+
+.tangle-flow .tangle-flow-node.is-folded > .tangle-flow-fold {
+  position: static;
+  border-color: transparent;
+  opacity: 1;
+}
+
+.tangle-flow-node.is-folded > .tangle-flow-fold svg {
+  transform: rotate(-90deg);
+}
+
+/* A folded group's pill. */
+.tangle-flow-node.is-pill {
+  border-style: solid;
+  border-color: color-mix(in srgb, currentColor 24%, transparent);
+}
+
+.tangle-flow-node.is-pill > .tangle-flow-caption {
+  color: inherit;
+}
+
+/* The arrows, edge labels and group tabs sit over the nodes, and let the pointer through. */
+.tangle-flow-svg,
+.tangle-flow-labels,
+.tangle-flow-tabs {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  transition: opacity 110ms ease;
+}
+
+.tangle-flow-svg {
+  z-index: 0;
+}
+
+.tangle-flow.is-moving > .tangle-flow-board > :is(.tangle-flow-svg, .tangle-flow-labels, .tangle-flow-tabs) {
+  opacity: 0;
+}
+
+.tangle-flow-edge,
+.tangle-flow-halo,
+.tangle-flow-note-arrow,
+.tangle-flow-frame {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tangle-flow-edge {
+  stroke: var(--tangle-flow-edge);
+  stroke-width: 1.3;
+}
+
+/* The gap an arrow leaves in the ones drawn before it, where it crosses them. */
+.tangle-flow-halo {
+  stroke: var(--tangle-flow-bg);
+  stroke-width: 6;
+  stroke-linecap: butt;
+  stroke-dasharray: 0 4 1000000;
+}
+
+.tangle-flow-head {
+  fill: var(--tangle-flow-edge);
+  stroke: var(--tangle-flow-edge);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+}
+
+.tangle-flow-note-arrow {
+  stroke: var(--tangle-flow-note);
+  stroke-width: 1.2;
+}
+
+.tangle-flow-frame {
+  stroke: var(--tangle-flow-rule);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+}
+
+.tangle-flow-label {
+  position: absolute;
+  color: var(--tangle-flow-note);
+  font: 10.5px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+}
+
+.tangle-flow .tangle-flow-tab {
+  position: absolute;
+  transform: translate(-100%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 1px 8px 1px 5px;
+  border: 1px solid var(--tangle-flow-rule);
+  border-radius: 999px;
+  background: var(--tangle-flow-bg);
+  color: var(--tangle-flow-note);
+  font: 10.5px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.tangle-flow .tangle-flow-tab:hover {
+  border-color: var(--tangle-flow-edge);
+  color: inherit;
+}
+
+.tangle-flow-error {
+  margin: 0.5em 0;
+  color: var(--tangle-error);
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: pre-wrap;
+}
+
 /* Click-to-type editor ---------------------------------------------------- */
 
 .tangle-editor {
@@ -1194,6 +1459,12 @@ t-graph[zoom] .tangle-graph-svg:active {
   padding: 0;
   font-family: inherit;
   white-space: nowrap;
+}
+
+/* While a point is held, the hand stays closed wherever the pointer goes. */
+:root.tangle-grabbing,
+:root.tangle-grabbing * {
+  cursor: grabbing !important;
 }
 
 /* Debugging --------------------------------------------------------------- */

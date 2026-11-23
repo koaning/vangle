@@ -140,6 +140,16 @@ export class TJsxgraph extends TangleElement {
     const point = (x, y, attributes = {}) => {
       const p = board.create("point", [read(x), read(y)], attributes);
       bound.push({ p, x, y });
+      // A point tied to a variable shows a hand you can grab. The style is inline, since
+      // JSXGraph swaps the class attribute on hover.
+      if ((typeof x === "string" || typeof y === "string") && !attributes.fixed && p.rendNode) {
+        p.rendNode.style.cursor = "grab";
+        p.on("down", () => {
+          const root = document.documentElement;
+          root.classList.add("tangle-grabbing");
+          addEventListener("pointerup", () => root.classList.remove("tangle-grabbing"), { once: true });
+        });
+      }
       // Variable → point, when something else on the page changes it.
       this.watch(() => {
         const at = [x, y].map((coord) => (typeof coord === "number" ? coord : scope.get(coord)));

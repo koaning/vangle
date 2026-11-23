@@ -92,6 +92,9 @@ th, td {
 th { color: var(--muted); font-weight: 600; }
 td:first-child { white-space: nowrap; }
 
+/* Arrow crossings in a <t-flow> cut gaps in the page's own background. */
+.tangle-flow { --tangle-flow-bg: var(--paper); }
+
 /* A live example, with its source panel attached underneath. */
 .example {
   display: block;

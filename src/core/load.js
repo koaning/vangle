@@ -19,6 +19,8 @@ export const config = {
   plotUrl: `${CDN}@observablehq/plot@0.6.17/dist/plot.umd.min.js`,
   jsxgraphUrl: `${CDN}jsxgraph@1.14.0/distrib/jsxgraphcore.js`,
   codemirrorUrl: `https://esm.sh/codemirror@6.0.2${CM_DEPS}`,
+  // With state as its only pinned dependency, esm.sh gives the copy of view the others use.
+  codemirrorViewUrl: "https://esm.sh/@codemirror/view@6.43.15?deps=@codemirror/state@6.7.6",
   codemirrorJsUrl: `https://esm.sh/@codemirror/lang-javascript@6.2.5${CM_DEPS}`,
   codemirrorLanguageUrl: `https://esm.sh/@codemirror/language@6.13.1${CM_DEPS}`,
   lezerHighlightUrl: "https://esm.sh/@lezer/highlight@1.2.5",
@@ -27,7 +29,7 @@ export const config = {
 
 /**
  * Override defaults: { katexUrl, katexCssUrl, vegaUrl, vegaLiteUrl, vegaEmbedUrl, d3Url,
- * plotUrl, jsxgraphUrl, codemirrorUrl, codemirrorJsUrl, codemirrorLanguageUrl,
+ * plotUrl, jsxgraphUrl, codemirrorUrl, codemirrorViewUrl, codemirrorJsUrl, codemirrorLanguageUrl,
  * lezerHighlightUrl, pixelsPerStep }. Call before KaTeX, Vega, d3, Plot, JSXGraph or CodeMirror loads.
  */
 export function configure(options) {
@@ -107,24 +109,28 @@ export function loadJsxgraph() {
   })());
 }
 
-// CodeMirror 6 is ES modules. Returns { EditorView, basicSetup, javascript,
-// syntaxHighlighting, classHighlighter }.
+// CodeMirror 6 is ES modules. Returns { EditorView, ViewPlugin, Decoration, basicSetup,
+// javascript, syntaxHighlighting, syntaxTree, classHighlighter }.
 let codemirrorPromise = null;
 export function loadCodemirror() {
   return (codemirrorPromise ??= (async () => {
     await null; // let a same-module configure() call run first
     if (globalThis.TangleConfig) Object.assign(config, globalThis.TangleConfig);
-    const [cm, js, language, highlight] = await Promise.all([
+    const [cm, view, js, language, highlight] = await Promise.all([
       import(config.codemirrorUrl),
+      import(config.codemirrorViewUrl),
       import(config.codemirrorJsUrl),
       import(config.codemirrorLanguageUrl),
       import(config.lezerHighlightUrl),
     ]);
     return {
       EditorView: cm.EditorView,
+      ViewPlugin: view.ViewPlugin,
+      Decoration: view.Decoration,
       basicSetup: cm.basicSetup,
       javascript: js.javascript,
       syntaxHighlighting: language.syntaxHighlighting,
+      syntaxTree: language.syntaxTree,
       classHighlighter: highlight.classHighlighter,
     };
   })());

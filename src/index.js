@@ -7,9 +7,10 @@
 //   When you eat <t-num name="cookies" min="0" max="20">3</t-num> cookies,
 //   you consume <t-out expr="cookies * 50"></t-out> calories.
 //
-// Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>
-// or a <t-formula-dag>; likewise Vega, only if it has a <t-vega>, Observable Plot
-// for <t-obsplot>, d3 for <t-graph>, JSXGraph for <t-jsxgraph>, and CodeMirror for <t-codecell>.
+// Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>,
+// a <t-formula-dag> or math in a <t-flow> note; likewise Vega, only if it has a
+// <t-vega>, Observable Plot for <t-obsplot>, d3 for <t-graph>, JSXGraph for
+// <t-jsxgraph>, and CodeMirror for <t-codecell>.
 // MIT license.
 
 // The entry point of the source: `make build` bundles it, and every module it
@@ -44,6 +45,7 @@ import { TDebug, inspectScope, layoutGraph } from "./elements/t-debug.js";
 import { TTag } from "./elements/t-tag.js";
 import { TMath } from "./elements/t-math.js";
 import { TFormulaDag } from "./elements/t-formula-dag.js";
+import { TFlow } from "./elements/t-flow.js";
 import { TVega, vegaBindings, diffRows } from "./elements/t-vega.js";
 import { TObsplot, plotOptions } from "./elements/t-obsplot.js";
 import { TJsxgraph } from "./elements/t-jsxgraph.js";
@@ -74,6 +76,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-tag": TTag,
     "t-math": TMath,
     "t-formula-dag": TFormulaDag,
+    "t-flow": TFlow,
     "t-vega": TVega,
     "t-obsplot": TObsplot,
     "t-jsxgraph": TJsxgraph,

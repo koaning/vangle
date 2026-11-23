@@ -92,8 +92,10 @@ function dagBest(candidates, score) {
  * `layers` top to bottom, each a list of ids (names or waypoints), and one
  * route [src, ...waypoints, dst] per edge. Layers wider than `cap` keep their
  * seeded order instead of trying every permutation. Empty layers are dropped.
+ * Edges whose index is in `direct` still count for ordering but get no
+ * waypoints: their route is just [src, dst], for arrows routed freely.
  */
-export function dagOrder(names, layerOf, edges, { sweeps = 8, cap = 6 } = {}) {
+export function dagOrder(names, layerOf, edges, { sweeps = 8, cap = 6, direct = new Set() } = {}) {
   const deepest = Math.max(0, ...names.map((n) => layerOf.get(n)));
   const layers = Array.from({ length: deepest + 1 }, () => []);
   for (const n of names) layers[layerOf.get(n)].push(n);
@@ -102,7 +104,12 @@ export function dagOrder(names, layerOf, edges, { sweeps = 8, cap = 6 } = {}) {
   const link = (a, b) => (below.has(a) ? below.get(a).push(b) : below.set(a, [b]));
   const routes = [];
   let waypoints = 0;
-  for (const [src, dst] of edges) {
+  edges.forEach(([src, dst], i) => {
+    if (direct.has(i)) {
+      link(src, dst);
+      routes.push([src, dst]);
+      return;
+    }
     let prev = src;
     const chain = [src];
     for (let l = layerOf.get(src) + 1; l < layerOf.get(dst); l++) {
@@ -115,7 +122,7 @@ export function dagOrder(names, layerOf, edges, { sweeps = 8, cap = 6 } = {}) {
     link(prev, dst);
     chain.push(dst);
     routes.push(chain);
-  }
+  });
 
   const crossings = (upper, lower) => {
     const pos = new Map(lower.map((n, i) => [n, i]));

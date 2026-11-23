@@ -35,6 +35,13 @@ test("llms.txt links to every docs page, and only to pages that exist", () => {
   }
 });
 
+test("every llms.txt page line ends with keywords", () => {
+  const llms = readFileSync(join(DOCS, "../llms.txt"), "utf8");
+  for (const line of llms.split("\n").filter((l) => /^- \[.*\]\(docs\//.test(l))) {
+    assert.match(line, /\. Keywords: \S.*\.$/, line.slice(0, 60));
+  }
+});
+
 test("inline code is escaped and inline HTML passes through", () => {
   assert.equal(inline("Use `<t-num>` & <kbd>Enter</kbd>"), "Use <code>&lt;t-num&gt;</code> &amp; <kbd>Enter</kbd>");
   assert.equal(inline('<t-out expr="a * b > c">x</t-out>'), '<t-out expr="a * b > c">x</t-out>');

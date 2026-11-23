@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // Lazy loading: KaTeX for <t-math>, Vega for <t-vega>, Plot for <t-obsplot>,
-// CodeMirror for <t-codecell>. Each
+// d3 for <t-graph>, CodeMirror for <t-codecell>. Each
 // loads only if the page has such an element, and a copy the page already loaded is reused.
 // ---------------------------------------------------------------------------
 
@@ -30,7 +30,7 @@ export const config = {
 /**
  * Override defaults: { katexUrl, katexCssUrl, vegaUrl, vegaLiteUrl, vegaEmbedUrl, d3Url,
  * plotUrl, jsxgraphUrl, codemirrorUrl, codemirrorViewUrl, codemirrorJsUrl, codemirrorLanguageUrl,
- * lezerHighlightUrl, pixelsPerStep }. Call before KaTeX, Vega, Plot, JSXGraph or CodeMirror loads.
+ * lezerHighlightUrl, pixelsPerStep }. Call before KaTeX, Vega, d3, Plot, JSXGraph or CodeMirror loads.
  */
 export function configure(options) {
   Object.assign(config, options);
@@ -77,13 +77,22 @@ export function loadVega() {
   })());
 }
 
+// d3's build is a classic script that sets the d3 global. Returns d3.
+let d3Promise = null;
+export function loadD3() {
+  return (d3Promise ??= (async () => {
+    await null; // let a same-module configure() call run first
+    if (globalThis.TangleConfig) Object.assign(config, globalThis.TangleConfig);
+    if (!globalThis.d3) await loadScript(config.d3Url);
+    return globalThis.d3;
+  })());
+}
+
 // Plot's UMD build needs d3 as a global, so d3 loads first. Returns { Plot, d3 }.
 let plotPromise = null;
 export function loadPlot() {
   return (plotPromise ??= (async () => {
-    await null; // let a same-module configure() call run first
-    if (globalThis.TangleConfig) Object.assign(config, globalThis.TangleConfig);
-    if (!globalThis.d3) await loadScript(config.d3Url);
+    await loadD3();
     if (!globalThis.Plot) await loadScript(config.plotUrl);
     return { Plot: globalThis.Plot, d3: globalThis.d3 };
   })());

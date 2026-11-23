@@ -9,8 +9,8 @@
 //
 // Zero dependencies. KaTeX is loaded lazily, and only if the page has a <t-math>,
 // a <t-formula-dag> or math in a <t-flow> note; likewise Vega, only if it has a
-// <t-vega>, Observable Plot for <t-obsplot>, JSXGraph for <t-jsxgraph>, and
-// CodeMirror for <t-codecell>.
+// <t-vega>, Observable Plot for <t-obsplot>, d3 for <t-graph>, JSXGraph for
+// <t-jsxgraph>, and CodeMirror for <t-codecell>.
 // MIT license.
 
 // The entry point of the source: `make build` bundles it, and every module it
@@ -30,6 +30,7 @@ export { TangleElement } from "./core/element.js";
 import { TScope } from "./elements/t-scope.js";
 import { TPanel } from "./elements/t-panel.js";
 import { TPaint } from "./elements/t-paint.js";
+import { TSketch } from "./elements/t-sketch.js";
 import { TVar } from "./elements/t-var.js";
 import { TNum } from "./elements/t-num.js";
 import { TLet } from "./elements/t-let.js";
@@ -48,14 +49,18 @@ import { TFlow } from "./elements/t-flow.js";
 import { TVega, vegaBindings, diffRows } from "./elements/t-vega.js";
 import { TObsplot, plotOptions } from "./elements/t-obsplot.js";
 import { TJsxgraph } from "./elements/t-jsxgraph.js";
+import { TGraph, graphData } from "./elements/t-graph.js";
 export { tangleCall } from "./call.js";
 
-export { buildRequest, inspectScope, layoutGraph, vegaBindings, diffRows, plotOptions };
+export { buildRequest, inspectScope, layoutGraph, vegaBindings, diffRows, plotOptions, graphData };
 
 if (typeof window !== "undefined" && window.customElements) {
   listen();
 
+  // <t-sketch> first: it keeps its children's HTML for Export, so it has to see them
+  // before the elements inside them are defined and render.
   const elements = {
+    "t-sketch": TSketch,
     "t-scope": TScope,
     "t-var": TVar,
     "t-num": TNum,
@@ -75,6 +80,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-vega": TVega,
     "t-obsplot": TObsplot,
     "t-jsxgraph": TJsxgraph,
+    "t-graph": TGraph,
     "t-panel": TPanel,
     "t-paint": TPaint,
   };

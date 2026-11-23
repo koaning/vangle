@@ -98,6 +98,7 @@ RSS readers and no-JS browsers still get a readable sentence.
 | [`<t-math>`](t-math.md) | A KaTeX formula with draggable parameters and live results. |
 | [`<t-graph>`](t-graph.md) | A network of nodes and edges that changes with the variables, with the picked and hovered node as variables. |
 | [`<t-paint>`](t-paint.md) | A canvas the reader draws on, with the drawing as a variable. |
+| [`<t-sketch>`](t-sketch.md) | An infinite whiteboard of vector strokes, with the board as a JSON variable. |
 | [`<t-scope>`](t-scope.md) | Giving part of the page its own variables. |
 
 For charts and other custom logic, the same variables are available from

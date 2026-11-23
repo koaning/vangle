@@ -102,6 +102,8 @@ td:first-child { white-space: nowrap; }
 }
 /* An example's source panels (markup, script, stylesheet) stack tightly, and the
    gap to the next paragraph comes after the last one. */
+/* A board has no margin of its own: keep it off the box's edges. */
+.example > t-sketch { margin: 1rem 0 1.25rem; }
 .example ~ details.source { margin-bottom: 1.4rem; }
 .example ~ details.source:has(+ [data-show-source]) { margin-bottom: 0; }
 .example button {

@@ -29,6 +29,7 @@ export { TangleElement } from "./core/element.js";
 import { TScope } from "./elements/t-scope.js";
 import { TPanel } from "./elements/t-panel.js";
 import { TPaint } from "./elements/t-paint.js";
+import { TSketch } from "./elements/t-sketch.js";
 import { TVar } from "./elements/t-var.js";
 import { TNum } from "./elements/t-num.js";
 import { TLet } from "./elements/t-let.js";
@@ -54,7 +55,10 @@ export { buildRequest, inspectScope, layoutGraph, vegaBindings, diffRows, plotOp
 if (typeof window !== "undefined" && window.customElements) {
   listen();
 
+  // <t-sketch> first: it keeps its children's HTML for Export, so it has to see them
+  // before the elements inside them are defined and render.
   const elements = {
+    "t-sketch": TSketch,
     "t-scope": TScope,
     "t-var": TVar,
     "t-num": TNum,

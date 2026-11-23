@@ -44,6 +44,7 @@ export const NAV = [
     ["t-jsxgraph", "<code>&lt;t-jsxgraph&gt;</code>"],
     ["t-graph", "<code>&lt;t-graph&gt;</code>"],
     ["t-paint", "<code>&lt;t-paint&gt;</code>"],
+    ["t-sketch", "<code>&lt;t-sketch&gt;</code>"],
     ["t-scope", "<code>&lt;t-scope&gt;</code>"],
     ["t-panel", "<code>&lt;t-panel&gt;</code>"],
     ["t-debug", "<code>&lt;t-debug&gt;</code>"],

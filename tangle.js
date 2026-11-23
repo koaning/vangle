@@ -2624,6 +2624,1756 @@ class TPaint extends TangleElement {
   }
 }
 
+// The model behind <t-sketch>, without the DOM: a board of strokes in canvas
+// coordinates (y down), read and written in the `.sketcher` JSON format of the
+// Sketcher app (https://github.com/koaning/sketcher), plus the viewport, hit
+// tests, edits and straight-line snapping. Strokes are immutable: edits return
+// new strokes, so the renderer can cache a Path2D per stroke object.
+
+const SKETCH_VERSION = 2;
+const SKETCH_BACKGROUNDS = ["plain", "dots", "grid"];
+/** Grid spacing at 100% zoom, in canvas units. */
+const SKETCH_GRID = 24;
+/** Snapped angles are multiples of 15°. */
+const SKETCH_ANGLE_STEP = Math.PI / 12;
+
+const sketchRgba = (r, g, b, a = 1) => ({ r, g, b, a });
+/** Ink on paper, slot for slot with the dark palette: black, gray, blue, red, green, yellow. */
+const SKETCH_LIGHT = [
+  sketchRgba(0.11, 0.11, 0.12),
+  sketchRgba(0.54, 0.54, 0.56),
+  sketchRgba(0.05, 0.42, 0.88),
+  sketchRgba(0.86, 0.2, 0.2),
+  sketchRgba(0.13, 0.56, 0.32),
+  sketchRgba(0.98, 0.74, 0.1),
+];
+/** Chalk on slate: white, gray, sky, coral, mint, yellow. */
+const SKETCH_DARK = [
+  sketchRgba(0.95, 0.95, 0.93),
+  sketchRgba(0.62, 0.62, 0.64),
+  sketchRgba(0.42, 0.72, 1.0),
+  sketchRgba(1.0, 0.47, 0.43),
+  sketchRgba(0.38, 0.85, 0.56),
+  sketchRgba(1.0, 0.85, 0.32),
+];
+
+/** A new upper-case UUID. randomUUID needs a secure context (https or localhost); elsewhere, build one. */
+function sketchID() {
+  if (crypto.randomUUID) return crypto.randomUUID().toUpperCase();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const hex = [...b].map((x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function emptySketch(background = "dots") {
+  return { version: SKETCH_VERSION, strokes: [], math: [], background };
+}
+
+/** A palette stroke takes its slot's color in the current theme; other strokes keep theirs. */
+function sketchStrokeColor(stroke, dark) {
+  const palette = dark ? SKETCH_DARK : SKETCH_LIGHT;
+  const slot = stroke.swatch;
+  return slot !== null && slot >= 0 && slot < palette.length ? palette[slot] : stroke.color;
+}
+
+function sketchCss(c, alpha = 1) {
+  const to = (v) => Math.round(Math.min(1, Math.max(0, v)) * 255);
+  return `rgba(${to(c.r)}, ${to(c.g)}, ${to(c.b)}, ${c.a * alpha})`;
+}
+
+// ---------------------------------------------------------------------------
+// Rectangles: { x, y, w, h }, or null for "nothing".
+// ---------------------------------------------------------------------------
+
+function sketchBoundsOf(points) {
+  if (!points.length) return null;
+  let minX = points[0].x, minY = points[0].y, maxX = minX, maxY = minY;
+  for (const p of points) {
+    if (p.x < minX) minX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y > maxY) maxY = p.y;
+  }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+function sketchUnion(a, b) {
+  if (!a) return b;
+  if (!b) return a;
+  const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+  return { x, y, w: Math.max(a.x + a.w, b.x + b.w) - x, h: Math.max(a.y + a.h, b.y + b.h) - y };
+}
+
+const sketchOutset = (r, d) => ({ x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d });
+
+const rectsMeet = (a, b) => a.x <= b.x + b.w && b.x <= a.x + a.w && a.y <= b.y + b.h && b.y <= a.y + a.h;
+
+const sketchContains = (r, p) => p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
+
+const sketchDistance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+
+/** The points' box, outset by half the line width (and a pixel). */
+function sketchStrokeBounds(stroke) {
+  const b = sketchBoundsOf(stroke.points);
+  return b && sketchOutset(b, stroke.width / 2 + 1);
+}
+
+function sketchContentBounds(strokes) {
+  let r = null;
+  for (const s of strokes) r = sketchUnion(r, sketchStrokeBounds(s));
+  return r;
+}
+
+// ---------------------------------------------------------------------------
+// The `.sketcher` format: points are [x, y] arrays, `swatch` is left out when
+// null, ids are upper case, and keys are sorted at every level. The board's
+// `math` layer is kept as it is, so a file from the app keeps its typeset math,
+// but <t-sketch> doesn't draw it.
+// ---------------------------------------------------------------------------
+
+function sketchFail(what) {
+  throw new Error(`Not a Sketcher board: bad ${what}`);
+}
+
+function sketchNum(v, what) {
+  if (typeof v !== "number" || !Number.isFinite(v)) sketchFail(what);
+  return v;
+}
+
+function sketchObj(v, what) {
+  if (typeof v !== "object" || v === null || Array.isArray(v)) sketchFail(what);
+  return v;
+}
+
+function sketchArr(v, what) {
+  if (!Array.isArray(v)) sketchFail(what);
+  return v;
+}
+
+function decodeSketchStroke(v) {
+  const o = sketchObj(v, "stroke");
+  if (o.tool !== "pen" && o.tool !== "marker") sketchFail("tool");
+  if (typeof o.id !== "string") sketchFail("id");
+  const c = sketchObj(o.color, "color");
+  return {
+    id: o.id.toUpperCase(),
+    tool: o.tool,
+    color: sketchRgba(sketchNum(c.r, "color"), sketchNum(c.g, "color"), sketchNum(c.b, "color"), sketchNum(c.a, "color")),
+    swatch: o.swatch === undefined || o.swatch === null ? null : sketchNum(o.swatch, "swatch"),
+    width: sketchNum(o.width, "width"),
+    points: sketchArr(o.points, "points").map((p) => {
+      if (!Array.isArray(p) || p.length !== 2) sketchFail("point");
+      return { x: sketchNum(p[0], "point"), y: sketchNum(p[1], "point") };
+    }),
+  };
+}
+
+/** A board from its JSON (an object or a string). Version 1 boards, without math, are upgraded. */
+function decodeSketch(json) {
+  if (typeof json === "string") {
+    try {
+      json = JSON.parse(json);
+    } catch {
+      throw new Error("Not a Sketcher board: invalid JSON");
+    }
+  }
+  const o = sketchObj(json, "board");
+  sketchNum(o.version, "version");
+  if (!SKETCH_BACKGROUNDS.includes(o.background)) sketchFail("background");
+  return {
+    version: SKETCH_VERSION,
+    strokes: sketchArr(o.strokes, "strokes").map(decodeSketchStroke),
+    math: o.math === undefined || o.math === null ? [] : sketchArr(o.math, "math"),
+    background: o.background,
+  };
+}
+
+function encodeSketchStroke(s) {
+  const out = { color: { a: s.color.a, b: s.color.b, g: s.color.g, r: s.color.r }, id: s.id };
+  out.points = s.points.map((p) => [p.x, p.y]);
+  if (s.swatch !== null) out.swatch = s.swatch;
+  out.tool = s.tool;
+  out.width = s.width;
+  return out;
+}
+
+/** The board as plain JSON, with its keys in sorted order: what `JSON.stringify` makes a `.sketcher` file of. */
+function encodeSketch(board) {
+  return {
+    background: board.background,
+    math: board.math,
+    strokes: board.strokes.map(encodeSketchStroke),
+    version: SKETCH_VERSION,
+  };
+}
+
+/** Some strokes, for the clipboard. */
+const encodeSketchFragment = (strokes) => ({ math: [], strokes: strokes.map(encodeSketchStroke) });
+
+function decodeSketchFragment(json) {
+  const o = sketchObj(json, "fragment");
+  return sketchArr(o.strokes ?? [], "strokes").map(decodeSketchStroke);
+}
+
+// ---------------------------------------------------------------------------
+// Viewport: view = canvas * scale + offset. Immutable.
+// ---------------------------------------------------------------------------
+
+class SketchViewport {
+  static min = 0.1;
+  static max = 8;
+
+  constructor(offset = { x: 0, y: 0 }, scale = 1) {
+    this.offset = offset;
+    this.scale = Math.min(SketchViewport.max, Math.max(SketchViewport.min, scale));
+  }
+
+  toView(p) {
+    return { x: p.x * this.scale + this.offset.x, y: p.y * this.scale + this.offset.y };
+  }
+
+  toCanvas(p) {
+    return { x: (p.x - this.offset.x) / this.scale, y: (p.y - this.offset.y) / this.scale };
+  }
+
+  rectToView(r) {
+    const o = this.toView(r);
+    return { x: o.x, y: o.y, w: r.w * this.scale, h: r.h * this.scale };
+  }
+
+  rectToCanvas(r) {
+    const o = this.toCanvas(r);
+    return { x: o.x, y: o.y, w: r.w / this.scale, h: r.h / this.scale };
+  }
+
+  panned(dx, dy) {
+    return new SketchViewport({ x: this.offset.x + dx, y: this.offset.y + dy }, this.scale);
+  }
+
+  /** Zooms by `factor`, keeping the canvas point under `anchor` (in view coordinates) in place. */
+  zoomed(factor, anchor) {
+    return this.zoomedTo(this.scale * factor, anchor);
+  }
+
+  zoomedTo(scale, anchor) {
+    const c = this.toCanvas(anchor);
+    const s = new SketchViewport(this.offset, scale).scale;
+    return new SketchViewport({ x: anchor.x - c.x * s, y: anchor.y - c.y * s }, s);
+  }
+
+  /** A viewport that fits `content` into a view of `size`, with padding. It never zooms in past 100%. */
+  static fitting(content, size, padding = 40) {
+    if (!content || (content.w <= 0 && content.h <= 0) || size.w <= 2 * padding || size.h <= 2 * padding) {
+      return new SketchViewport();
+    }
+    const sx = (size.w - 2 * padding) / Math.max(content.w, 1);
+    const sy = (size.h - 2 * padding) / Math.max(content.h, 1);
+    const s = new SketchViewport(undefined, Math.min(1, sx, sy)).scale;
+    const cx = content.x + content.w / 2, cy = content.y + content.h / 2;
+    return new SketchViewport({ x: size.w / 2 - cx * s, y: size.h / 2 - cy * s }, s);
+  }
+}
+
+/** The grid spacing at a zoom level: doubled until the lines are at least 12px apart on screen. */
+function sketchGridStep(scale) {
+  let step = SKETCH_GRID;
+  while (step * scale < 12) step *= 2;
+  return step;
+}
+
+// ---------------------------------------------------------------------------
+// Paths: quadratic curves through the midpoints of the segments. A single point
+// is a dot (the stroke has round caps).
+// ---------------------------------------------------------------------------
+
+function sketchSmooth(points, sink) {
+  const n = points.length;
+  if (!n) return sink;
+  sink.moveTo(points[0].x, points[0].y);
+  if (n <= 2) {
+    sink.lineTo(points[n - 1].x, points[n - 1].y);
+    return sink;
+  }
+  for (let i = 1; i < n - 1; i++) {
+    const p = points[i], q = points[i + 1];
+    sink.quadraticCurveTo(p.x, p.y, (p.x + q.x) / 2, (p.y + q.y) / 2);
+  }
+  sink.lineTo(points[n - 1].x, points[n - 1].y);
+  return sink;
+}
+
+// ---------------------------------------------------------------------------
+// Hit tests
+// ---------------------------------------------------------------------------
+
+function pointSegmentDistance(p, a, b) {
+  const abx = b.x - a.x, aby = b.y - a.y;
+  const lenSq = abx * abx + aby * aby;
+  const t = lenSq > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / lenSq)) : 0;
+  return Math.hypot(a.x + t * abx - p.x, a.y + t * aby - p.y);
+}
+
+function segmentsCross(p1, p2, p3, p4) {
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const d1 = cross(p3, p4, p1), d2 = cross(p3, p4, p2);
+  const d3 = cross(p1, p2, p3), d4 = cross(p1, p2, p4);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+function segmentDistance(a1, a2, b1, b2) {
+  if (segmentsCross(a1, a2, b1, b2)) return 0;
+  return Math.min(
+    pointSegmentDistance(a1, b1, b2),
+    pointSegmentDistance(a2, b1, b2),
+    pointSegmentDistance(b1, a1, a2),
+    pointSegmentDistance(b2, a1, a2),
+  );
+}
+
+/** Whether the eraser, swept from `e1` to `e2` with this radius, touches the stroke. */
+function sketchTouched(stroke, e1, e2, radius) {
+  const reach = radius + stroke.width / 2;
+  const bounds = sketchStrokeBounds(stroke);
+  const sweep = sketchOutset(sketchBoundsOf([e1, e2]), reach);
+  if (!bounds || !rectsMeet(bounds, sweep)) return false;
+  const pts = stroke.points;
+  if (pts.length === 1) return pointSegmentDistance(pts[0], e1, e2) <= reach;
+  for (let i = 0; i < pts.length - 1; i++) {
+    if (segmentDistance(pts[i], pts[i + 1], e1, e2) <= reach) return true;
+  }
+  return false;
+}
+
+/** Even-odd point in polygon. The polygon closes itself. */
+function sketchInPolygon(polygon, p) {
+  if (polygon.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const a = polygon[i], b = polygon[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+  }
+  return inside;
+}
+
+/** The ids of the strokes with at least half their points inside the lasso. */
+function sketchLassoed(lasso, strokes) {
+  const box = sketchBoundsOf(lasso);
+  if (lasso.length < 3 || !box) return [];
+  return strokes
+    .filter((s) => {
+      const b = sketchStrokeBounds(s);
+      if (!b || !rectsMeet(b, box)) return false;
+      const inside = s.points.reduce((n, p) => n + (sketchInPolygon(lasso, p) ? 1 : 0), 0);
+      return inside / s.points.length >= 0.5;
+    })
+    .map((s) => s.id);
+}
+
+// ---------------------------------------------------------------------------
+// Edits
+// ---------------------------------------------------------------------------
+
+const sketchMoved = (s, dx, dy) => ({ ...s, points: s.points.map((p) => ({ x: p.x + dx, y: p.y + dy })) });
+
+/** Scales the points and the line width about `anchor`. */
+function sketchScaled(s, f, anchor) {
+  const points = s.points.map((p) => ({ x: anchor.x + (p.x - anchor.x) * f, y: anchor.y + (p.y - anchor.y) * f }));
+  return { ...s, points, width: s.width * f };
+}
+
+/** Copies of the strokes, moved by (dx, dy), with fresh ids. */
+const sketchCopies = (strokes, dx, dy) => strokes.map((s) => ({ ...sketchMoved(s, dx, dy), id: sketchID() }));
+
+// ---------------------------------------------------------------------------
+// Straight lines: Shift snaps the angle to 15° steps, Option/Alt snaps the ends
+// to the grid. With both, the end lands on the grid only where that keeps the
+// angle (0°, 45°, 90°, …).
+// ---------------------------------------------------------------------------
+
+const sketchToGrid = (p, step) => ({ x: Math.round(p.x / step) * step, y: Math.round(p.y / step) * step });
+
+/** The end of a line from `start` toward `end` at the nearest 15° angle, as long as `end`'s projection onto it. */
+function angleSnapped(start, end) {
+  const dx = end.x - start.x, dy = end.y - start.y;
+  if (!dx && !dy) return start;
+  const angle = Math.round(Math.atan2(dy, dx) / SKETCH_ANGLE_STEP) * SKETCH_ANGLE_STEP;
+  const ux = Math.cos(angle), uy = Math.sin(angle);
+  const length = dx * ux + dy * uy;
+  // Exact zeros keep horizontal and vertical lines straight.
+  return {
+    x: start.x + (Math.abs(ux) < 1e-12 ? 0 : ux * length),
+    y: start.y + (Math.abs(uy) < 1e-12 ? 0 : uy * length),
+  };
+}
+
+/** A straight line from `start` to `end`: one point when it has no length, else two. */
+function sketchLine(start, end, { angle = false, grid = null } = {}) {
+  let a = start, b = end;
+  if (grid) a = sketchToGrid(a, grid);
+  if (angle) {
+    b = angleSnapped(a, b);
+    if (grid) {
+      const g = sketchToGrid(b, grid);
+      const cross = (b.x - a.x) * (g.y - a.y) - (b.y - a.y) * (g.x - a.x);
+      if (Math.abs(cross) < 1e-6 * grid * grid) b = g;
+    }
+  } else if (grid) {
+    b = sketchToGrid(b, grid);
+  }
+  return a.x === b.x && a.y === b.y ? [a] : [a, b];
+}
+
+// Ported from the board of Sketcher (https://github.com/koaning/sketcher), without its math layer.
+
+const SKETCH_CSS = `
+  :host {
+    display: block;
+    font: 13px ui-sans-serif, system-ui, sans-serif;
+    --line: color-mix(in srgb, currentColor 15%, transparent);
+    --glass: color-mix(in srgb, var(--tangle-surface, #fff) 80%, transparent);
+  }
+  * { box-sizing: border-box; }
+  [part="board"] {
+    position: relative;
+    height: 400px;
+    min-height: 160px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    outline: none;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+  }
+  [part="board"]:focus-visible { outline: 2px solid var(--tangle-accent); outline-offset: 1px; }
+  canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+  .glass {
+    background: var(--glass);
+    border: 1px solid var(--line);
+    box-shadow: 0 2px 10px rgb(0 0 0 / 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  [part="palette"] {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    max-width: calc(100% - 16px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 5px;
+    border-radius: 10px;
+    z-index: 2;
+  }
+  .section { display: flex; align-items: center; gap: 1px; }
+  .section + .section { padding-left: 4px; border-left: 1px solid var(--line); }
+  button {
+    all: unset;
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    color: inherit;
+    cursor: pointer;
+  }
+  button svg { width: 16px; height: 16px; }
+  button:hover:not(:disabled) { background: color-mix(in srgb, currentColor 9%, transparent); }
+  button[aria-pressed="true"] {
+    color: var(--tangle-accent);
+    background: color-mix(in srgb, var(--tangle-accent) 15%, transparent);
+  }
+  button:disabled { opacity: 0.3; cursor: default; }
+  button:focus-visible { outline: 2px solid var(--tangle-accent); }
+  .width { width: 20px; }
+  .width span { display: block; border-radius: 50%; background: currentColor; }
+  .width[aria-pressed="true"] { color: inherit; background: color-mix(in srgb, currentColor 14%, transparent); }
+  [part~="swatch"] { width: 22px; border-radius: 50%; }
+  [part~="swatch"] span {
+    display: block;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 15%, transparent);
+  }
+  [part~="swatch"][aria-pressed="true"] {
+    background: none;
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, currentColor 70%, transparent);
+  }
+  [part="selection-bar"] { position: absolute; display: flex; padding: 2px; border-radius: 10px; z-index: 2; }
+  [part="menu"] {
+    position: absolute;
+    min-width: 180px;
+    padding: 4px;
+    border-radius: 8px;
+    z-index: 3;
+    display: flex;
+    flex-direction: column;
+  }
+  [part="menu"] button {
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    width: auto;
+    height: auto;
+    padding: 4px 9px;
+    border-radius: 5px;
+  }
+  [part="menu"] button:hover:not(:disabled), [part="menu"] button:focus-visible {
+    background: var(--tangle-accent);
+    color: var(--tangle-surface, #fff);
+    outline: none;
+  }
+  kbd { font: inherit; opacity: 0.55; }
+  hr { border: 0; height: 1px; margin: 4px 8px; background: var(--line); }
+  [part="toast"] {
+    position: absolute;
+    left: 50%;
+    bottom: 12px;
+    transform: translateX(-50%);
+    padding: 6px 12px;
+    border-radius: 8px;
+    z-index: 4;
+  }
+  [hidden] { display: none !important; }
+`;
+
+/** Thin, medium and thick, in screen pixels. */
+const SKETCH_WIDTHS = { pen: [1.5, 2.5, 6], marker: [10, 20, 36] };
+/** The eraser's radius, and the least distance between two captured points, in screen pixels. */
+const SKETCH_ERASER = 10;
+const SKETCH_SPACING = 1.5;
+const SKETCH_HANDLE = 5;
+const SKETCH_UNDO = 500;
+/** Highlights are drawn opaque and put down once at this opacity, so overlaps don't darken. */
+const SKETCH_MARKER_ALPHA = { light: 0.35, dark: 0.55 };
+
+// Icons in the style of Lucide (https://lucide.dev, ISC license).
+const sketchIcon = (body) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+const SKETCH_ICONS = {
+  pen: sketchIcon('<path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/>'),
+  marker: sketchIcon('<path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/>'),
+  eraser: sketchIcon('<path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/>'),
+  select: sketchIcon('<path d="M3.704 14.467A10 8 0 0 1 2 10a10 8 0 0 1 20 0 10 8 0 0 1-10 8 10 8 0 0 1-5.181-1.158"/><path d="M7 22a5 5 0 0 1-2-3.994"/><circle cx="5" cy="16" r="2"/>'),
+  undo: sketchIcon('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>'),
+  redo: sketchIcon('<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>'),
+  plain: sketchIcon('<rect width="18" height="18" x="3" y="3" rx="2"/>'),
+  dots: sketchIcon('<circle cx="6" cy="6" r=".6"/><circle cx="12" cy="6" r=".6"/><circle cx="18" cy="6" r=".6"/><circle cx="6" cy="12" r=".6"/><circle cx="12" cy="12" r=".6"/><circle cx="18" cy="12" r=".6"/><circle cx="6" cy="18" r=".6"/><circle cx="12" cy="18" r=".6"/><circle cx="18" cy="18" r=".6"/>'),
+  grid: sketchIcon('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/>'),
+  trash: sketchIcon('<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>'),
+};
+const SKETCH_TOOL_NAMES = { pen: "Pen (P)", marker: "Marker (M)", eraser: "Eraser (E)", select: "Select (S)" };
+const SKETCH_BACKGROUND_NAMES = { plain: "Plain", dots: "Dots", grid: "Grid" };
+
+const sketchIsMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
+/** A shortcut's label: ⇧⌘E on a Mac, Ctrl+Shift+E elsewhere. */
+function sketchKeys(key, { shift = false, mod = true } = {}) {
+  if (sketchIsMac) return `${shift ? "⇧" : ""}${mod ? "⌘" : ""}${key}`;
+  return [mod ? "Ctrl" : "", shift ? "Shift" : "", key].filter(Boolean).join("+");
+}
+
+/** The smoothed path of a stroke, cached per stroke object (strokes don't change). */
+const sketchPaths = new WeakMap();
+function sketchPath(stroke) {
+  let path = sketchPaths.get(stroke);
+  if (!path) sketchPaths.set(stroke, (path = sketchSmooth(stroke.points, new Path2D())));
+  return path;
+}
+
+/** The last strokes copied on this page, for when the system clipboard can't be used. */
+let sketchClipboard = null;
+/** An offscreen canvas that flattens a group of highlights, reused. */
+let sketchScratch = null;
+
+/** Whether a CSS color is light, judging by its red, green and blue. */
+function sketchIsLight(color) {
+  const [r, g, b] = (color.match(/[\d.]+/g) ?? [0, 0, 0]).map(Number);
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b > 128;
+}
+
+const sketchCursors = new Map();
+/** A round cursor with a light and a dark outline, so it shows on any ink. */
+function sketchCursor(diameter, fill) {
+  const key = `${diameter}|${fill}`;
+  let cursor = sketchCursors.get(key);
+  if (!cursor) {
+    const size = Math.ceil(diameter + 4);
+    const c = size / 2, r = diameter / 2;
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">` +
+      (fill ? `<circle cx="${c}" cy="${c}" r="${r}" fill="${fill}"/>` : "") +
+      `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="rgba(255,255,255,0.9)" stroke-width="2"/>` +
+      `<circle cx="${c}" cy="${c}" r="${r}" fill="none" stroke="rgba(0,0,0,0.6)" stroke-width="1"/></svg>`;
+    cursor = `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${Math.round(c)} ${Math.round(c)}, crosshair`;
+    sketchCursors.set(key, cursor);
+  }
+  return cursor;
+}
+
+/**
+ * Draws strokes on a context that is in canvas coordinates. Highlights go first,
+ * under the pen ink: each color's highlights are stroked opaque into a scratch
+ * canvas and put down once, translucent, so overlapping strokes of one color
+ * don't get darker. Different colors still mix where they cross.
+ */
+function sketchDrawInk(ctx, items, dark) {
+  const groups = new Map();
+  for (const item of items) {
+    if (item.stroke.tool !== "marker") continue;
+    const color = sketchCss(sketchStrokeColor(item.stroke, dark));
+    if (!groups.has(color)) groups.set(color, []);
+    groups.get(color).push(item);
+  }
+  for (const [color, group] of groups) sketchDrawHighlights(ctx, group, color, dark);
+  ctx.save();
+  ctx.lineCap = ctx.lineJoin = "round";
+  for (const { stroke, path } of items) {
+    if (stroke.tool !== "pen") continue;
+    ctx.strokeStyle = sketchCss(sketchStrokeColor(stroke, dark));
+    ctx.lineWidth = stroke.width;
+    ctx.stroke(path);
+  }
+  ctx.restore();
+}
+
+function sketchDrawHighlights(ctx, items, color, dark) {
+  let bounds = null;
+  for (const { stroke } of items) bounds = sketchUnion(bounds, sketchStrokeBounds(stroke));
+  if (!bounds) return;
+  // The group's box in device pixels, clipped to the target.
+  const t = ctx.getTransform();
+  const x0 = Math.max(0, Math.floor(t.a * bounds.x + t.e));
+  const y0 = Math.max(0, Math.floor(t.d * bounds.y + t.f));
+  const x1 = Math.min(ctx.canvas.width, Math.ceil(t.a * (bounds.x + bounds.w) + t.e));
+  const y1 = Math.min(ctx.canvas.height, Math.ceil(t.d * (bounds.y + bounds.h) + t.f));
+  if (x1 <= x0 || y1 <= y0) return;
+  sketchScratch ??= document.createElement("canvas");
+  if (sketchScratch.width < ctx.canvas.width) sketchScratch.width = ctx.canvas.width;
+  if (sketchScratch.height < ctx.canvas.height) sketchScratch.height = ctx.canvas.height;
+  const s = sketchScratch.getContext("2d");
+  s.setTransform(1, 0, 0, 1, 0, 0);
+  s.clearRect(x0, y0, x1 - x0, y1 - y0);
+  s.setTransform(t);
+  s.strokeStyle = color;
+  s.lineCap = s.lineJoin = "round";
+  for (const { stroke, path } of items) {
+    s.lineWidth = stroke.width;
+    s.stroke(path);
+  }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha = dark ? SKETCH_MARKER_ALPHA.dark : SKETCH_MARKER_ALPHA.light;
+  // Multiply darkens like highlighter on paper; on a dark board it would vanish.
+  ctx.globalCompositeOperation = dark ? "source-over" : "multiply";
+  ctx.drawImage(sketchScratch, x0, y0, x1 - x0, y1 - y0, x0, y0, x1 - x0, y1 - y0);
+  ctx.restore();
+}
+
+/** Dots or grid lines, in view coordinates, so they keep their size on screen. */
+function sketchDrawBackground(ctx, background, view, dark, size) {
+  if (background === "plain") return;
+  const step = sketchGridStep(view.scale);
+  const topLeft = view.toCanvas({ x: 0, y: 0 });
+  const bottomRight = view.toCanvas({ x: size.w, y: size.h });
+  const startX = Math.floor(topLeft.x / step) * step;
+  const startY = Math.floor(topLeft.y / step) * step;
+  ctx.save();
+  ctx.beginPath();
+  if (background === "dots") {
+    for (let y = startY; y <= bottomRight.y + step; y += step) {
+      for (let x = startX; x <= bottomRight.x + step; x += step) {
+        const p = view.toView({ x, y });
+        ctx.moveTo(p.x + 1.1, p.y);
+        ctx.arc(p.x, p.y, 1.1, 0, Math.PI * 2);
+      }
+    }
+    ctx.fillStyle = dark ? "rgba(255, 255, 255, 0.14)" : "rgba(0, 0, 0, 0.16)";
+    ctx.fill();
+  } else {
+    for (let x = startX; x <= bottomRight.x + step; x += step) {
+      const vx = Math.round(view.toView({ x, y: 0 }).x) + 0.5;
+      ctx.moveTo(vx, 0);
+      ctx.lineTo(vx, size.h);
+    }
+    for (let y = startY; y <= bottomRight.y + step; y += step) {
+      const vy = Math.round(view.toView({ x: 0, y }).y) + 0.5;
+      ctx.moveTo(0, vy);
+      ctx.lineTo(size.w, vy);
+    }
+    ctx.strokeStyle = dark ? "rgba(255, 255, 255, 0.07)" : "rgba(0, 0, 0, 0.07)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// <t-sketch name="board" height="400" background="dots"></t-sketch>
+// An infinite whiteboard: pen, highlighter, eraser and lasso on a canvas you pan
+// and zoom. The drawing is a variable: the board as `.sketcher` JSON, set once
+// per finished stroke or edit. Setting the variable shows that board.
+class TSketch extends TangleElement {
+  /** The board as `.sketcher` JSON: `{ background, math, strokes, version }`. */
+  get value() {
+    return this._value;
+  }
+
+  connectedCallback() {
+    if (!this.shadowRoot) this.build();
+    this.listenToPage();
+    this._name = this.hasAttribute("name") ? validName(this) : null;
+    if (!this._name) {
+      if (this._value === undefined) this.publish();
+      return;
+    }
+    this.watch((scope) => {
+      const value = scope.get(this._name);
+      untracked(() => {
+        if (value === undefined || value === null || value === "") this.publish();
+        else if (value !== this._value) this.load(value);
+      });
+    });
+  }
+
+  disconnectedCallback() {
+    for (const stop of this._pageListeners ?? []) stop();
+    this._pageListeners = [];
+    super.disconnectedCallback();
+  }
+
+  build() {
+    const background = this.getAttribute("background") ?? "dots";
+    if (!SKETCH_BACKGROUNDS.includes(background)) {
+      console.error(`tangle: <t-sketch> background is ${SKETCH_BACKGROUNDS.join(", ")}`, this);
+    }
+    this._board = emptySketch(SKETCH_BACKGROUNDS.includes(background) ? background : "dots");
+    this._view = new SketchViewport();
+    this._tool = "pen";
+    this._widthIndex = 1;
+    this._swatch = 0;
+    this._undo = [];
+    this._redo = [];
+    this._selection = new Set();
+    this._erased = new Set();
+    this._gesture = null;
+    this._touches = new Map();
+    this._size = { w: 0, h: 0 };
+    this._dark = false;
+    this._edits = 0; // boards set or edits made, so a late src file doesn't overwrite them
+
+    const root = this.attachShadow({ mode: "open" });
+    root.innerHTML = `<style>${SKETCH_CSS}</style>
+      <div part="board" tabindex="0" role="application">
+        <canvas part="canvas"></canvas>
+        <div part="palette" class="glass" role="toolbar"></div>
+        <div part="selection-bar" class="glass" hidden></div>
+        <div part="menu" class="glass" role="menu" hidden></div>
+        <div part="toast" class="glass" role="status" hidden></div>
+      </div>`;
+    const $ = (part) => root.querySelector(`[part="${part}"]`);
+    this._root = $("board");
+    this._canvas = $("canvas");
+    this._ctx = this._canvas.getContext("2d");
+    this._menu = $("menu");
+    this._bar = $("selection-bar");
+    this._toast = $("toast");
+    this._root.setAttribute("aria-label", this.getAttribute("label") ?? this.getAttribute("name") ?? "Whiteboard");
+    const height = Number(this.getAttribute("height"));
+    if (height > 0) this._root.style.height = `${height}px`;
+    this.buildPalette($("palette"));
+    this._bar.append(this.button(SKETCH_ICONS.trash, "Delete (⌫)", () => this.deleteSelection()));
+    for (const el of [$("palette"), this._bar, this._menu]) {
+      el.addEventListener("pointerdown", (e) => e.stopPropagation());
+      el.addEventListener("contextmenu", (e) => e.preventDefault());
+    }
+    this._toast.addEventListener("pointerdown", () => (this._toast.hidden = true));
+
+    const canvas = this._canvas;
+    canvas.addEventListener("pointerdown", (e) => this.pointerDown(e));
+    canvas.addEventListener("pointermove", (e) => this.pointerMove(e));
+    canvas.addEventListener("pointerup", (e) => this.pointerUp(e));
+    canvas.addEventListener("pointercancel", (e) => this.pointerCancel(e));
+    canvas.addEventListener("pointerleave", () => {
+      if (!this._gesture) this._hover = null;
+    });
+    canvas.addEventListener("wheel", (e) => this.wheel(e), { passive: false });
+    canvas.addEventListener("contextmenu", (e) => this.contextMenu(e));
+    this._root.addEventListener("keydown", (e) => this.keyDown(e));
+    this._root.addEventListener("keyup", (e) => this.keyUp(e));
+    this._root.addEventListener("focusout", (e) => {
+      if (this._root.contains(e.relatedTarget)) return;
+      this._menu.hidden = true;
+      this._space = false;
+      this.updateCursor();
+    });
+    // Safari's trackpad pinch comes as gesture events too; the wheel handler zooms.
+    this._root.addEventListener("gesturestart", (e) => e.preventDefault());
+    new ResizeObserver(() => this.resized()).observe(this._root);
+
+    const src = this.getAttribute("src");
+    if (src) this.fetchBoard(src);
+    this.refresh();
+  }
+
+  buildPalette(palette) {
+    const section = (buttons) => {
+      const el = document.createElement("div");
+      el.className = "section";
+      el.append(...buttons);
+      palette.append(el);
+    };
+    this._toolButtons = Object.entries(SKETCH_TOOL_NAMES).map(([tool, title]) =>
+      this.button(SKETCH_ICONS[tool], title, () => this.setTool(tool)),
+    );
+    this._widthButtons = ["Thin", "Medium", "Thick"].map((name, i) => {
+      const b = this.button("", `${name} ([ and ])`, () => {
+        this._widthIndex = i;
+        this.refresh();
+      });
+      b.classList.add("width");
+      const d = 3 + i * 2.5;
+      b.innerHTML = `<span style="width:${d}px;height:${d}px"></span>`;
+      return b;
+    });
+    this._swatchButtons = SKETCH_LIGHT.map((_, i) => {
+      const b = this.button("<span></span>", `Color ${i + 1}`, () => this.setSwatch(i));
+      b.setAttribute("part", "button swatch");
+      return b;
+    });
+    this._backgroundButton = this.button("", "", () => {
+      const i = SKETCH_BACKGROUNDS.indexOf(this._board.background);
+      this.commit({ ...this._board, background: SKETCH_BACKGROUNDS[(i + 1) % SKETCH_BACKGROUNDS.length] });
+    });
+    this._undoButton = this.button(SKETCH_ICONS.undo, `Undo (${sketchKeys("Z")})`, () => this.undo());
+    this._redoButton = this.button(SKETCH_ICONS.redo, `Redo (${sketchKeys("Z", { shift: true })})`, () => this.redo());
+    section(this._toolButtons);
+    section(this._widthButtons);
+    section(this._swatchButtons);
+    section([this._backgroundButton, this._undoButton, this._redoButton]);
+  }
+
+  /** A button that doesn't take focus, so keys keep going to the board. */
+  button(icon, title, action) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("part", "button");
+    b.title = title;
+    b.setAttribute("aria-label", title.replace(/ \(.*\)$/, ""));
+    b.innerHTML = icon;
+    b.addEventListener("pointerdown", (e) => e.preventDefault());
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      action();
+    });
+    return b;
+  }
+
+  /** Clipboard events and theme changes reach the board through the page. */
+  listenToPage() {
+    if (this._pageListeners?.length) return;
+    const stops = (this._pageListeners = []);
+    const listen = (target, type, fn) => {
+      target.addEventListener(type, fn);
+      stops.push(() => target.removeEventListener(type, fn));
+    };
+    for (const type of ["copy", "cut", "paste"]) {
+      listen(document, type, (e) => {
+        if (!this.hasFocus) return;
+        e.preventDefault();
+        this._pendingClipboard = null;
+        if (type === "paste") this.paste(e.clipboardData);
+        else this.copy(type, e.clipboardData);
+      });
+    }
+    listen(matchMedia("(prefers-color-scheme: dark)"), "change", () => this.themeChanged());
+    const observer = new MutationObserver(() => this.themeChanged());
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme", "style"] });
+    stops.push(() => observer.disconnect());
+    this.themeChanged();
+  }
+
+  get hasFocus() {
+    return !!this.shadowRoot.activeElement;
+  }
+
+  // -------------------------------------------------------------------------
+  // The board and its variable
+  // -------------------------------------------------------------------------
+
+  /** Loads the src file, unless the board changed while it was on its way. */
+  async fetchBoard(src) {
+    const edits = this._edits;
+    try {
+      const response = await fetch(src);
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      const board = decodeSketch(await response.json());
+      if (this._edits !== edits) return;
+      this.setBoard(board);
+      this.publish();
+    } catch (error) {
+      console.error(`tangle: <t-sketch> could not load ${src}: ${error.message}`, this);
+    }
+  }
+
+  /**
+   * Shows a board from the variable. Given as a string, it goes back into the
+   * variable as JSON; an object stays as it is, so two boards with one name
+   * don't keep handing each other new objects.
+   */
+  load(value) {
+    let board;
+    try {
+      board = decodeSketch(value);
+    } catch (error) {
+      console.error(`tangle: <t-sketch> ${error.message}`, this);
+      return;
+    }
+    this.setBoard(board);
+    if (typeof value === "string") this.publish();
+    else this._value = value;
+  }
+
+  /** Replaces the board, and fits the view to it. Undo starts over. */
+  setBoard(board) {
+    this._edits++;
+    this.cancelGesture();
+    this._board = board;
+    this._undo = [];
+    this._redo = [];
+    this._selection.clear();
+    if (this._size.w) this.zoomToFit();
+    else this._fitLater = true;
+    this.refresh();
+  }
+
+  /** Records an edit for undo, and puts the board in the variable. */
+  commit(next) {
+    this._undo.push(this._board);
+    if (this._undo.length > SKETCH_UNDO) this._undo.shift();
+    this._redo = [];
+    this._board = next;
+    this.changed();
+  }
+
+  undo() {
+    const last = this._undo.pop();
+    if (!last) return;
+    this._redo.push(this._board);
+    this._board = last;
+    this.changed();
+  }
+
+  redo() {
+    const next = this._redo.pop();
+    if (!next) return;
+    this._undo.push(this._board);
+    this._board = next;
+    this.changed();
+  }
+
+  changed() {
+    this._edits++;
+    this.cancelGesture();
+    const ids = new Set(this._board.strokes.map((s) => s.id));
+    for (const id of this._selection) if (!ids.has(id)) this._selection.delete(id);
+    this.refresh();
+    this.publish();
+  }
+
+  publish() {
+    this._value = encodeSketch(this._board);
+    if (this._name) this.scope.set(this._name, this._value);
+    this.dispatchEvent(new Event("change", { bubbles: true }));
+  }
+
+  // -------------------------------------------------------------------------
+  // Tools, selection, theme
+  // -------------------------------------------------------------------------
+
+  setTool(tool) {
+    if (tool !== "select") this._selection.clear();
+    this._tool = tool;
+    this.refresh();
+  }
+
+  /** Picking a color goes back to drawing. */
+  setSwatch(i) {
+    this._swatch = i;
+    if (this._tool === "eraser" || this._tool === "select") this._tool = "pen";
+    this._selection.clear();
+    this.refresh();
+  }
+
+  /** The current tool's line width, in screen pixels. */
+  get screenWidth() {
+    if (this._tool === "eraser") return SKETCH_ERASER * 2;
+    return SKETCH_WIDTHS[this._tool === "marker" ? "marker" : "pen"][this._widthIndex];
+  }
+
+  get palette() {
+    return this._dark ? SKETCH_DARK : SKETCH_LIGHT;
+  }
+
+  get selected() {
+    return this._board.strokes.filter((s) => this._selection.has(s.id));
+  }
+
+  get selectionBounds() {
+    return this._selection.size ? sketchContentBounds(this.selected) : null;
+  }
+
+  selectAll() {
+    this._tool = "select";
+    this._selection = new Set(this._board.strokes.map((s) => s.id));
+    this.refresh();
+  }
+
+  deleteSelection() {
+    if (!this._selection.size) return;
+    const strokes = this._board.strokes.filter((s) => !this._selection.has(s.id));
+    this._selection.clear();
+    this.commit({ ...this._board, strokes });
+  }
+
+  clearBoard() {
+    if (!this._board.strokes.length) return;
+    this._selection.clear();
+    this.commit({ ...this._board, strokes: [] });
+  }
+
+  /** The page is dark when its text is light. The paper is the page's surface. */
+  themeChanged() {
+    const style = getComputedStyle(this);
+    const dark = sketchIsLight(style.color);
+    const paper = style.getPropertyValue("--tangle-surface").trim() || (dark ? "#1e1f22" : "#fbfbf8");
+    const accent = style.getPropertyValue("--tangle-accent").trim() || "#246bce";
+    if (dark === this._dark && paper === this._paper && accent === this._accent) return;
+    Object.assign(this, { _dark: dark, _paper: paper, _accent: accent });
+    this.refresh();
+  }
+
+  /** Updates the palette and redraws. */
+  refresh() {
+    this._toolButtons.forEach((b, i) => b.setAttribute("aria-pressed", String(Object.keys(SKETCH_TOOL_NAMES)[i] === this._tool)));
+    this._widthButtons.forEach((b, i) => b.setAttribute("aria-pressed", String(i === this._widthIndex)));
+    const drawing = this._tool === "pen" || this._tool === "marker";
+    this._swatchButtons.forEach((b, i) => {
+      b.setAttribute("aria-pressed", String(drawing && i === this._swatch));
+      b.firstElementChild.style.background = sketchCss(this.palette[i]);
+    });
+    const bg = this._board.background;
+    const next = SKETCH_BACKGROUNDS[(SKETCH_BACKGROUNDS.indexOf(bg) + 1) % SKETCH_BACKGROUNDS.length];
+    this._backgroundButton.innerHTML = SKETCH_ICONS[bg];
+    this._backgroundButton.title = `Background: ${SKETCH_BACKGROUND_NAMES[bg]} (click for ${SKETCH_BACKGROUND_NAMES[next]})`;
+    this._backgroundButton.setAttribute("aria-label", `Background: ${SKETCH_BACKGROUND_NAMES[bg]}`);
+    this._undoButton.disabled = !this._undo.length;
+    this._redoButton.disabled = !this._redo.length;
+    this.requestRender();
+  }
+
+  showToast(message) {
+    this._toast.textContent = message;
+    this._toast.hidden = false;
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => (this._toast.hidden = true), 2500);
+  }
+
+  // -------------------------------------------------------------------------
+  // View
+  // -------------------------------------------------------------------------
+
+  get viewCenter() {
+    return { x: this._size.w / 2, y: this._size.h / 2 };
+  }
+
+  zoomToFit() {
+    this._view = SketchViewport.fitting(sketchContentBounds(this._board.strokes), this._size);
+    this.requestRender();
+  }
+
+  zoomToActualSize() {
+    this._view = this._view.zoomedTo(1, this.viewCenter);
+    this.requestRender();
+  }
+
+  zoomBy(factor) {
+    this._view = this._view.zoomed(factor, this.viewCenter);
+    this.requestRender();
+  }
+
+  resized() {
+    const w = this._root.clientWidth, h = this._root.clientHeight;
+    if (w === this._size.w && h === this._size.h) return;
+    this._size = { w, h };
+    if (w && h && (this._fitLater || !this._sized)) {
+      this._sized = true;
+      this._fitLater = false;
+      if (this._board.strokes.length) this.zoomToFit();
+    }
+    this.render();
+  }
+
+  // -------------------------------------------------------------------------
+  // Pointer
+  // -------------------------------------------------------------------------
+
+  viewPoint(e) {
+    const r = this._canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  pointerDown(e) {
+    this._menu.hidden = true;
+    this._root.focus({ preventScroll: true, focusVisible: false });
+    const v = this.viewPoint(e);
+    this._hover = v;
+    if (e.pointerType === "touch") {
+      this._touches.set(e.pointerId, v);
+      if (this._touches.size === 2) {
+        // A second finger turns whatever the first one started into a pan and zoom.
+        this.cancelGesture();
+        this._gesture = { kind: "pinch", last: this.pinchState() };
+        return;
+      }
+      if (this._touches.size > 2) return;
+    }
+    if (this._gesture || e.button === 2) return;
+    try {
+      this._canvas.setPointerCapture(e.pointerId);
+    } catch {
+      // A synthetic pointer can't be captured.
+    }
+    const id = e.pointerId;
+    if (e.button === 1 || this._space) {
+      e.preventDefault();
+      this._gesture = { kind: "pan", id, last: v };
+      this.requestRender();
+      return;
+    }
+    if (e.button !== 0) return;
+    const p = this._view.toCanvas(v);
+    // A pen's eraser end reports the eraser button.
+    const tool = e.pointerType === "pen" && e.buttons & 32 ? "eraser" : this._tool;
+    if (tool === "pen" || tool === "marker") {
+      const stroke = {
+        id: sketchID(),
+        tool,
+        color: this.palette[this._swatch],
+        swatch: this._swatch,
+        width: this.screenWidth / this._view.scale,
+        points: [p],
+      };
+      this._gesture = { kind: "stroke", id, stroke, raw: [p], end: p, shift: e.shiftKey, alt: e.altKey };
+    } else if (tool === "eraser") {
+      this._erased = new Set();
+      this._gesture = { kind: "erase", id, last: p };
+      this.erase(p, p);
+    } else {
+      this.selectDown(id, p);
+    }
+    this.requestRender();
+  }
+
+  pointerMove(e) {
+    const v = this.viewPoint(e);
+    this._hover = v;
+    const g = this._gesture;
+    if (e.pointerType === "touch" && this._touches.has(e.pointerId)) {
+      this._touches.set(e.pointerId, v);
+      if (g?.kind === "pinch") {
+        const next = this.pinchState();
+        let view = this._view.panned(next.center.x - g.last.center.x, next.center.y - g.last.center.y);
+        if (g.last.spread > 0 && next.spread > 0) view = view.zoomed(next.spread / g.last.spread, next.center);
+        this._view = view;
+        g.last = next;
+        this.requestRender();
+        return;
+      }
+    }
+    if (!g) return this.updateCursor();
+    if (g.kind === "pinch" || g.id !== e.pointerId) return;
+    if (g.kind === "pan") {
+      this._view = this._view.panned(v.x - g.last.x, v.y - g.last.y);
+      g.last = v;
+      return this.requestRender();
+    }
+    // Every sample counts for ink; otherwise browsers send one move per frame.
+    const samples = e.getCoalescedEvents?.() ?? [];
+    const points = (samples.length ? samples : [e]).map((s) => this._view.toCanvas(this.viewPoint(s)));
+    const spacing = SKETCH_SPACING / this._view.scale;
+    for (const p of points) {
+      if (g.kind === "stroke") {
+        if (sketchDistance(g.raw.at(-1), p) >= spacing) g.raw.push(p);
+        g.end = p;
+      } else if (g.kind === "erase") {
+        this.erase(g.last, p);
+        g.last = p;
+      } else if (g.kind === "lasso") {
+        if (sketchDistance(g.points.at(-1), p) >= spacing) g.points.push(p);
+      } else if (g.kind === "scale") {
+        // The pointer, projected onto the diagonal, so the scale stays uniform.
+        const dx = g.start.x - g.anchor.x, dy = g.start.y - g.anchor.y;
+        const lengthSq = dx * dx + dy * dy;
+        if (lengthSq > 0) {
+          const t = ((p.x - g.anchor.x) * dx + (p.y - g.anchor.y) * dy) / lengthSq;
+          g.factor = Math.max(0.05, Math.min(20, t));
+        }
+      } else if (g.kind === "move") {
+        g.offset = { x: p.x - g.anchor.x, y: p.y - g.anchor.y };
+      }
+    }
+    if (g.kind === "stroke") this.shapeStroke(g, e.shiftKey, e.altKey);
+    this.requestRender();
+  }
+
+  /** Freehand, or with Shift or Option/Alt held, a straight line. The keys can change mid-stroke. */
+  shapeStroke(g, shift, alt) {
+    g.shift = shift;
+    g.alt = alt;
+    g.stroke.points = shift || alt
+      ? sketchLine(g.raw[0], g.end, { angle: shift, grid: alt ? sketchGridStep(this._view.scale) : null })
+      : g.raw;
+  }
+
+  pointerUp(e) {
+    if (e.pointerType === "touch") {
+      this._touches.delete(e.pointerId);
+      if (this._gesture?.kind === "pinch") {
+        if (this._touches.size < 2) this._gesture = null;
+        return;
+      }
+    }
+    const g = this._gesture;
+    if (!g || g.kind === "pinch" || g.id !== e.pointerId) return;
+    this._gesture = null;
+    if (g.kind === "stroke") {
+      const p = this._view.toCanvas(this.viewPoint(e));
+      const last = g.raw.at(-1);
+      if (last.x !== p.x || last.y !== p.y) g.raw.push(p);
+      g.end = p;
+      this.shapeStroke(g, g.shift, g.alt);
+      const stroke = { ...g.stroke, points: [...g.stroke.points] };
+      this.commit({ ...this._board, strokes: [...this._board.strokes, stroke] });
+    } else if (g.kind === "erase") {
+      const ids = this._erased;
+      this._erased = new Set();
+      if (ids.size) this.commit({ ...this._board, strokes: this._board.strokes.filter((s) => !ids.has(s.id)) });
+    } else if (g.kind === "lasso") {
+      const box = sketchBoundsOf(g.points);
+      // A click, not a drag, just clears the selection.
+      if (Math.max(box.w, box.h) * this._view.scale > 4) this._selection = new Set(sketchLassoed(g.points, this._board.strokes));
+    } else if (g.kind === "move") {
+      if (Math.hypot(g.offset.x, g.offset.y) > 0.01) {
+        const strokes = this._board.strokes.map((s) => (this._selection.has(s.id) ? sketchMoved(s, g.offset.x, g.offset.y) : s));
+        this.commit({ ...this._board, strokes });
+      }
+    } else if (g.kind === "scale") {
+      if (Math.abs(g.factor - 1) > 0.001) {
+        const strokes = this._board.strokes.map((s) => (this._selection.has(s.id) ? sketchScaled(s, g.factor, g.anchor) : s));
+        this.commit({ ...this._board, strokes });
+      }
+    }
+    this.requestRender();
+  }
+
+  pointerCancel(e) {
+    this._touches.delete(e.pointerId);
+    const g = this._gesture;
+    if (g?.kind === "pinch" && this._touches.size < 2) this._gesture = null;
+    else if (g && g.kind !== "pinch" && g.id === e.pointerId) this.cancelGesture();
+  }
+
+  pinchState() {
+    const [a, b] = [...this._touches.values()];
+    return { center: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, spread: sketchDistance(a, b) };
+  }
+
+  /** Drops a gesture without committing it: Esc, a second finger, a cancelled pointer. */
+  cancelGesture() {
+    this._gesture = null;
+    this._erased = new Set();
+    this.requestRender();
+  }
+
+  erase(a, b) {
+    const radius = SKETCH_ERASER / this._view.scale;
+    for (const s of this._board.strokes) {
+      if (!this._erased.has(s.id) && sketchTouched(s, a, b, radius)) this._erased.add(s.id);
+    }
+  }
+
+  get handleCenter() {
+    const bounds = this.selectionBounds;
+    if (!bounds || this._tool !== "select") return null;
+    const r = sketchOutset(this._view.rectToView(this.previewRect(bounds)), 6);
+    return { x: r.x + r.w, y: r.y + r.h };
+  }
+
+  onHandle(v) {
+    const handle = this.handleCenter;
+    return !!handle && !!v && sketchDistance(v, handle) <= SKETCH_HANDLE + 6;
+  }
+
+  selectDown(id, p) {
+    const bounds = this.selectionBounds;
+    if (bounds && this.onHandle(this._view.toView(p)) && (bounds.w > 0 || bounds.h > 0)) {
+      this._gesture = { kind: "scale", id, anchor: { x: bounds.x, y: bounds.y }, start: p, factor: 1 };
+    } else if (bounds && sketchContains(sketchOutset(bounds, 8 / this._view.scale), p)) {
+      this._gesture = { kind: "move", id, anchor: p, offset: { x: 0, y: 0 } };
+    } else {
+      this._selection = new Set();
+      this._gesture = { kind: "lasso", id, points: [p] };
+    }
+  }
+
+  /** The live move or resize, as `p * s + t`. */
+  get preview() {
+    const g = this._gesture;
+    if (g?.kind === "move") return { s: 1, tx: g.offset.x, ty: g.offset.y };
+    if (g?.kind === "scale") return { s: g.factor, tx: g.anchor.x * (1 - g.factor), ty: g.anchor.y * (1 - g.factor) };
+    return null;
+  }
+
+  previewRect(r) {
+    const t = this.preview;
+    return t ? { x: r.x * t.s + t.tx, y: r.y * t.s + t.ty, w: r.w * t.s, h: r.h * t.s } : r;
+  }
+
+  // -------------------------------------------------------------------------
+  // Clipboard and images
+  // -------------------------------------------------------------------------
+
+  copy(kind, data) {
+    if (!this._selection.size) return;
+    const strokes = this.selected;
+    sketchClipboard = strokes;
+    const json = JSON.stringify(encodeSketchFragment(strokes));
+    const text = JSON.stringify({ type: "sketcher-fragment", fragment: encodeSketchFragment(strokes) });
+    if (data) {
+      data.setData("application/x-sketcher-fragment", json);
+      data.setData("text/plain", text);
+    } else {
+      navigator.clipboard?.writeText(text).catch(() => {});
+    }
+    if (kind === "cut") this.deleteSelection();
+  }
+
+  /** Pastes under the pointer when it's over the board, else next to the original. */
+  paste(data) {
+    const strokes = this.readClipboard(data);
+    if (!strokes?.length) return;
+    const bounds = sketchContentBounds(strokes);
+    let dx = 16 / this._view.scale, dy = dx;
+    if (this._hover && bounds) {
+      const target = this._view.toCanvas(this._hover);
+      dx = target.x - (bounds.x + bounds.w / 2);
+      dy = target.y - (bounds.y + bounds.h / 2);
+    }
+    const copies = sketchCopies(strokes, dx, dy);
+    this._tool = "select";
+    this.commit({ ...this._board, strokes: [...this._board.strokes, ...copies] });
+    this._selection = new Set(copies.map((s) => s.id));
+    this.refresh();
+  }
+
+  readClipboard(data) {
+    if (data) {
+      try {
+        const raw = data.getData("application/x-sketcher-fragment");
+        if (raw) return decodeSketchFragment(JSON.parse(raw));
+      } catch {
+        // fall through
+      }
+      try {
+        const parsed = JSON.parse(data.getData("text/plain"));
+        if (parsed?.type === "sketcher-fragment") return decodeSketchFragment(parsed.fragment);
+      } catch {
+        // not ours
+      }
+      // Something else is on the clipboard: only paste our own copy when nothing at all is.
+      if (data.types.length) return null;
+    }
+    return sketchClipboard;
+  }
+
+  /**
+   * The strokes (by default the whole board) on paper, cropped to the ink plus
+   * padding: a canvas, or null when there's no ink.
+   */
+  image(strokes = this._board.strokes, scale = 2, padding = 32) {
+    const content = sketchContentBounds(strokes);
+    if (!content) return null;
+    const r = sketchOutset(content, padding);
+    const x = Math.floor(r.x), y = Math.floor(r.y);
+    const w = Math.ceil(r.x + r.w) - x, h = Math.ceil(r.y + r.h) - y;
+    const canvas = Object.assign(document.createElement("canvas"), { width: Math.floor(w * scale), height: Math.floor(h * scale) });
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = this._paper;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(scale, 0, 0, scale, -x * scale, -y * scale);
+    sketchDrawInk(ctx, strokes.map((stroke) => ({ stroke, path: sketchPath(stroke) })), this._dark);
+    return canvas;
+  }
+
+  /** The board as a PNG data URL, cropped to the ink, or null when it's empty. */
+  toPNG({ scale = 2, padding = 32 } = {}) {
+    return this.image(this._board.strokes, scale, padding)?.toDataURL("image/png") ?? null;
+  }
+
+  exportPNG() {
+    const canvas = this.image();
+    if (!canvas) return;
+    const a = document.createElement("a");
+    a.href = canvas.toDataURL("image/png");
+    a.download = `${this.getAttribute("name") || "sketch"}.png`;
+    a.click();
+  }
+
+  /** Copies the selection, or the whole board, to the clipboard as a picture. */
+  copyAsImage() {
+    const canvas = this.image(this._selection.size ? this.selected : this._board.strokes);
+    if (!canvas || !navigator.clipboard?.write) return;
+    const blob = new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]).then(
+      () => this.showToast("Copied as an image"),
+      () => this.showToast("Couldn't copy to the clipboard"),
+    );
+  }
+
+  // -------------------------------------------------------------------------
+  // Wheel, keys and menu
+  // -------------------------------------------------------------------------
+
+  /**
+   * Ctrl/⌘ + wheel and trackpad pinches zoom. A plain wheel pans once the board
+   * has focus; before that it scrolls the page, so a board doesn't trap the scroll.
+   */
+  wheel(e) {
+    const zoom = e.ctrlKey || e.metaKey;
+    if (!zoom && !this.hasFocus) return;
+    e.preventDefault();
+    this._menu.hidden = true;
+    const lines = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    if (zoom) this._view = this._view.zoomed(Math.exp(-e.deltaY * lines * 0.01), this.viewPoint(e));
+    else this._view = this._view.panned(-e.deltaX * lines, -e.deltaY * lines);
+    this.requestRender();
+  }
+
+  keyDown(e) {
+    // Keep page shortcuts away while the board has focus.
+    e.stopPropagation();
+    const mod = sketchIsMac ? e.metaKey : e.ctrlKey;
+    if (e.key === "Shift" || e.key === "Alt") {
+      const g = this._gesture;
+      if (g?.kind === "stroke") {
+        this.shapeStroke(g, e.shiftKey, e.altKey);
+        this.requestRender();
+      }
+      return;
+    }
+    if (mod) {
+      if (this.modKey(e.key.toLowerCase(), e)) e.preventDefault();
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "Escape") {
+      if (!this._menu.hidden) this._menu.hidden = true;
+      else if (this._gesture && this._gesture.kind !== "pan" && this._gesture.kind !== "pinch") this.cancelGesture();
+      else {
+        this._selection.clear();
+        this.requestRender();
+      }
+      return;
+    }
+    if (e.key === "Backspace" || e.key === "Delete") {
+      if (this._selection.size) {
+        e.preventDefault();
+        this.deleteSelection();
+      }
+      return;
+    }
+    if (e.key === " ") {
+      e.preventDefault();
+      if (!e.repeat) {
+        this._space = true;
+        this.updateCursor();
+      }
+      return;
+    }
+    // Shift+0 stands in for ⌘1, which browsers keep for switching tabs.
+    if (e.shiftKey && e.code === "Digit0") return this.zoomToActualSize();
+    const digit = /^Digit([1-6])$/.exec(e.code);
+    if (digit) return this.setSwatch(Number(digit[1]) - 1);
+    const tool = { p: "pen", b: "pen", m: "marker", h: "marker", e: "eraser", s: "select" }[e.key.toLowerCase()];
+    if (tool) return this.setTool(tool);
+    if (e.key === "[" || e.key === "]") {
+      this._widthIndex = Math.max(0, Math.min(2, this._widthIndex + (e.key === "[" ? -1 : 1)));
+      this.refresh();
+    }
+  }
+
+  /** ⌘ (or Ctrl) shortcuts. Returns whether the key was used. */
+  modKey(key, e) {
+    switch (key) {
+      case "z":
+        if (e.shiftKey) this.redo();
+        else this.undo();
+        return true;
+      case "y":
+        if (sketchIsMac) return false;
+        this.redo();
+        return true;
+      case "a":
+        this.selectAll();
+        return true;
+      case "=":
+      case "+":
+        this.zoomBy(1.25);
+        return true;
+      case "-":
+      case "_":
+        this.zoomBy(0.8);
+        return true;
+      case "0":
+        this.zoomToFit();
+        return true;
+      case "backspace":
+      case "delete":
+        if (!e.shiftKey) return false;
+        this.clearBoard();
+        return true;
+      case "e":
+        if (!e.shiftKey) return false;
+        this.exportPNG();
+        return true;
+      case "c":
+      case "x":
+      case "v":
+        if (key === "c" && e.shiftKey) {
+          this.copyAsImage();
+          return true;
+        }
+        // Let the browser fire its clipboard event; if it doesn't, use the page's own clipboard.
+        this._pendingClipboard = key === "c" ? "copy" : key === "x" ? "cut" : "paste";
+        setTimeout(() => {
+          const pending = this._pendingClipboard;
+          this._pendingClipboard = null;
+          if (pending === "paste") this.paste(null);
+          else if (pending) this.copy(pending, null);
+        });
+        return false;
+    }
+    return false;
+  }
+
+  keyUp(e) {
+    e.stopPropagation();
+    if (e.key === " ") {
+      this._space = false;
+      this.updateCursor();
+    }
+    if ((e.key === "Shift" || e.key === "Alt") && this._gesture?.kind === "stroke") {
+      this.shapeStroke(this._gesture, e.shiftKey, e.altKey);
+      this.requestRender();
+    }
+  }
+
+  contextMenu(e) {
+    e.preventDefault();
+    this.cancelGesture();
+    const v = this.viewPoint(e);
+    const empty = !this._board.strokes.length;
+    const entries = this._selection.size
+      ? [
+          { label: "Cut", keys: sketchKeys("X"), action: () => this.copy("cut", null) },
+          { label: "Copy", keys: sketchKeys("C"), action: () => this.copy("copy", null) },
+          { label: "Copy as Image", keys: sketchKeys("C", { shift: true }), action: () => this.copyAsImage() },
+          "-",
+          { label: "Delete", keys: "⌫", action: () => this.deleteSelection() },
+        ]
+      : [
+          { label: "Paste", keys: sketchKeys("V"), disabled: !sketchClipboard, action: () => this.paste(null) },
+          { label: "Select All", keys: sketchKeys("A"), disabled: empty, action: () => this.selectAll() },
+          "-",
+          { label: "Zoom to Fit", keys: sketchKeys("0"), action: () => this.zoomToFit() },
+          { label: "Actual Size", keys: sketchKeys("0", { shift: true, mod: false }), action: () => this.zoomToActualSize() },
+          "-",
+          { label: "Copy as Image", keys: sketchKeys("C", { shift: true }), disabled: empty, action: () => this.copyAsImage() },
+          { label: "Export as PNG", keys: sketchKeys("E", { shift: true }), disabled: empty, action: () => this.exportPNG() },
+          "-",
+          { label: "Clear", keys: sketchKeys("⌫", { shift: true }), disabled: empty, action: () => this.clearBoard() },
+        ];
+    const menu = this._menu;
+    menu.replaceChildren(
+      ...entries.map((entry) => {
+        if (entry === "-") return document.createElement("hr");
+        const b = document.createElement("button");
+        b.type = "button";
+        b.setAttribute("role", "menuitem");
+        b.textContent = entry.label;
+        const kbd = document.createElement("kbd");
+        kbd.textContent = entry.keys;
+        b.append(kbd);
+        b.disabled = !!entry.disabled;
+        b.addEventListener("click", (event) => {
+          event.stopPropagation();
+          menu.hidden = true;
+          entry.action();
+        });
+        return b;
+      }),
+    );
+    menu.hidden = false;
+    const x = Math.max(4, Math.min(v.x, this._size.w - menu.offsetWidth - 4));
+    const y = Math.max(4, Math.min(v.y, this._size.h - menu.offsetHeight - 4));
+    Object.assign(menu.style, { left: `${x}px`, top: `${y}px` });
+    this.requestRender();
+  }
+
+  // -------------------------------------------------------------------------
+  // Drawing
+  // -------------------------------------------------------------------------
+
+  requestRender() {
+    if (this._frame) return;
+    this._frame = requestAnimationFrame(() => {
+      this._frame = 0;
+      this.render();
+    });
+  }
+
+  render() {
+    const { w, h } = this._size;
+    const dpr = window.devicePixelRatio || 1;
+    const canvas = this._canvas;
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+      canvas.width = Math.round(w * dpr);
+      canvas.height = Math.round(h * dpr);
+    }
+    const ctx = this._ctx;
+    const dark = this._dark;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = this._paper;
+    ctx.fillRect(0, 0, w, h);
+    sketchDrawBackground(ctx, this._board.background, this._view, dark, this._size);
+
+    const view = this._view;
+    const px = 1 / view.scale;
+    ctx.setTransform(dpr * view.scale, 0, 0, dpr * view.scale, dpr * view.offset.x, dpr * view.offset.y);
+    const visible = view.rectToCanvas({ x: 0, y: 0, w, h });
+    const preview = this.preview;
+    const items = [];
+    for (const stroke of this._board.strokes) {
+      if (this._erased.has(stroke.id)) continue;
+      const selected = this._selection.has(stroke.id);
+      let item = { stroke, path: sketchPath(stroke) };
+      let bounds = sketchStrokeBounds(stroke);
+      if (selected && preview) {
+        const path = new Path2D();
+        path.addPath(item.path, new DOMMatrix([preview.s, 0, 0, preview.s, preview.tx, preview.ty]));
+        item = { stroke: { ...stroke, width: stroke.width * preview.s }, path };
+        bounds = bounds && this.previewRect(bounds);
+      }
+      if (!bounds || bounds.x > visible.x + visible.w || bounds.x + bounds.w < visible.x) continue;
+      if (bounds.y > visible.y + visible.h || bounds.y + bounds.h < visible.y) continue;
+      if (selected) {
+        // A halo in the accent color.
+        ctx.save();
+        ctx.globalAlpha = 0.28;
+        ctx.strokeStyle = this._accent;
+        ctx.lineWidth = item.stroke.width + 7 * px;
+        ctx.lineCap = ctx.lineJoin = "round";
+        ctx.stroke(item.path);
+        ctx.restore();
+      }
+      items.push(item);
+    }
+    const g = this._gesture;
+    if (g?.kind === "stroke") items.push({ stroke: g.stroke, path: sketchSmooth(g.stroke.points, new Path2D()) });
+    sketchDrawInk(ctx, items, dark);
+    this.drawSelection(ctx, px);
+    this.placeSelectionBar();
+    this.updateCursor();
+  }
+
+  drawSelection(ctx, px) {
+    const g = this._gesture;
+    ctx.save();
+    ctx.strokeStyle = ctx.fillStyle = this._accent;
+    if (g?.kind === "lasso" && g.points.length > 1) {
+      ctx.beginPath();
+      g.points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.globalAlpha = 0.06;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = 1.25 * px;
+      ctx.setLineDash([5 * px, 4 * px]);
+      ctx.stroke();
+    }
+    const bounds = this.selectionBounds;
+    if (bounds) {
+      const r = sketchOutset(this.previewRect(bounds), 6 * px);
+      ctx.beginPath();
+      ctx.roundRect(r.x, r.y, r.w, r.h, 6 * px);
+      ctx.globalAlpha = 0.8;
+      ctx.lineWidth = px;
+      ctx.setLineDash([4 * px, 3 * px]);
+      ctx.stroke();
+      if (this._tool === "select") {
+        ctx.beginPath();
+        ctx.arc(r.x + r.w, r.y + r.h, SKETCH_HANDLE * px, 0, Math.PI * 2);
+        ctx.globalAlpha = 1;
+        ctx.setLineDash([]);
+        ctx.fillStyle = this._paper;
+        ctx.fill();
+        ctx.lineWidth = 1.5 * px;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  placeSelectionBar() {
+    const bar = this._bar;
+    const bounds = this.selectionBounds;
+    const busy = this._gesture && this._gesture.kind !== "pan" && this._gesture.kind !== "pinch";
+    bar.hidden = !bounds || !!busy;
+    if (bar.hidden) return;
+    const bw = bar.offsetWidth, bh = bar.offsetHeight;
+    const r = this._view.rectToView(bounds);
+    let x = r.x + r.w / 2 - bw / 2;
+    let y = r.y - bh - 14;
+    if (y < 8) y = r.y + r.h + 14;
+    x = Math.max(8, Math.min(this._size.w - bw - 8, x));
+    y = Math.max(8, Math.min(this._size.h - bh - 8, y));
+    Object.assign(bar.style, { left: `${x}px`, top: `${y}px` });
+  }
+
+  updateCursor() {
+    const cursor = this.cursor();
+    if (this._canvas.style.cursor !== cursor) this._canvas.style.cursor = cursor;
+  }
+
+  cursor() {
+    const g = this._gesture;
+    if (g?.kind === "pan" || g?.kind === "move") return "grabbing";
+    if (this._space) return "grab";
+    if (g?.kind === "scale") return "nwse-resize";
+    if (this._tool === "eraser") return sketchCursor(SKETCH_ERASER * 2, null);
+    if (this._tool === "select") return this.onHandle(this._hover) ? "nwse-resize" : "crosshair";
+    const color = this.palette[this._swatch];
+    const marker = this._tool === "marker";
+    const alpha = this._dark ? SKETCH_MARKER_ALPHA.dark : SKETCH_MARKER_ALPHA.light;
+    return sketchCursor(Math.max(this.screenWidth, 4), sketchCss(color, marker ? alpha : 1));
+  }
+}
+
 // <t-var name="a" value="2" min="-5" max="5" step="0.1" color="#246bce">
 // Declares a variable without showing it (e.g. for formulas).
 class TVar extends TangleElement {
@@ -6028,6 +7778,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-graph": TGraph,
     "t-panel": TPanel,
     "t-paint": TPaint,
+    "t-sketch": TSketch,
   };
   for (const [tag, cls] of Object.entries(elements)) {
     if (!customElements.get(tag)) customElements.define(tag, cls);

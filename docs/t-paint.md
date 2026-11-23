@@ -1,7 +1,8 @@
 # `<t-paint>`
 
 A canvas the reader draws on. With a `name`, the drawing is a variable: a PNG data URL, which
-you can show in an image, send to a server or read pixels from.
+you can show in an image, send to a server or read pixels from. For a whiteboard you can pan and
+zoom, with the strokes as data, see [`<t-sketch>`](t-sketch.md).
 
 <t-scope class="example" data-show-source>
   <t-tag tag="t-paint">

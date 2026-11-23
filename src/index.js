@@ -29,6 +29,7 @@ export { TangleElement } from "./core/element.js";
 import { TScope } from "./elements/t-scope.js";
 import { TPanel } from "./elements/t-panel.js";
 import { TPaint } from "./elements/t-paint.js";
+import { TSketch } from "./elements/t-sketch.js";
 import { TVar } from "./elements/t-var.js";
 import { TNum } from "./elements/t-num.js";
 import { TLet } from "./elements/t-let.js";
@@ -76,6 +77,7 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-graph": TGraph,
     "t-panel": TPanel,
     "t-paint": TPaint,
+    "t-sketch": TSketch,
   };
   for (const [tag, cls] of Object.entries(elements)) {
     if (!customElements.get(tag)) customElements.define(tag, cls);

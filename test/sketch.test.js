@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   SketchViewport, decodeSketch, decodeSketchFragment, encodeSketch, encodeSketchFragment, sketchCopies, sketchGridStep,
-  sketchID, sketchLassoed, sketchLine, sketchScaled, sketchTouched,
+  sketchID, sketchLassoed, sketchLine, sketchRounded, sketchScaled, sketchTouched,
 } from "../src/core/sketch.js";
 
 const stroke = (id, points, extra = {}) => ({
@@ -26,7 +26,7 @@ const FILE = {
   version: 2,
 };
 
-test("a .sketcher board round-trips, with sorted keys and its math kept", () => {
+test("a board round-trips through JSON, with sorted keys and its math kept", () => {
   const board = decodeSketch(JSON.stringify(FILE));
   assert.equal(board.strokes[1].swatch, null);
   assert.deepEqual(board.strokes[0].points[1], { x: 10, y: 5 });
@@ -117,4 +117,12 @@ test("the viewport zooms about a point and fits content without zooming in", () 
   assert.equal(fit.scale, 1);
   assert.deepEqual(fit.toView({ x: 5, y: 5 }), { x: 200, y: 150 });
   assert.equal(SketchViewport.fitting({ x: 0, y: 0, w: 1000, h: 100 }, { w: 400, h: 300 }).scale, 0.32);
+});
+
+test("an exported board rounds points to a tenth and widths to a hundredth", () => {
+  const board = { ...decodeSketch(FILE), strokes: [stroke("A", [[1.234, 5.678]], { width: 2.3456 })] };
+  const [s] = sketchRounded(board).strokes;
+  assert.deepEqual(s.points, [{ x: 1.2, y: 5.7 }]);
+  assert.equal(s.width, 2.35);
+  assert.equal(board.strokes[0].points[0].x, 1.234);
 });

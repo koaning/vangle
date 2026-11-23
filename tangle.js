@@ -2625,7 +2625,7 @@ class TPaint extends TangleElement {
 }
 
 // The model behind <t-sketch>, without the DOM: a board of strokes in canvas
-// coordinates (y down), read and written in the `.sketcher` JSON format of the
+// coordinates (y down), read and written as JSON in the format of the
 // Sketcher app (https://github.com/koaning/sketcher), plus the viewport, hit
 // tests, edits and straight-line snapping. Strokes are immutable: edits return
 // new strokes, so the renderer can cache a Path2D per stroke object.
@@ -2727,7 +2727,7 @@ function sketchContentBounds(strokes) {
 }
 
 // ---------------------------------------------------------------------------
-// The `.sketcher` format: points are [x, y] arrays, `swatch` is left out when
+// The JSON format (Sketcher's `.sketcher` files): points are [x, y] arrays, `swatch` is left out when
 // null, ids are upper case, and keys are sorted at every level. The board's
 // `math` layer is kept as it is, so a file from the app keeps its typeset math,
 // but <t-sketch> doesn't draw it.
@@ -2799,7 +2799,7 @@ function encodeSketchStroke(s) {
   return out;
 }
 
-/** The board as plain JSON, with its keys in sorted order: what `JSON.stringify` makes a `.sketcher` file of. */
+/** The board as plain JSON, with its keys in sorted order: what `JSON.stringify` makes a file of. */
 function encodeSketch(board) {
   return {
     background: board.background,
@@ -3025,16 +3025,28 @@ function sketchLine(start, end, { angle = false, grid = null } = {}) {
   return a.x === b.x && a.y === b.y ? [a] : [a, b];
 }
 
+/** The board with points rounded to a tenth and widths to a hundredth: smaller to paste into a page. */
+function sketchRounded(board) {
+  const round = (v, f) => Math.round(v * f) / f;
+  const strokes = board.strokes.map((s) => ({
+    ...s,
+    width: round(s.width, 100),
+    points: s.points.map((p) => ({ x: round(p.x, 10), y: round(p.y, 10) })),
+  }));
+  return { ...board, strokes };
+}
+
 // Ported from the board of Sketcher (https://github.com/koaning/sketcher), without its math layer.
 
 const SKETCH_CSS = `
+  /* No font here: the cards inherit from the element, and should look like the page. */
   :host {
     display: block;
-    font: 13px ui-sans-serif, system-ui, sans-serif;
     --line: color-mix(in srgb, currentColor 15%, transparent);
     --glass: color-mix(in srgb, var(--tangle-surface, #fff) 80%, transparent);
   }
   * { box-sizing: border-box; }
+  .glass { font: 13px ui-sans-serif, system-ui, sans-serif; }
   [part="board"] {
     position: relative;
     height: 400px;
@@ -3048,7 +3060,21 @@ const SKETCH_CSS = `
     touch-action: none;
   }
   [part="board"]:focus-visible { outline: 2px solid var(--tangle-accent); outline-offset: 1px; }
+  /* The board scrolls with two fingers only while it has focus, so show when it does. */
+  [part="board"] { transition: border-color 0.15s, box-shadow 0.15s; }
+  :host(:focus-within) [part="board"] {
+    border-color: var(--tangle-accent);
+    box-shadow: 0 0 0 1px var(--tangle-accent);
+  }
   canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+  /* Light paper: ink multiplies, like a highlighter on a printed chart. */
+  [part="board"]:not(.dark) .ink { mix-blend-mode: multiply; }
+  .viewing .ink { pointer-events: none; }
+  .cards { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
+  ::slotted(*) { cursor: auto; }
+  :host(:fullscreen) { background: var(--tangle-surface, #fff); }
+  :host(:fullscreen) [part="board"] { height: 100vh !important; border: 0; border-radius: 0; }
+  [part="viewbar"] { position: absolute; right: 8px; bottom: 8px; display: flex; padding: 2px; border-radius: 10px; z-index: 2; }
   .glass {
     background: var(--glass);
     border: 1px solid var(--line);
@@ -3165,6 +3191,11 @@ const SKETCH_ICONS = {
   plain: sketchIcon('<rect width="18" height="18" x="3" y="3" rx="2"/>'),
   dots: sketchIcon('<circle cx="6" cy="6" r=".6"/><circle cx="12" cy="6" r=".6"/><circle cx="18" cy="6" r=".6"/><circle cx="6" cy="12" r=".6"/><circle cx="12" cy="12" r=".6"/><circle cx="18" cy="12" r=".6"/><circle cx="6" cy="18" r=".6"/><circle cx="12" cy="18" r=".6"/><circle cx="18" cy="18" r=".6"/>'),
   grid: sketchIcon('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/>'),
+  eye: sketchIcon('<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>'),
+  code: sketchIcon('<path d="m18 16 4-4-4-4"/><path d="m6 8-4 4 4 4"/><path d="m14.5 4-5 16"/>'),
+  fit: sketchIcon('<path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/>'),
+  expand: sketchIcon('<path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/>'),
+  shrink: sketchIcon('<path d="m14 10 7-7"/><path d="M20 10h-6V4"/><path d="m3 21 7-7"/><path d="M4 14h6v6"/>'),
   trash: sketchIcon('<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>'),
 };
 const SKETCH_TOOL_NAMES = { pen: "Pen (P)", marker: "Marker (M)", eraser: "Eraser (E)", select: "Select (S)" };
@@ -3313,12 +3344,23 @@ function sketchDrawBackground(ctx, background, view, dark, size) {
   ctx.restore();
 }
 
-// <t-sketch name="board" height="400" background="dots"></t-sketch>
+/** Children that aren't drawn, so they aren't cards. */
+const SKETCH_HIDDEN = new Set(["script", "style", "template", "t-let", "t-var", "t-fetch"]);
+/** A card's width without a data-width, in board units. */
+const SKETCH_CARD_WIDTH = 280;
+
+const sketchAttr = (v) => String(v).replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+
+// <t-sketch name="board" height="400" background="dots" mode="edit">
+//   <p data-x="0" data-y="0">…any HTML, vangle elements included…</p>
+// </t-sketch>
 // An infinite whiteboard: pen, highlighter, eraser and lasso on a canvas you pan
-// and zoom. The drawing is a variable: the board as `.sketcher` JSON, set once
-// per finished stroke or edit. Setting the variable shows that board.
+// and zoom. Its children are cards on the board, which you move and draw around.
+// The drawing is a variable: the board as JSON, set once per
+// finished stroke or edit. Setting the variable shows that board. In view mode
+// the board only pans and zooms; Export makes a view-mode copy to paste into a page.
 class TSketch extends TangleElement {
-  /** The board as `.sketcher` JSON: `{ background, math, strokes, version }`. */
+  /** The board as JSON: `{ background, math, strokes, version }`. */
   get value() {
     return this._value;
   }
@@ -3351,69 +3393,101 @@ class TSketch extends TangleElement {
     if (!SKETCH_BACKGROUNDS.includes(background)) {
       console.error(`tangle: <t-sketch> background is ${SKETCH_BACKGROUNDS.join(", ")}`, this);
     }
-    this._board = emptySketch(SKETCH_BACKGROUNDS.includes(background) ? background : "dots");
+    this._mode = this.getAttribute("mode") === "view" ? "view" : "edit";
+    this._preview = false;
+    this._board = { ...emptySketch(SKETCH_BACKGROUNDS.includes(background) ? background : "dots"), cards: new Map() };
     this._view = new SketchViewport();
     this._tool = "pen";
     this._widthIndex = 1;
     this._swatch = 0;
     this._undo = [];
     this._redo = [];
-    this._selection = new Set();
+    this._selection = new Set(); // stroke ids, and card elements
     this._erased = new Set();
     this._gesture = null;
     this._touches = new Map();
     this._size = { w: 0, h: 0 };
     this._dark = false;
     this._edits = 0; // boards set or edits made, so a late src file doesn't overwrite them
+    this._children = new Map(); // element → { source, card }
 
     const root = this.attachShadow({ mode: "open" });
     root.innerHTML = `<style>${SKETCH_CSS}</style>
       <div part="board" tabindex="0" role="application">
-        <canvas part="canvas"></canvas>
+        <canvas class="paper"></canvas>
+        <div class="cards"><slot></slot></div>
+        <canvas part="canvas" class="ink"></canvas>
         <div part="palette" class="glass" role="toolbar"></div>
+        <div part="viewbar" class="glass"></div>
         <div part="selection-bar" class="glass" hidden></div>
         <div part="menu" class="glass" role="menu" hidden></div>
         <div part="toast" class="glass" role="status" hidden></div>
       </div>`;
     const $ = (part) => root.querySelector(`[part="${part}"]`);
     this._root = $("board");
+    this._paperCanvas = root.querySelector(".paper");
     this._canvas = $("canvas");
+    this._cardLayer = root.querySelector(".cards");
     this._ctx = this._canvas.getContext("2d");
+    this._palette = $("palette");
+    this._viewbar = $("viewbar");
     this._menu = $("menu");
     this._bar = $("selection-bar");
     this._toast = $("toast");
     this._root.setAttribute("aria-label", this.getAttribute("label") ?? this.getAttribute("name") ?? "Whiteboard");
     const height = Number(this.getAttribute("height"));
     if (height > 0) this._root.style.height = `${height}px`;
-    this.buildPalette($("palette"));
+    this.buildPalette(this._palette);
+    this._fitButton = this.button(SKETCH_ICONS.fit, `Zoom to fit (${sketchKeys("0")})`, () => this.zoomToFit());
+    this._editButton = this.button(SKETCH_ICONS.pen, "Back to editing (Esc)", () => this.setPreview(false));
+    this._screenButtons = [this.button("", "", () => this.toggleFullScreen()), this.button("", "", () => this.toggleFullScreen())];
+    this._viewbar.append(this._fitButton, this._screenButtons[1], this._editButton);
+    this._palette.lastElementChild.append(this._screenButtons[0]);
+    // Full screen or back: fit the board to its new size.
+    this.addEventListener("fullscreenchange", () => {
+      this._fitLater = true;
+      this.refresh();
+    });
     this._bar.append(this.button(SKETCH_ICONS.trash, "Delete (⌫)", () => this.deleteSelection()));
-    for (const el of [$("palette"), this._bar, this._menu]) {
+    for (const el of [this._palette, this._viewbar, this._bar, this._menu]) {
       el.addEventListener("pointerdown", (e) => e.stopPropagation());
       el.addEventListener("contextmenu", (e) => e.preventDefault());
     }
     this._toast.addEventListener("pointerdown", () => (this._toast.hidden = true));
 
-    const canvas = this._canvas;
-    canvas.addEventListener("pointerdown", (e) => this.pointerDown(e));
-    canvas.addEventListener("pointermove", (e) => this.pointerMove(e));
-    canvas.addEventListener("pointerup", (e) => this.pointerUp(e));
-    canvas.addEventListener("pointercancel", (e) => this.pointerCancel(e));
-    canvas.addEventListener("pointerleave", () => {
+    // On the board, not the ink canvas: in view mode the ink lets pointers through to the cards.
+    const board = this._root;
+    board.addEventListener("pointerdown", (e) => this.pointerDown(e));
+    board.addEventListener("pointermove", (e) => this.pointerMove(e));
+    board.addEventListener("pointerup", (e) => this.pointerUp(e));
+    board.addEventListener("pointercancel", (e) => this.pointerCancel(e));
+    board.addEventListener("pointerleave", () => {
       if (!this._gesture) this._hover = null;
     });
-    canvas.addEventListener("wheel", (e) => this.wheel(e), { passive: false });
-    canvas.addEventListener("contextmenu", (e) => this.contextMenu(e));
-    this._root.addEventListener("keydown", (e) => this.keyDown(e));
-    this._root.addEventListener("keyup", (e) => this.keyUp(e));
-    this._root.addEventListener("focusout", (e) => {
-      if (this._root.contains(e.relatedTarget)) return;
+    board.addEventListener("wheel", (e) => this.wheel(e), { passive: false });
+    board.addEventListener("contextmenu", (e) => this.contextMenu(e));
+    board.addEventListener("keydown", (e) => this.keyDown(e));
+    board.addEventListener("keyup", (e) => this.keyUp(e));
+    board.addEventListener("focusout", (e) => {
+      if (board.contains(e.relatedTarget)) return;
       this._menu.hidden = true;
       this._space = false;
       this.updateCursor();
     });
     // Safari's trackpad pinch comes as gesture events too; the wheel handler zooms.
-    this._root.addEventListener("gesturestart", (e) => e.preventDefault());
-    new ResizeObserver(() => this.resized()).observe(this._root);
+    board.addEventListener("gesturestart", (e) => e.preventDefault());
+    new ResizeObserver(() => this.resized()).observe(board);
+    // Cards change size as charts load: keep them in view until the reader does anything
+    // with the board or a card, so dragging a number never makes the board jump.
+    const settle = () => (this._viewMoved = true);
+    this.addEventListener("pointerdown", settle, true);
+    this.addEventListener("keydown", settle, true);
+    this._cardResize = new ResizeObserver(() => {
+      if (!this._viewMoved && this._size.w) this.zoomToFit();
+      else this.requestRender();
+    });
+    new MutationObserver(() => this.readChildren()).observe(this, { childList: true });
+    this.readChildren();
 
     const src = this.getAttribute("src");
     if (src) this.fetchBoard(src);
@@ -3451,10 +3525,22 @@ class TSketch extends TangleElement {
     });
     this._undoButton = this.button(SKETCH_ICONS.undo, `Undo (${sketchKeys("Z")})`, () => this.undo());
     this._redoButton = this.button(SKETCH_ICONS.redo, `Redo (${sketchKeys("Z", { shift: true })})`, () => this.redo());
+    const preview = this.button(SKETCH_ICONS.eye, "Preview: the board as readers see it", () => this.setPreview(true));
+    const exportButton = this.button(SKETCH_ICONS.code, "Export: copy the HTML of a view-only board", () => this.copyHTML());
     section(this._toolButtons);
     section(this._widthButtons);
     section(this._swatchButtons);
     section([this._backgroundButton, this._undoButton, this._redoButton]);
+    section([preview, exportButton]);
+  }
+
+  get fullScreen() {
+    return document.fullscreenElement === this;
+  }
+
+  toggleFullScreen() {
+    if (this.fullScreen) document.exitFullscreen();
+    else this.requestFullscreen?.().catch(() => this.showToast("This browser won't show the board full screen"));
   }
 
   /** A button that doesn't take focus, so keys keep going to the board. */
@@ -3463,7 +3549,7 @@ class TSketch extends TangleElement {
     b.type = "button";
     b.setAttribute("part", "button");
     b.title = title;
-    b.setAttribute("aria-label", title.replace(/ \(.*\)$/, ""));
+    b.setAttribute("aria-label", title.replace(/ \(.*\)$|: .*$/, ""));
     b.innerHTML = icon;
     b.addEventListener("pointerdown", (e) => e.preventDefault());
     b.addEventListener("click", (e) => {
@@ -3483,7 +3569,7 @@ class TSketch extends TangleElement {
     };
     for (const type of ["copy", "cut", "paste"]) {
       listen(document, type, (e) => {
-        if (!this.hasFocus) return;
+        if (!this.hasFocus || this.viewing) return;
         e.preventDefault();
         this._pendingClipboard = null;
         if (type === "paste") this.paste(e.clipboardData);
@@ -3497,8 +3583,157 @@ class TSketch extends TangleElement {
     this.themeChanged();
   }
 
+  /** Whether the board itself, not a card on it, has focus. */
   get hasFocus() {
     return !!this.shadowRoot.activeElement;
+  }
+
+  /** Whether the reader is only looking: view mode, or a preview of it. */
+  get viewing() {
+    return this._mode === "view" || this._preview;
+  }
+
+  setPreview(on) {
+    if (this._mode === "view") return;
+    this._preview = on;
+    this._selection.clear();
+    this.cancelGesture();
+    this._root.focus({ preventScroll: true, focusVisible: false });
+    this.refresh();
+  }
+
+  // -------------------------------------------------------------------------
+  // Cards: the board's children, placed in board coordinates
+  // -------------------------------------------------------------------------
+
+  /**
+   * Takes in children the board hasn't seen. Their HTML is kept as it was when
+   * they arrived, before vangle elements in them render, for Export. An inline
+   * `<script type="application/json">` is a board to start from.
+   */
+  readChildren() {
+    const seen = new Set();
+    let cards = null;
+    for (const el of this.children) {
+      seen.add(el);
+      if (this._children.has(el)) continue;
+      const tag = el.localName;
+      if (tag === "script" && el.type === "application/json") {
+        this._children.set(el, { board: true });
+        if (!this._edits) this.loadInline(el.textContent);
+        continue;
+      }
+      const card = !SKETCH_HIDDEN.has(tag);
+      this._children.set(el, { source: el.outerHTML, card });
+      if (!card) continue;
+      cards ??= new Map(this._board.cards);
+      const x = Number(el.dataset.x), y = Number(el.dataset.y);
+      const width = Number(el.dataset.width) || SKETCH_CARD_WIDTH;
+      Object.assign(el.style, { position: "absolute", margin: "0", boxSizing: "border-box", width: `${width}px` });
+      // Without a place, a card goes to the right of the others.
+      let place = { x, y };
+      if (!Number.isFinite(x) || !Number.isFinite(y) || el.dataset.x === undefined || el.dataset.y === undefined) {
+        let right = null;
+        for (const [, p] of cards) right = Math.max(right ?? -Infinity, p.x + p.w);
+        place = { x: right === null ? 0 : right + 40, y: 0 };
+      }
+      cards.set(el, { ...place, w: width });
+      this._cardResize.observe(el);
+    }
+    for (const el of this._children.keys()) {
+      if (seen.has(el)) continue;
+      this._children.delete(el);
+      this._cardResize.unobserve(el);
+      cards ??= new Map(this._board.cards);
+      cards.delete(el);
+      this._selection.delete(el);
+    }
+    if (cards) {
+      this._board = { ...this._board, cards };
+      this.requestRender();
+    }
+  }
+
+  loadInline(text) {
+    try {
+      this.setBoard(decodeSketch(text));
+      this._edits = 0; // it's where the board starts, so a src may still replace it
+    } catch (error) {
+      console.error(`tangle: <t-sketch> ${error.message}`, this);
+    }
+  }
+
+  get cards() {
+    return [...this._board.cards.keys()].filter((el) => this._children.get(el)?.card);
+  }
+
+  /** A card's box in board coordinates. Its height is what the page lays it out at. */
+  cardRect(el) {
+    const p = this._board.cards.get(el);
+    return { x: p.x, y: p.y, w: el.offsetWidth || p.w, h: el.offsetHeight };
+  }
+
+  /** The topmost card under a board point. */
+  cardAt(p) {
+    const cards = this.cards;
+    for (let i = cards.length - 1; i >= 0; i--) if (sketchContains(this.cardRect(cards[i]), p)) return cards[i];
+    return null;
+  }
+
+  /** The card an event came from, if any. */
+  cardOf(e) {
+    return e.composedPath().find((node) => this._children.get(node)?.card) ?? null;
+  }
+
+  /** The ink and the cards. */
+  contentBounds() {
+    let r = sketchContentBounds(this._board.strokes);
+    for (const el of this.cards) r = sketchUnion(r, this.cardRect(el));
+    return r;
+  }
+
+  // -------------------------------------------------------------------------
+  // Export
+  // -------------------------------------------------------------------------
+
+  /**
+   * The HTML of a view-only copy of this board: the same attributes, the cards
+   * where they are now, and the ink as JSON. Paste it into a page.
+   */
+  exportHTML() {
+    const attrs = [...this.attributes]
+      .filter((a) => a.name !== "mode" && a.name !== "src")
+      .map((a) => (a.value === "" ? ` ${a.name}` : ` ${a.name}="${sketchAttr(a.value)}"`))
+      .join("");
+    const lines = [`<t-sketch mode="view"${attrs}>`];
+    const template = document.createElement("template");
+    for (const [el, child] of this._children) {
+      if (child.board) continue;
+      let html = child.source;
+      const place = this._board.cards.get(el);
+      if (child.card && place) {
+        template.innerHTML = html;
+        const copy = template.content.firstElementChild;
+        copy.dataset.x = Math.round(place.x);
+        copy.dataset.y = Math.round(place.y);
+        html = copy.outerHTML;
+      }
+      lines.push(`  ${html}`);
+    }
+    const json = JSON.stringify(encodeSketch(sketchRounded(this._board))).replaceAll("<", "\\u003c");
+    lines.push(`  <script type="application/json">${json}</script>`, "</t-sketch>");
+    return lines.join("\n");
+  }
+
+  copyHTML() {
+    const html = this.exportHTML();
+    const done = () => this.showToast("Copied the HTML of a view-only board");
+    const failed = () => {
+      console.log(html);
+      this.showToast("Couldn't copy: the HTML is in the console");
+    };
+    if (navigator.clipboard?.writeText) navigator.clipboard.writeText(html).then(done, failed);
+    else failed();
   }
 
   // -------------------------------------------------------------------------
@@ -3538,14 +3773,15 @@ class TSketch extends TangleElement {
     else this._value = value;
   }
 
-  /** Replaces the board, and fits the view to it. Undo starts over. */
+  /** Replaces the ink, and fits the view to the board. The cards stay. Undo starts over. */
   setBoard(board) {
     this._edits++;
     this.cancelGesture();
-    this._board = board;
+    this._board = { ...board, cards: this._board.cards };
     this._undo = [];
     this._redo = [];
     this._selection.clear();
+    this._viewMoved = false;
     if (this._size.w) this.zoomToFit();
     else this._fitLater = true;
     this.refresh();
@@ -3580,7 +3816,7 @@ class TSketch extends TangleElement {
     this._edits++;
     this.cancelGesture();
     const ids = new Set(this._board.strokes.map((s) => s.id));
-    for (const id of this._selection) if (!ids.has(id)) this._selection.delete(id);
+    for (const item of this._selection) if (!ids.has(item) && !this._board.cards.has(item)) this._selection.delete(item);
     this.refresh();
     this.publish();
   }
@@ -3619,22 +3855,31 @@ class TSketch extends TangleElement {
     return this._dark ? SKETCH_DARK : SKETCH_LIGHT;
   }
 
+  /** The selected strokes. */
   get selected() {
     return this._board.strokes.filter((s) => this._selection.has(s.id));
   }
 
+  get selectedCards() {
+    return this.cards.filter((el) => this._selection.has(el));
+  }
+
   get selectionBounds() {
-    return this._selection.size ? sketchContentBounds(this.selected) : null;
+    if (!this._selection.size) return null;
+    let r = sketchContentBounds(this.selected);
+    for (const el of this.selectedCards) r = sketchUnion(r, this.cardRect(el));
+    return r;
   }
 
   selectAll() {
     this._tool = "select";
-    this._selection = new Set(this._board.strokes.map((s) => s.id));
+    this._selection = new Set([...this._board.strokes.map((s) => s.id), ...this.cards]);
     this.refresh();
   }
 
+  /** Deletes the selected strokes. Cards are the page's HTML, so they stay. */
   deleteSelection() {
-    if (!this._selection.size) return;
+    if (!this.selected.length) return;
     const strokes = this._board.strokes.filter((s) => !this._selection.has(s.id));
     this._selection.clear();
     this.commit({ ...this._board, strokes });
@@ -3659,6 +3904,17 @@ class TSketch extends TangleElement {
 
   /** Updates the palette and redraws. */
   refresh() {
+    const viewing = this.viewing;
+    this._root.classList.toggle("viewing", viewing);
+    this._root.classList.toggle("dark", this._dark);
+    this._palette.hidden = viewing;
+    this._viewbar.hidden = !viewing;
+    this._editButton.hidden = !this._preview;
+    for (const b of this._screenButtons) {
+      b.innerHTML = this.fullScreen ? SKETCH_ICONS.shrink : SKETCH_ICONS.expand;
+      b.title = this.fullScreen ? "Exit full screen (Esc)" : "Full screen";
+      b.setAttribute("aria-label", b.title.replace(/ \(.*\)$/, ""));
+    }
     this._toolButtons.forEach((b, i) => b.setAttribute("aria-pressed", String(Object.keys(SKETCH_TOOL_NAMES)[i] === this._tool)));
     this._widthButtons.forEach((b, i) => b.setAttribute("aria-pressed", String(i === this._widthIndex)));
     const drawing = this._tool === "pen" || this._tool === "marker";
@@ -3692,16 +3948,18 @@ class TSketch extends TangleElement {
   }
 
   zoomToFit() {
-    this._view = SketchViewport.fitting(sketchContentBounds(this._board.strokes), this._size);
+    this._view = SketchViewport.fitting(this.contentBounds(), this._size);
     this.requestRender();
   }
 
   zoomToActualSize() {
+    this._viewMoved = true;
     this._view = this._view.zoomedTo(1, this.viewCenter);
     this.requestRender();
   }
 
   zoomBy(factor) {
+    this._viewMoved = true;
     this._view = this._view.zoomed(factor, this.viewCenter);
     this.requestRender();
   }
@@ -3710,10 +3968,10 @@ class TSketch extends TangleElement {
     const w = this._root.clientWidth, h = this._root.clientHeight;
     if (w === this._size.w && h === this._size.h) return;
     this._size = { w, h };
-    if (w && h && (this._fitLater || !this._sized)) {
+    if (w && h && (this._fitLater || !this._sized || !this._viewMoved)) {
       this._sized = true;
       this._fitLater = false;
-      if (this._board.strokes.length) this.zoomToFit();
+      this.zoomToFit();
     }
     this.render();
   }
@@ -3723,11 +3981,13 @@ class TSketch extends TangleElement {
   // -------------------------------------------------------------------------
 
   viewPoint(e) {
-    const r = this._canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
+    const r = this._root.getBoundingClientRect();
+    return { x: e.clientX - r.left - this._root.clientLeft, y: e.clientY - r.top - this._root.clientTop };
   }
 
   pointerDown(e) {
+    // In view mode, the cards are live: their own elements handle the pointer.
+    if (this.viewing && this.cardOf(e)) return;
     this._menu.hidden = true;
     this._root.focus({ preventScroll: true, focusVisible: false });
     const v = this.viewPoint(e);
@@ -3744,12 +4004,12 @@ class TSketch extends TangleElement {
     }
     if (this._gesture || e.button === 2) return;
     try {
-      this._canvas.setPointerCapture(e.pointerId);
+      this._root.setPointerCapture(e.pointerId);
     } catch {
       // A synthetic pointer can't be captured.
     }
     const id = e.pointerId;
-    if (e.button === 1 || this._space) {
+    if (e.button === 1 || this._space || this.viewing) {
       e.preventDefault();
       this._gesture = { kind: "pan", id, last: v };
       this.requestRender();
@@ -3790,6 +4050,7 @@ class TSketch extends TangleElement {
         let view = this._view.panned(next.center.x - g.last.center.x, next.center.y - g.last.center.y);
         if (g.last.spread > 0 && next.spread > 0) view = view.zoomed(next.spread / g.last.spread, next.center);
         this._view = view;
+        this._viewMoved = true;
         g.last = next;
         this.requestRender();
         return;
@@ -3799,6 +4060,7 @@ class TSketch extends TangleElement {
     if (g.kind === "pinch" || g.id !== e.pointerId) return;
     if (g.kind === "pan") {
       this._view = this._view.panned(v.x - g.last.x, v.y - g.last.y);
+      this._viewMoved = true;
       g.last = v;
       return this.requestRender();
     }
@@ -3865,12 +4127,24 @@ class TSketch extends TangleElement {
       if (ids.size) this.commit({ ...this._board, strokes: this._board.strokes.filter((s) => !ids.has(s.id)) });
     } else if (g.kind === "lasso") {
       const box = sketchBoundsOf(g.points);
-      // A click, not a drag, just clears the selection.
-      if (Math.max(box.w, box.h) * this._view.scale > 4) this._selection = new Set(sketchLassoed(g.points, this._board.strokes));
+      // A click, not a drag, just clears the selection. A card is picked when its middle is in the lasso.
+      if (Math.max(box.w, box.h) * this._view.scale > 4) {
+        const cards = this.cards.filter((el) => {
+          const r = this.cardRect(el);
+          return sketchInPolygon(g.points, { x: r.x + r.w / 2, y: r.y + r.h / 2 });
+        });
+        this._selection = new Set([...sketchLassoed(g.points, this._board.strokes), ...cards]);
+      }
     } else if (g.kind === "move") {
-      if (Math.hypot(g.offset.x, g.offset.y) > 0.01) {
-        const strokes = this._board.strokes.map((s) => (this._selection.has(s.id) ? sketchMoved(s, g.offset.x, g.offset.y) : s));
-        this.commit({ ...this._board, strokes });
+      const { x: dx, y: dy } = g.offset;
+      if (Math.hypot(dx, dy) > 0.01) {
+        const strokes = this._board.strokes.map((s) => (this._selection.has(s.id) ? sketchMoved(s, dx, dy) : s));
+        const cards = new Map(this._board.cards);
+        for (const el of this.selectedCards) {
+          const p = cards.get(el);
+          cards.set(el, { ...p, x: p.x + dx, y: p.y + dy });
+        }
+        this.commit({ ...this._board, strokes, cards });
       }
     } else if (g.kind === "scale") {
       if (Math.abs(g.factor - 1) > 0.001) {
@@ -3907,9 +4181,10 @@ class TSketch extends TangleElement {
     }
   }
 
+  /** The resize handle, in view coordinates. Only ink resizes, so a selection with cards has none. */
   get handleCenter() {
     const bounds = this.selectionBounds;
-    if (!bounds || this._tool !== "select") return null;
+    if (!bounds || this._tool !== "select" || this.viewing || this.selectedCards.length) return null;
     const r = sketchOutset(this._view.rectToView(this.previewRect(bounds)), 6);
     return { x: r.x + r.w, y: r.y + r.h };
   }
@@ -3921,9 +4196,14 @@ class TSketch extends TangleElement {
 
   selectDown(id, p) {
     const bounds = this.selectionBounds;
+    const card = this.cardAt(p);
     if (bounds && this.onHandle(this._view.toView(p)) && (bounds.w > 0 || bounds.h > 0)) {
       this._gesture = { kind: "scale", id, anchor: { x: bounds.x, y: bounds.y }, start: p, factor: 1 };
     } else if (bounds && sketchContains(sketchOutset(bounds, 8 / this._view.scale), p)) {
+      this._gesture = { kind: "move", id, anchor: p, offset: { x: 0, y: 0 } };
+    } else if (card) {
+      // A card can be grabbed without lassoing it first.
+      this._selection = new Set([card]);
       this._gesture = { kind: "move", id, anchor: p, offset: { x: 0, y: 0 } };
     } else {
       this._selection = new Set();
@@ -3949,8 +4229,8 @@ class TSketch extends TangleElement {
   // -------------------------------------------------------------------------
 
   copy(kind, data) {
-    if (!this._selection.size) return;
     const strokes = this.selected;
+    if (!strokes.length) return;
     sketchClipboard = strokes;
     const json = JSON.stringify(encodeSketchFragment(strokes));
     const text = JSON.stringify({ type: "sketcher-fragment", fragment: encodeSketchFragment(strokes) });
@@ -4002,8 +4282,8 @@ class TSketch extends TangleElement {
   }
 
   /**
-   * The strokes (by default the whole board) on paper, cropped to the ink plus
-   * padding: a canvas, or null when there's no ink.
+   * The strokes (by default all the ink) on paper, cropped to the ink plus
+   * padding: a canvas, or null when there's no ink. Cards aren't in it.
    */
   image(strokes = this._board.strokes, scale = 2, padding = 32) {
     const content = sketchContentBounds(strokes);
@@ -4020,7 +4300,7 @@ class TSketch extends TangleElement {
     return canvas;
   }
 
-  /** The board as a PNG data URL, cropped to the ink, or null when it's empty. */
+  /** The ink as a PNG data URL, cropped to it, or null when there's none. */
   toPNG({ scale = 2, padding = 32 } = {}) {
     return this.image(this._board.strokes, scale, padding)?.toDataURL("image/png") ?? null;
   }
@@ -4034,9 +4314,9 @@ class TSketch extends TangleElement {
     a.click();
   }
 
-  /** Copies the selection, or the whole board, to the clipboard as a picture. */
+  /** Copies the selected ink, or all of it, to the clipboard as a picture. */
   copyAsImage() {
-    const canvas = this.image(this._selection.size ? this.selected : this._board.strokes);
+    const canvas = this.image(this.selected.length ? this.selected : this._board.strokes);
     if (!canvas || !navigator.clipboard?.write) return;
     const blob = new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
     navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]).then(
@@ -4055,9 +4335,18 @@ class TSketch extends TangleElement {
    */
   wheel(e) {
     const zoom = e.ctrlKey || e.metaKey;
-    if (!zoom && !this.hasFocus) return;
+    if (!zoom && !this.matches(":focus-within")) {
+      // The page scrolls. Say once in a while how to scroll the board instead.
+      const now = performance.now();
+      if (!(now - this._hinted < 8000)) {
+        this._hinted = now;
+        this.showToast("Click the board to pan it with two fingers");
+      }
+      return;
+    }
     e.preventDefault();
     this._menu.hidden = true;
+    this._viewMoved = true;
     const lines = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
     if (zoom) this._view = this._view.zoomed(Math.exp(-e.deltaY * lines * 0.01), this.viewPoint(e));
     else this._view = this._view.panned(-e.deltaX * lines, -e.deltaY * lines);
@@ -4065,9 +4354,12 @@ class TSketch extends TangleElement {
   }
 
   keyDown(e) {
+    // Keys typed into a card are the card's.
+    if (!this.shadowRoot.contains(e.composedPath()[0])) return;
     // Keep page shortcuts away while the board has focus.
     e.stopPropagation();
     const mod = sketchIsMac ? e.metaKey : e.ctrlKey;
+    const key = e.key.toLowerCase();
     if (e.key === "Shift" || e.key === "Alt") {
       const g = this._gesture;
       if (g?.kind === "stroke") {
@@ -4076,8 +4368,24 @@ class TSketch extends TangleElement {
       }
       return;
     }
+    if (e.key === " ") {
+      e.preventDefault();
+      if (!e.repeat) {
+        this._space = true;
+        this.updateCursor();
+      }
+      return;
+    }
+    if (this.viewing) {
+      if (e.key === "Escape" && this._preview) this.setPreview(false);
+      else if (mod && ["=", "+", "-", "_", "0"].includes(key)) {
+        e.preventDefault();
+        this.modKey(key, e);
+      } else if (e.shiftKey && e.code === "Digit0") this.zoomToActualSize();
+      return;
+    }
     if (mod) {
-      if (this.modKey(e.key.toLowerCase(), e)) e.preventDefault();
+      if (this.modKey(key, e)) e.preventDefault();
       return;
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -4097,19 +4405,11 @@ class TSketch extends TangleElement {
       }
       return;
     }
-    if (e.key === " ") {
-      e.preventDefault();
-      if (!e.repeat) {
-        this._space = true;
-        this.updateCursor();
-      }
-      return;
-    }
     // Shift+0 stands in for ⌘1, which browsers keep for switching tabs.
     if (e.shiftKey && e.code === "Digit0") return this.zoomToActualSize();
     const digit = /^Digit([1-6])$/.exec(e.code);
     if (digit) return this.setSwatch(Number(digit[1]) - 1);
-    const tool = { p: "pen", b: "pen", m: "marker", h: "marker", e: "eraser", s: "select" }[e.key.toLowerCase()];
+    const tool = { p: "pen", b: "pen", m: "marker", h: "marker", e: "eraser", s: "select" }[key];
     if (tool) return this.setTool(tool);
     if (e.key === "[" || e.key === "]") {
       this._widthIndex = Math.max(0, Math.min(2, this._widthIndex + (e.key === "[" ? -1 : 1)));
@@ -4172,6 +4472,7 @@ class TSketch extends TangleElement {
   }
 
   keyUp(e) {
+    if (!this.shadowRoot.contains(e.composedPath()[0])) return;
     e.stopPropagation();
     if (e.key === " ") {
       this._space = false;
@@ -4184,11 +4485,13 @@ class TSketch extends TangleElement {
   }
 
   contextMenu(e) {
+    // Viewing, the page's own menu is fine.
+    if (this.viewing) return;
     e.preventDefault();
     this.cancelGesture();
     const v = this.viewPoint(e);
     const empty = !this._board.strokes.length;
-    const entries = this._selection.size
+    const entries = this.selected.length
       ? [
           { label: "Cut", keys: sketchKeys("X"), action: () => this.copy("cut", null) },
           { label: "Copy", keys: sketchKeys("C"), action: () => this.copy("copy", null) },
@@ -4198,11 +4501,13 @@ class TSketch extends TangleElement {
         ]
       : [
           { label: "Paste", keys: sketchKeys("V"), disabled: !sketchClipboard, action: () => this.paste(null) },
-          { label: "Select All", keys: sketchKeys("A"), disabled: empty, action: () => this.selectAll() },
+          { label: "Select All", keys: sketchKeys("A"), action: () => this.selectAll() },
           "-",
           { label: "Zoom to Fit", keys: sketchKeys("0"), action: () => this.zoomToFit() },
           { label: "Actual Size", keys: sketchKeys("0", { shift: true, mod: false }), action: () => this.zoomToActualSize() },
           "-",
+          { label: "Preview", keys: "", action: () => this.setPreview(true) },
+          { label: "Copy HTML for a Page", keys: "", action: () => this.copyHTML() },
           { label: "Copy as Image", keys: sketchKeys("C", { shift: true }), disabled: empty, action: () => this.copyAsImage() },
           { label: "Export as PNG", keys: sketchKeys("E", { shift: true }), disabled: empty, action: () => this.exportPNG() },
           "-",
@@ -4247,26 +4552,45 @@ class TSketch extends TangleElement {
     });
   }
 
-  render() {
+  /** Sizes a canvas to the board in device pixels and resets its transform. */
+  prepare(canvas) {
     const { w, h } = this._size;
     const dpr = window.devicePixelRatio || 1;
-    const canvas = this._canvas;
     if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
       canvas.width = Math.round(w * dpr);
       canvas.height = Math.round(h * dpr);
     }
-    const ctx = this._ctx;
-    const dark = this._dark;
+    const ctx = canvas.getContext("2d");
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = this._paper;
-    ctx.fillRect(0, 0, w, h);
-    sketchDrawBackground(ctx, this._board.background, this._view, dark, this._size);
+    return [ctx, dpr];
+  }
 
+  render() {
+    const { w, h } = this._size;
     const view = this._view;
+    const dark = this._dark;
+    const preview = this.preview;
+
+    // Underneath: the paper and its dots or grid.
+    const [paper] = this.prepare(this._paperCanvas);
+    paper.fillStyle = this._paper;
+    paper.fillRect(0, 0, w, h);
+    sketchDrawBackground(paper, this._board.background, view, dark, this._size);
+
+    // In between: the cards, in board coordinates.
+    this._cardLayer.style.transform = `translate(${view.offset.x}px, ${view.offset.y}px) scale(${view.scale})`;
+    for (const [el, p] of this._board.cards) {
+      const moving = preview && this._selection.has(el);
+      el.style.left = `${p.x + (moving ? preview.tx : 0)}px`;
+      el.style.top = `${p.y + (moving ? preview.ty : 0)}px`;
+    }
+
+    // On top: the ink.
+    const [ctx, dpr] = this.prepare(this._canvas);
+    ctx.clearRect(0, 0, w, h);
     const px = 1 / view.scale;
     ctx.setTransform(dpr * view.scale, 0, 0, dpr * view.scale, dpr * view.offset.x, dpr * view.offset.y);
     const visible = view.rectToCanvas({ x: 0, y: 0, w, h });
-    const preview = this.preview;
     const items = [];
     for (const stroke of this._board.strokes) {
       if (this._erased.has(stroke.id)) continue;
@@ -4296,9 +4620,25 @@ class TSketch extends TangleElement {
     const g = this._gesture;
     if (g?.kind === "stroke") items.push({ stroke: g.stroke, path: sketchSmooth(g.stroke.points, new Path2D()) });
     sketchDrawInk(ctx, items, dark);
-    this.drawSelection(ctx, px);
+    if (!this.viewing) {
+      this.drawCardOutlines(ctx, px);
+      this.drawSelection(ctx, px);
+    }
     this.placeSelectionBar();
     this.updateCursor();
+  }
+
+  /** While editing, a faint outline shows where each card is. */
+  drawCardOutlines(ctx, px) {
+    ctx.save();
+    ctx.strokeStyle = this._dark ? "rgba(255, 255, 255, 0.25)" : "rgba(0, 0, 0, 0.2)";
+    ctx.lineWidth = px;
+    ctx.setLineDash([3 * px, 3 * px]);
+    for (const el of this.cards) {
+      const r = sketchOutset(this.previewRect(this.cardRect(el)), 4 * px);
+      if (!this._selection.has(el)) ctx.strokeRect(r.x, r.y, r.w, r.h);
+    }
+    ctx.restore();
   }
 
   drawSelection(ctx, px) {
@@ -4325,7 +4665,7 @@ class TSketch extends TangleElement {
       ctx.lineWidth = px;
       ctx.setLineDash([4 * px, 3 * px]);
       ctx.stroke();
-      if (this._tool === "select") {
+      if (this.handleCenter) {
         ctx.beginPath();
         ctx.arc(r.x + r.w, r.y + r.h, SKETCH_HANDLE * px, 0, Math.PI * 2);
         ctx.globalAlpha = 1;
@@ -4343,7 +4683,7 @@ class TSketch extends TangleElement {
     const bar = this._bar;
     const bounds = this.selectionBounds;
     const busy = this._gesture && this._gesture.kind !== "pan" && this._gesture.kind !== "pinch";
-    bar.hidden = !bounds || !!busy;
+    bar.hidden = !bounds || !!busy || this.viewing || !this.selected.length;
     if (bar.hidden) return;
     const bw = bar.offsetWidth, bh = bar.offsetHeight;
     const r = this._view.rectToView(bounds);
@@ -4357,16 +4697,19 @@ class TSketch extends TangleElement {
 
   updateCursor() {
     const cursor = this.cursor();
-    if (this._canvas.style.cursor !== cursor) this._canvas.style.cursor = cursor;
+    if (this._root.style.cursor !== cursor) this._root.style.cursor = cursor;
   }
 
   cursor() {
     const g = this._gesture;
     if (g?.kind === "pan" || g?.kind === "move") return "grabbing";
-    if (this._space) return "grab";
+    if (this._space || this.viewing) return "grab";
     if (g?.kind === "scale") return "nwse-resize";
     if (this._tool === "eraser") return sketchCursor(SKETCH_ERASER * 2, null);
-    if (this._tool === "select") return this.onHandle(this._hover) ? "nwse-resize" : "crosshair";
+    if (this._tool === "select") {
+      if (this.onHandle(this._hover)) return "nwse-resize";
+      return this._hover && this.cardAt(this._view.toCanvas(this._hover)) ? "move" : "crosshair";
+    }
     const color = this.palette[this._swatch];
     const marker = this._tool === "marker";
     const alpha = this._dark ? SKETCH_MARKER_ALPHA.dark : SKETCH_MARKER_ALPHA.light;
@@ -7756,7 +8099,10 @@ export function tangleCall(fn, { name, params = {} } = {}) {
 if (typeof window !== "undefined" && window.customElements) {
   listen();
 
+  // <t-sketch> first: it keeps its children's HTML for Export, so it has to see them
+  // before the elements inside them are defined and render.
   const elements = {
+    "t-sketch": TSketch,
     "t-scope": TScope,
     "t-var": TVar,
     "t-num": TNum,
@@ -7778,7 +8124,6 @@ if (typeof window !== "undefined" && window.customElements) {
     "t-graph": TGraph,
     "t-panel": TPanel,
     "t-paint": TPaint,
-    "t-sketch": TSketch,
   };
   for (const [tag, cls] of Object.entries(elements)) {
     if (!customElements.get(tag)) customElements.define(tag, cls);

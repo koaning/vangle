@@ -16,3 +16,9 @@ bundles are stale.
 
 Modules import each other with relative named imports only. Each top-level name is declared
 in exactly one module.
+
+## Talking about vangle
+
+Explain vangle terms when you use them with the user, especially `name`. Don't just say "with
+`name`, …". Say what it does: `name="x"` puts the element's value in a page variable `x` that other
+elements read, and that can be set from code. Show a two-line example the first time it comes up.

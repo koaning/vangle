@@ -54,6 +54,7 @@ export const NAV = [
     ["gallery-amdahl", "Amdahl's law"],
     ["gallery-winners-curse", "The winner's curse"],
     ["gallery-darts", "Throwing darts at a drawing"],
+    ["gallery-mixture", "A Gaussian mixture as a DAG"],
     ["gallery-recompute", "What recomputes"],
     ["gallery-bezier", "Bézier curves"],
     ["gallery-coaster-nausea", "Coaster nausea"],

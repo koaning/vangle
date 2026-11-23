@@ -1,5 +1,5 @@
 // The model behind <t-sketch>, without the DOM: a board of strokes in canvas
-// coordinates (y down), read and written in the `.sketcher` JSON format of the
+// coordinates (y down), read and written as JSON in the format of the
 // Sketcher app (https://github.com/koaning/sketcher), plus the viewport, hit
 // tests, edits and straight-line snapping. Strokes are immutable: edits return
 // new strokes, so the renderer can cache a Path2D per stroke object.
@@ -101,7 +101,7 @@ export function sketchContentBounds(strokes) {
 }
 
 // ---------------------------------------------------------------------------
-// The `.sketcher` format: points are [x, y] arrays, `swatch` is left out when
+// The JSON format (Sketcher's `.sketcher` files): points are [x, y] arrays, `swatch` is left out when
 // null, ids are upper case, and keys are sorted at every level. The board's
 // `math` layer is kept as it is, so a file from the app keeps its typeset math,
 // but <t-sketch> doesn't draw it.
@@ -173,7 +173,7 @@ function encodeSketchStroke(s) {
   return out;
 }
 
-/** The board as plain JSON, with its keys in sorted order: what `JSON.stringify` makes a `.sketcher` file of. */
+/** The board as plain JSON, with its keys in sorted order: what `JSON.stringify` makes a file of. */
 export function encodeSketch(board) {
   return {
     background: board.background,
@@ -321,7 +321,7 @@ export function sketchTouched(stroke, e1, e2, radius) {
 }
 
 /** Even-odd point in polygon. The polygon closes itself. */
-function sketchInPolygon(polygon, p) {
+export function sketchInPolygon(polygon, p) {
   if (polygon.length < 3) return false;
   let inside = false;
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
@@ -397,4 +397,15 @@ export function sketchLine(start, end, { angle = false, grid = null } = {}) {
     b = sketchToGrid(b, grid);
   }
   return a.x === b.x && a.y === b.y ? [a] : [a, b];
+}
+
+/** The board with points rounded to a tenth and widths to a hundredth: smaller to paste into a page. */
+export function sketchRounded(board) {
+  const round = (v, f) => Math.round(v * f) / f;
+  const strokes = board.strokes.map((s) => ({
+    ...s,
+    width: round(s.width, 100),
+    points: s.points.map((p) => ({ x: round(p.x, 10), y: round(p.y, 10) })),
+  }));
+  return { ...board, strokes };
 }

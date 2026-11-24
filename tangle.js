@@ -5827,6 +5827,9 @@ class TCodeCell extends TangleElement {
   }
 }
 
+// Attributes whose live element the reader can change, and that are read back.
+const LIVE = new Set(["value", "checked"]);
+
 const VOID_TAGS = new Set([
   "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr",
 ]);
@@ -5836,6 +5839,8 @@ const VOID_TAGS = new Set([
 // below it. `tag` is the tag name plus any fixed attributes. Each named child is an
 // attribute (`attr` overrides the name shown); a child marked `content`, or loose
 // text, is what goes between the tags. A true/false value is a boolean attribute.
+// It works both ways for `value` and `checked`: moving the slider or typing in the
+// field below sets the variable behind that attribute.
 class TTag extends CodeElement {
   connectedCallback() {
     if (!this._tag) {
@@ -5853,6 +5858,7 @@ class TTag extends CodeElement {
       this._flags = this._els.map((el, i) => (el.localName === "t-choice" ? this.flag(el, i, scope) : null));
       this._preview = document.createElement("div");
       this._preview.className = "t-tag-preview";
+      this._preview.addEventListener("input", () => this.sync(scope));
       this.append(this._preview);
     }
     this.watch(() => this.render(scope));
@@ -5880,10 +5886,27 @@ class TTag extends CodeElement {
     return flag;
   }
 
+  // The reader changed the live element: copy its `value` and `checked` back into
+  // the variables behind those attributes.
+  sync(scope) {
+    const el = this._preview.firstElementChild;
+    if (!el || el.localName.includes("-")) return;
+    this._els.forEach((_, i) => {
+      const prop = this.attrName(i);
+      if (i === this._content || !LIVE.has(prop) || !(prop in el)) return;
+      const old = scope.peek(this._args[i]);
+      let next = el[prop];
+      if (typeof old === "number") next = Number(next);
+      else if (typeof old === "boolean") next = Boolean(next);
+      if (typeof next === "number" && !Number.isFinite(next)) return;
+      scope.set(this._args[i], next);
+    });
+  }
+
   render(scope) {
     const { name, attrs } = this._tag;
-    const el = document.createElement(name);
-    for (const [key, value] of attrs) el.setAttribute(key, value);
+    const want = new Map(attrs);
+    const live = new Map();
     let text = this._text;
     let relayout = false;
     this._els.forEach((arg, i) => {
@@ -5904,13 +5927,24 @@ class TTag extends CodeElement {
         flag.classList.toggle("is-off", value === false);
         flag.setAttribute("aria-checked", String(value === true));
       });
+      const attr = this.attrName(i);
       if (i === this._content) text = shown;
-      else if (isBool) el.toggleAttribute(this.attrName(i), value);
-      else if (value !== undefined) el.setAttribute(this.attrName(i), shown);
+      else if (isBool) value ? want.set(attr, "") : want.delete(attr);
+      else if (value !== undefined) want.set(attr, shown);
+      if (i !== this._content && LIVE.has(attr) && value !== undefined) live.set(attr, isBool ? value : shown);
     });
-    if (text && !VOID_TAGS.has(name)) el.textContent = text;
     untracked(() => {
-      this._preview.replaceChildren(el);
+      // A plain element is updated in place, so a slider keeps being dragged and a
+      // field keeps its focus. vangle's own elements are made anew, to read their attributes.
+      const plain = !name.includes("-");
+      let el = this._preview.firstElementChild;
+      const reuse = plain && el?.localName === name;
+      if (!reuse) el = document.createElement(name);
+      for (const { name: key } of [...el.attributes]) if (!want.has(key)) el.removeAttribute(key);
+      for (const [key, value] of want) if (el.getAttribute(key) !== value) el.setAttribute(key, value);
+      if (!VOID_TAGS.has(name) && el.textContent !== text) el.textContent = text;
+      if (plain) for (const [key, value] of live) if (key in el && el[key] !== value) el[key] = value;
+      if (!reuse) this._preview.replaceChildren(el);
       if (relayout) this.layout();
     });
   }

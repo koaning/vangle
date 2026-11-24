@@ -174,21 +174,50 @@ body.docs {
 }
 body.docs main { min-width: 0; }
 
+/* The sidebar scrolls on its own when it's taller than the window. The padding
+   keeps room for the links' hover background, which hangs left of the text. */
 .docs-nav {
   position: sticky;
-  top: 2.5rem;
+  top: 0;
   align-self: start;
+  max-height: 100vh;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  margin: -2.5rem -0.5rem 0;
+  padding: 2.5rem 0.5rem 2rem;
   font: 0.86rem/1.5 var(--sans);
 }
 .docs-nav-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
 .docs-nav .brand { color: var(--ink); font-weight: 700; font-size: 1rem; text-decoration: none; }
-.docs-nav h4 {
-  margin: 1.4rem 0 0.3rem;
+/* Nav groups are <details>: click a heading to fold its links away. */
+.docs-nav details { margin: 1.1rem 0 0; font-size: inherit; }
+.docs-nav summary {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.3rem;
   color: var(--muted);
   font-size: 0.7rem;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  list-style: none;
+  user-select: none;
 }
+.docs-nav summary::-webkit-details-marker { display: none; }
+.docs-nav summary::before {
+  content: "";
+  width: 0.35em;
+  height: 0.35em;
+  border: solid currentColor;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+.docs-nav details[open] > summary::before { transform: rotate(45deg); }
+.docs-nav summary:hover { color: var(--ink); }
 .docs-nav ul { margin: 0; padding: 0; list-style: none; }
 .docs-nav a {
   display: block;
@@ -217,7 +246,7 @@ body.docs main { min-width: 0; }
 
 @media (max-width: 900px) {
   body.docs { display: block; padding-top: 1.5rem; }
-  .docs-nav { position: static; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid var(--line); }
+  .docs-nav { position: static; max-height: none; overflow: visible; margin: 0 0 2rem; padding: 0 0 1rem; border-bottom: 1px solid var(--line); }
   .docs-nav ul { display: flex; flex-wrap: wrap; gap: 0 1rem; }
 }
 

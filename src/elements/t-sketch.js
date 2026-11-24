@@ -1543,11 +1543,11 @@ export class TSketch extends TangleElement {
     const dark = this._dark;
     const preview = this.preview;
 
-    // Underneath: the paper and its dots or grid.
+    // Underneath: the paper, with its dots or grid while editing.
     const [paper] = this.prepare(this._paperCanvas);
     paper.fillStyle = this._paper;
     paper.fillRect(0, 0, w, h);
-    sketchDrawBackground(paper, this._board.background, view, dark, this._size);
+    if (!this.viewing) sketchDrawBackground(paper, this._board.background, view, dark, this._size);
 
     // In between: the cards, in board coordinates.
     this._cardLayer.style.transform = `translate(${view.offset.x}px, ${view.offset.y}px) scale(${view.scale})`;

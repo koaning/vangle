@@ -4,6 +4,7 @@ import {
   SketchViewport, decodeSketch, decodeSketchFragment, encodeSketch, encodeSketchFragment, sketchCopies, sketchGridStep,
   sketchID, sketchLassoed, sketchLine, sketchRounded, sketchScaled, sketchTouched,
 } from "../src/core/sketch.js";
+import { TSketch } from "../src/elements/t-sketch.js";
 
 const stroke = (id, points, extra = {}) => ({
   id,
@@ -125,4 +126,61 @@ test("an exported board rounds points to a tenth and widths to a hundredth", () 
   assert.deepEqual(s.points, [{ x: 1.2, y: 5.7 }]);
   assert.equal(s.width, 2.35);
   assert.equal(board.strokes[0].points[0].x, 1.234);
+});
+
+test("view mode and preview hide background dots and grid lines", () => {
+  const spyCtx = () => {
+    const calls = [];
+    return {
+      calls,
+      save() {},
+      restore() {},
+      beginPath() {},
+      clearRect() {},
+      fillRect() { calls.push("fillRect"); },
+      setTransform() {},
+      setLineDash() {},
+      moveTo() {},
+      lineTo() { calls.push("lineTo"); },
+      arc() { calls.push("arc"); },
+      fill() { calls.push("fill"); },
+      stroke() { calls.push("stroke"); },
+      strokeRect() {},
+      roundRect() {},
+    };
+  };
+  const renderPaper = (mode, preview, background) => {
+    const paper = spyCtx();
+    const ink = spyCtx();
+    const sketch = Object.assign(new TSketch(), {
+      _mode: mode,
+      _preview: preview,
+      _board: { background, strokes: [], cards: new Map() },
+      _view: new SketchViewport(),
+      _size: { w: 100, h: 100 },
+      _dark: false,
+      _paper: "#fbfbf8",
+      _accent: "#246bce",
+      _erased: new Set(),
+      _selection: new Set(),
+      _gesture: null,
+      _tool: "pen",
+      _swatch: 0,
+      _widthIndex: 1,
+      _paperCanvas: paper,
+      _canvas: ink,
+      _cardLayer: { style: {} },
+      _bar: { hidden: false, style: {} },
+      _root: { style: {} },
+      prepare: (ctx) => [ctx, 1],
+    });
+    sketch.render();
+    return paper.calls;
+  };
+
+  for (const [bg, mark] of [["dots", "arc"], ["grid", "lineTo"]]) {
+    assert.ok(renderPaper("edit", false, bg).includes(mark), `edit mode draws ${bg}`);
+    assert.deepEqual(renderPaper("view", false, bg), ["fillRect"], `view mode hides ${bg}`);
+    assert.deepEqual(renderPaper("edit", true, bg), ["fillRect"], `preview hides ${bg}`);
+  }
 });

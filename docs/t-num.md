@@ -23,6 +23,7 @@ as in `<t-num name="price" value="1000" format="$%,d"></t-num>`.
 | `color` | accent color | A CSS color, or two (`"#246bce #75a7ff"`) for light and dark mode. Every place the variable appears uses it, formulas included. |
 | `label` | the name | The accessible name screen readers announce. |
 | `pixels-per-step` | `5` | How far the pointer must travel to change the value by one step. Raise it for finer control. |
+| `prev` | none | A second variable that keeps the value from before the reader's latest change. See [previous value](#prev). |
 
 Try them out: change the attributes in the code, then drag the number below it. This uses
 [`<t-tag>`](t-tag.md).
@@ -47,6 +48,7 @@ Try them out: change the attributes in the code, then drag the number below it. 
 | <kbd>→</kbd> <kbd>↑</kbd> / <kbd>←</kbd> <kbd>↓</kbd> | One step up or down. Hold <kbd>Shift</kbd> for ten steps. |
 | <kbd>Home</kbd> / <kbd>End</kbd> | Jumps to `min` or `max`, if set. |
 | <kbd>Enter</kbd> or <kbd>Space</kbd> | Opens the field to type a value. |
+| <kbd>Esc</kbd> while dragging | Cancels the drag and puts back the value from before it. |
 
 In the typing field, <kbd>Enter</kbd> confirms and <kbd>Esc</kbd> cancels; clicking away also
 confirms. The field accepts expressions, so readers can type `w + 1` or `2 * Math.PI`.
@@ -63,6 +65,25 @@ with the same name, and with no value of its own, is another handle on the same 
   <p>… three paragraphs later …</p>
   <p>With your <t-num name="budget"></t-num> budget, you can buy <t-out expr="Math.floor(budget / 35)"></t-out> books.</p>
 </t-scope>
+
+## The previous value {#prev}
+
+`prev="old"` makes a second variable, `old`, that holds the value from before the
+reader's latest change, so the page can show what a drag did. It starts out equal to the
+value. When a drag begins, `old` takes the value from before it and keeps it while the
+reader explores; a typed value or an arrow key also moves the old value into `old`.
+Press <kbd>Esc</kbd> during a drag to cancel it: both variables go back to what they were.
+
+<t-scope class="example" data-show-source="open">
+  <p>Bake <t-num name="cookies" prev="before" min="0" max="40">12</t-num> cookies:
+    that was <t-out expr="before"></t-out>, a change of
+    <t-out expr="cookies - before" format="%+d"></t-out>, or
+    <t-out expr="(cookies - before) * 50" format="%+d"></t-out> calories.</p>
+</t-scope>
+
+`old` is an ordinary variable: other elements read it in expressions, and code can set it.
+It has the same format and step as the value. Every handle on the variable updates it,
+including another view of it, or a `\tangle` in a [`<t-math>`](t-math.md) formula.
 
 ## Drag sensitivity
 

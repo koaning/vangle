@@ -1,5 +1,5 @@
 import { Signal, untracked } from "./signals.js";
-import { scopeOf } from "./scope.js";
+import { NAME_RE, scopeOf } from "./scope.js";
 import { limits, nudge, formatValue, snap } from "./format.js";
 import { filterOptions } from "./options.js";
 import { config } from "./load.js";
@@ -49,47 +49,89 @@ export function decorate(el, scope, name) {
   else el.style.removeProperty("--tangle-color");
 }
 
+// A variable declared with prev="old" keeps, in the variable `old`, the value
+// it had before the reader's latest change: a drag, a typed value or an arrow
+// key. Escape during a drag puts back both the value and `old`.
+function prevOf(scope, name) {
+  const prev = scope.slot(name).meta.peek().prev;
+  return prev && prev !== name && NAME_RE.test(prev) ? prev : null;
+}
+
+/** Set `name` to `next` for the reader, keeping the value it had in its `prev` variable. */
+export function readerSet(scope, name, next) {
+  const before = scope.peek(name);
+  const prev = prevOf(scope, name);
+  if (prev && !Object.is(before, next)) scope.set(prev, before);
+  scope.set(name, next);
+}
+
+/** Start dragging `name`. Its value now is what Escape restores. */
+export function startDrag(scope, name, extra = {}) {
+  drag = { scope, name, startX: 0, startValue: scope.peek(name), moved: false, prev: null, ...extra };
+  active.value = keyOf(scope, name);
+  hover.value = keyOf(scope, name);
+  return drag;
+}
+
+/** Move the drag to `dx` pixels from where it started. False while it's still a click. */
+export function dragBy(dx) {
+  if (!drag.moved && Math.abs(dx) < 3) return false;
+  if (!drag.moved) {
+    drag.moved = true;
+    const prev = prevOf(drag.scope, drag.name);
+    if (prev) {
+      drag.prev = { name: prev, value: drag.scope.peek(prev) };
+      drag.scope.set(prev, drag.startValue);
+    }
+  }
+  const meta = drag.scope.slot(drag.name).meta.peek();
+  const { step } = limits(meta);
+  const pps = meta.pixelsPerStep ?? config.pixelsPerStep;
+  const from = Number(drag.startValue) || 0;
+  drag.scope.set(drag.name, nudge(from, Math.trunc(dx / pps) * step, meta));
+  return true;
+}
+
+/** End the drag and return it. With `cancel`, put back the values from before it. */
+export function endDrag(cancel = false) {
+  const finished = drag;
+  if (!finished) return null;
+  drag = null;
+  globalThis.document?.documentElement.classList.remove("tangle-dragging");
+  if (cancel) {
+    if (finished.moved) finished.scope.set(finished.name, finished.startValue);
+    if (finished.prev) finished.scope.set(finished.prev.name, finished.prev.value);
+    active.value = null;
+  }
+  return finished;
+}
+
 function onPointerDown(event) {
   const el = event.target.closest?.(PARAM);
   if (!el || (event.pointerType === "mouse" && event.button !== 0)) return;
   event.preventDefault();
   closeEditor(true);
   const { scope, name } = paramOf(el);
-  drag = {
-    scope,
-    name,
+  startDrag(scope, name, {
     pointerId: event.pointerId,
     pointerType: event.pointerType,
     startX: event.clientX,
-    startValue: Number(scope.peek(name)) || 0,
-    moved: false,
     where: occurrence(el),
-  };
+  });
   try {
     document.documentElement.setPointerCapture(event.pointerId);
   } catch {}
   document.documentElement.classList.add("tangle-dragging");
-  active.value = keyOf(scope, name);
-  hover.value = keyOf(scope, name);
 }
 
 function onPointerMove(event) {
   if (!drag || event.pointerId !== drag.pointerId) return;
-  const dx = event.clientX - drag.startX;
-  if (!drag.moved && Math.abs(dx) < 3) return;
-  drag.moved = true;
-  event.preventDefault();
-  const meta = drag.scope.slot(drag.name).meta.peek();
-  const { step } = limits(meta);
-  const pps = meta.pixelsPerStep ?? config.pixelsPerStep;
-  drag.scope.set(drag.name, nudge(drag.startValue, Math.trunc(dx / pps) * step, meta));
+  if (dragBy(event.clientX - drag.startX)) event.preventDefault();
 }
 
 function onPointerUp(event) {
   if (!drag || event.pointerId !== drag.pointerId) return;
-  const finished = drag;
-  drag = null;
-  document.documentElement.classList.remove("tangle-dragging");
+  const finished = endDrag();
   if (finished.pointerType !== "mouse") hover.value = null;
   if (event.type === "pointercancel" || finished.moved) {
     active.value = null;
@@ -108,6 +150,16 @@ function onPointerOver(event) {
 }
 
 function onKeyDown(event) {
+  // Escape during a drag cancels it, wherever the focus is.
+  if (drag && event.key === "Escape") {
+    event.preventDefault();
+    try {
+      document.documentElement.releasePointerCapture(drag.pointerId);
+    } catch {}
+    if (drag.pointerType !== "mouse") hover.value = null;
+    endDrag(true);
+    return;
+  }
   const el = event.target.closest?.(PARAM);
   if (!el || event.altKey || event.metaKey || event.ctrlKey) return;
   const { scope, name } = paramOf(el);
@@ -140,7 +192,7 @@ function onKeyDown(event) {
       return;
   }
   event.preventDefault();
-  if (next !== undefined) scope.set(name, next);
+  if (next !== undefined) readerSet(scope, name, next);
 }
 
 // Click without dragging (or press Enter) to type a value. Accepts numbers
@@ -182,7 +234,7 @@ function closeEditor(commit, { strict = false } = {}) {
   if (!editor) return;
   const ed = editor;
   if (commit && ed.text) {
-    ed.scope.set(ed.name, ed.input.value);
+    readerSet(ed.scope, ed.name, ed.input.value);
   } else if (commit) {
     const text = ed.input.value.trim();
     let next = Number(text.replace(/,/g, ""));
@@ -194,7 +246,7 @@ function closeEditor(commit, { strict = false } = {}) {
       }
     }
     if (Number.isFinite(next)) {
-      ed.scope.set(ed.name, snap(next, ed.meta));
+      readerSet(ed.scope, ed.name, snap(next, ed.meta));
     } else if (strict) {
       ed.input.classList.add("is-invalid");
       ed.input.setAttribute("aria-invalid", "true");

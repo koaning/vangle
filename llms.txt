@@ -18,7 +18,7 @@
 
 ## Elements
 
-- [`<t-num>`](docs/t-num.md): a number the reader can drag, type or step with the keyboard. Keywords: slider, scrubber, parameter, input.
+- [`<t-num>`](docs/t-num.md): a number the reader can drag, type or step with the keyboard. `prev="old"` keeps the value from before the latest change in a variable `old`, and Escape cancels a drag. Keywords: slider, scrubber, parameter, input, previous value, undo.
 - [`<t-var>`](docs/t-var.md): declares a variable without showing it, for example a formula parameter. Keywords: constant, parameter, state.
 - [`<t-let>`](docs/t-let.md): a named value computed from other variables. Keywords: derived, formula, compute.
 - [`<t-out>`](docs/t-out.md): shows the live result of an expression in the text. Keywords: display, print, value.

@@ -17,12 +17,24 @@ export function declare(el, scope, name, initial) {
   for (const [attr, key] of Object.entries(NUMERIC_META)) {
     if (el.hasAttribute(attr)) patch[key] = Number(el.getAttribute(attr));
   }
-  for (const attr of ["color", "label", "format"]) {
+  for (const attr of ["color", "label", "format", "prev"]) {
     if (el.hasAttribute(attr)) patch[attr] = el.getAttribute(attr);
   }
   // A <t-num>'s format only becomes the variable's default if none is set yet.
   if (el.localName === "t-num" && scope.slot(name).meta.peek().format) delete patch.format;
   declareMeta(scope, name, patch, initial);
+  // prev="old": `old` holds the value before the reader's latest change (see interaction.js).
+  // It starts out equal to the value, and shows with the same format and step.
+  const prev = patch.prev;
+  if (prev && prev !== name && NAME_RE.test(prev)) {
+    const { format, step } = scope.slot(name).meta.peek();
+    const like = {};
+    if (format) like.format = format;
+    if (step != null) like.step = step;
+    declareMeta(scope, prev, like, scope.peek(name));
+  } else if (prev) {
+    console.error(`tangle: prev="${prev}" on <${el.localName}> must be a valid name other than "${name}"`, el);
+  }
 }
 
 /**

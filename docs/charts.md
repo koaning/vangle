@@ -20,8 +20,8 @@ reads them and draws.
     <svg class="chart" viewBox="0 0 600 290" role="img" aria-label="The ball's flight path">
       <g class="axes"></g>
       <polyline class="flight"></polyline>
-      <circle class="peak" r="4"></circle>
-      <circle class="landing" r="5"></circle>
+      <circle class="peak" r="6"></circle>
+      <circle class="landing" r="6"></circle>
     </svg>
   </t-scope>
 </div>
@@ -66,25 +66,51 @@ reads them and draws.
     landing.setAttribute("cy", y(0));
   });
 
-  // Clicking the chart aims the throw at that point.
-  svg.addEventListener("click", (event) => {
+  // Dragging the chart's handles changes speed and angle. Drag the top of the arc anywhere,
+  // or the landing point along the ground. Pressing anywhere else moves the top there.
+  const g = 9.81, rad = (deg) => (deg * Math.PI) / 180;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, Math.round(v)));
+  const toMetres = (event) => {
     const p = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
-    const angle = Math.round((Math.atan2(y(0) - p.y, p.x - x(0)) * 180) / Math.PI);
-    scope.set("angle", Math.min(85, Math.max(5, angle)));
+    return { d: (p.x - x(0)) / 5.4, h: (y(0) - p.y) / 5.4 };
+  };
+  const aim = {
+    // The top of the arc is at (d, h) when tan(angle) = 2h / d and speed² = 2gh / sin²(angle).
+    peak({ d, h }) {
+      const a = Math.atan2(2 * Math.max(h, 0.5), Math.max(d, 0.5));
+      scope.set("angle", clamp((a * 180) / Math.PI, 5, 85));
+      scope.set("speed", clamp(Math.sqrt((2 * g * Math.max(h, 0.5)) / Math.sin(a) ** 2), 5, 30));
+    },
+    // Keep the angle and find the speed that lands at d: range = speed² · sin(2 · angle) / g.
+    landing({ d }) {
+      const s2 = (Math.max(d, 0) * g) / Math.sin(2 * rad(scope.peek("angle")));
+      scope.set("speed", clamp(Math.sqrt(s2), 5, 30));
+    },
+  };
+  let dragging = null;
+  svg.addEventListener("pointerdown", (event) => {
+    dragging = event.target === landing ? "landing" : "peak";
+    svg.setPointerCapture(event.pointerId);
+    aim[dragging](toMetres(event));
   });
+  svg.addEventListener("pointermove", (event) => dragging && aim[dragging](toMetres(event)));
+  svg.addEventListener("pointerup", () => (dragging = null));
+  svg.addEventListener("pointercancel", () => (dragging = null));
 </script>
 
 <style data-show-source>
-  .chart { display: block; width: 100%; height: auto; margin: 1rem 0; overflow: visible; cursor: crosshair; }
+  .chart { display: block; width: 100%; height: auto; margin: 1rem 0; overflow: visible; cursor: crosshair; touch-action: none; user-select: none; }
   .chart .axes line { stroke: currentColor; stroke-opacity: 0.12; }
   .chart .axes text { fill: currentColor; fill-opacity: 0.55; font: 12px system-ui, sans-serif; text-anchor: middle; }
   .chart .axes text.y { text-anchor: end; }
   .chart .flight { fill: none; stroke: var(--tangle-accent); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
-  .chart .peak { fill: var(--tangle-accent); fill-opacity: 0.5; }
-  .chart .landing { fill: var(--tangle-accent); }
+  .chart .peak, .chart .landing { fill: var(--tangle-accent); stroke: var(--tangle-accent); stroke-opacity: 0.25; stroke-width: 12; cursor: grab; }
+  .chart .peak { fill-opacity: 0.5; }
+  .chart .landing { cursor: ew-resize; }
 </style>
 
-Drag the speed or the angle, or click anywhere in the chart to aim there.
+Drag the speed or the angle in the text, or drag the chart: pull the top of the arc anywhere to set
+both, or slide the landing point along the ground to throw further at the same angle.
 
 ## How it works
 
@@ -164,19 +190,32 @@ effect. With D3, run the update part of your join.
 
 ## Letting the chart change variables
 
-The data can flow the other way too. The click handler in the example calls `scope.set`, and
-every `<t-num>`, output and formula that uses `angle` updates, including the chart itself:
+The data can flow the other way too. Dragging the chart calls `scope.set`, and every `<t-num>`,
+output and formula that uses `speed` or `angle` updates, including the chart itself.
+
+Work out which variables a gesture should change from what the reader is pointing at. A reader
+who drags the top of the arc expects the arc's top to follow the pointer, so the handler solves
+the physics backwards for the speed and angle that put it there:
 
 ```js
-svg.addEventListener("click", (event) => {
-  // Convert the click from screen pixels to the SVG's own coordinates.
+const toMetres = (event) => {
+  // Convert the pointer from screen pixels to the SVG's own coordinates, then to metres.
   const p = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.getScreenCTM().inverse());
-  const angle = Math.round((Math.atan2(y(0) - p.y, p.x - x(0)) * 180) / Math.PI);
-  scope.set("angle", Math.min(85, Math.max(5, angle)));
-});
+  return { d: (p.x - x(0)) / 5.4, h: (y(0) - p.y) / 5.4 };
+};
+
+// The top of the arc is at (d, h) when tan(angle) = 2h / d and speed² = 2gh / sin²(angle).
+function aimPeak({ d, h }) {
+  const a = Math.atan2(2 * h, d);
+  scope.set("angle", clamp((a * 180) / Math.PI, 5, 85));
+  scope.set("speed", clamp(Math.sqrt((2 * 9.81 * h) / Math.sin(a) ** 2), 5, 30));
+}
 ```
 
-`set` doesn't apply the variable's `min`, `max` or `step`, so the handler rounds and clamps the
-value itself.
+`set` doesn't apply the variable's `min`, `max` or `step`, so `clamp` rounds and clamps the value
+itself. Near the edges the arc's top then stops short of the pointer instead of jumping around.
+
+Use pointer events with `setPointerCapture`, so the drag keeps going when the pointer leaves the
+chart, and `touch-action: none` in the CSS, so a drag on a phone doesn't scroll the page.
 
 `effect` returns a function that stops it. Call it if you remove the chart from the page.

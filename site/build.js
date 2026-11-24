@@ -215,11 +215,14 @@ export function page(name, md, root = false) {
   const flat = NAV.flatMap(([, links]) => links);
   const at = root ? -1 : flat.findIndex(([slug]) => slug === name);
   const link = ([slug, label], cls, hint) => `<a class="${cls}" href="${slug}.html"><small>${hint}</small>${label}</a>`;
+  // Each group collapses, and only the one holding the current page starts open
+  // (the first group on the landing page), so the sidebar stays short.
+  const current = root ? NAV[0][0] : NAV.find(([, links]) => links.some(([slug]) => slug === name))?.[0];
   const nav = NAV.map(
     ([heading, links]) =>
-      `<h4>${heading}</h4>\n<ul>\n${links
+      `<details class="nav-group"${heading === current ? " open" : ""}>\n<summary>${heading}</summary>\n<ul>\n${links
         .map(([slug, label]) => `<li><a href="${docs}${slug}.html"${slug === name && !root ? ' aria-current="page"' : ""}>${label}</a></li>`)
-        .join("\n")}\n</ul>`,
+        .join("\n")}\n</ul>\n</details>`,
   ).join("\n");
   const pager = [
     at > 0 ? link(flat[at - 1], "prev", "Previous") : "",

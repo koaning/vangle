@@ -91,3 +91,16 @@ test("fenced code, also inside a list item", () => {
 test("loose lists wrap items in paragraphs", () => {
   assert.equal(blocks("1. one\n\n2. two"), "<ol>\n<li><p>one</p></li>\n<li><p>two</p></li>\n</ol>");
 });
+
+test("the sidebar groups collapse, and only the current page's group starts open", () => {
+  const pages = build();
+  for (const [heading, links] of NAV) {
+    for (const [slug] of links) {
+      const groups = [...pages[`${slug}.html`].matchAll(/<details class="nav-group"( open)?>\n<summary>([^<]+)<\/summary>/g)];
+      assert.equal(groups.length, NAV.length, slug);
+      assert.deepEqual(groups.filter((g) => g[1]).map((g) => g[2]), [heading], slug);
+    }
+  }
+  const open = [...landing().matchAll(/<details class="nav-group" open>\n<summary>([^<]+)</g)].map((m) => m[1]);
+  assert.deepEqual(open, [NAV[0][0]]);
+});

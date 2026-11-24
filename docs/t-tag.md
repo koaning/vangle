@@ -1,7 +1,8 @@
 # `<t-tag>`
 
 An HTML tag whose attributes the reader can change, with the live element right below it.
-Drag a number, click a word or toggle an attribute, and the element updates.
+Drag a number, click a word or toggle an attribute, and the element updates. It works the
+other way too: drag the slider below and its `value` follows.
 
 <t-scope class="example" data-show-source="open">
   <t-tag tag='input type="range"'>
@@ -32,6 +33,19 @@ On the children:
 | `content` | Marks the child that goes between the opening and closing tags, instead of being an attribute. Put it last. |
 
 Text inside `<t-tag>` that isn't in a child is fixed content: `<t-tag tag="button">Save</t-tag>`.
+
+## Changing the element
+
+The `value` and `checked` attributes go both ways. When the reader moves the slider, types in
+the field or ticks the box, the variable behind that attribute changes too, and so does
+everything else that reads it.
+
+<t-scope class="example" data-show-source="open">
+  <t-tag tag='input type="text"'>
+    <t-text name="greeting" attr="value">hello</t-text>
+  </t-tag>
+  You typed <t-out expr="greeting.length" format="%d"></t-out> characters.
+</t-scope>
 
 ## Values
 

@@ -22,7 +22,7 @@ For a fixed-size canvas whose drawing is a picture, see [`<t-paint>`](t-paint.md
 | `mode` | `edit` | `edit` draws and moves things, and has **Preview** and **Export**. `view` only pans and zooms: the ink stays put and the cards are live. |
 | `name` | | Puts the board in a page variable of that name, as JSON, so other elements and your code can read it, save it or set it. See [the board as a variable](#variable). Without it, nothing else on the page sees the board. |
 | `height` | `400` | The board's height in pixels. It's as wide as its container. |
-| `background` | `dots` | The paper of an empty board: `plain`, `dots` or `grid`. A loaded board brings its own, and the palette's background button cycles through them. |
+| `background` | `dots` | The paper of an empty board: `plain`, `dots` or `grid`. A loaded board brings its own, and the palette's background button cycles through them. Shown while editing; view mode and **Preview** use plain paper. |
 | `src` | | A JSON file of a board to start from. A `<script type="application/json">` inside the board does the same, inline. |
 | `label` | the name | The accessible name of the board. |
 

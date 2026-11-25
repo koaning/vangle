@@ -85,7 +85,53 @@ export class Scope {
     return untracked(() => this.get(name));
   }
   set(name, value) {
-    this.slot(name).def.value = value;
+    const slot = this.slot(name);
+    const before = slot.previewing ? slot.baseline : slot.def.peek();
+    slot.previewing = false;
+    slot.baseline = undefined;
+    slot.def.value = value;
+    if (slot.prev && !Object.is(value, before)) {
+      this.set(slot.prev, before === undefined ? value : before);
+    }
+  }
+  /** Set a live, uncommitted value during a drag, edit or menu browse; end with commit() or revert(). */
+  preview(name, value) {
+    const slot = this.slot(name);
+    if (!slot.previewing) {
+      slot.baseline = slot.def.peek();
+      slot.previewing = true;
+    }
+    slot.def.value = value;
+  }
+  /** Finish an active preview, keeping the current value as committed. */
+  commit(name) {
+    const slot = this.slots.get(name);
+    if (!slot?.previewing) return;
+    const before = slot.baseline;
+    const after = slot.def.peek();
+    slot.previewing = false;
+    slot.baseline = undefined;
+    if (slot.prev && !Object.is(after, before)) {
+      this.set(slot.prev, before === undefined ? after : before);
+    }
+  }
+  /** Cancel an active preview, restoring the value from before preview() started. */
+  revert(name) {
+    const slot = this.slots.get(name);
+    if (!slot?.previewing) return;
+    const before = slot.baseline;
+    slot.previewing = false;
+    slot.baseline = undefined;
+    slot.def.value = before;
+  }
+  /** Store `name`'s previous committed value in `prevName` whenever `name` commits a change. */
+  trackPrevious(name, prevName) {
+    const slot = this.slot(name);
+    slot.prev = prevName;
+    const cur = slot.previewing ? slot.baseline : slot.def.peek();
+    if (cur !== undefined && this.slot(prevName).def.peek() === undefined) {
+      this.set(prevName, cur);
+    }
   }
   /** Set several variables at once. */
   setValues(values) {

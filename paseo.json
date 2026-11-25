@@ -1,0 +1,17 @@
+{
+  "worktree": {
+    "setup": "make docs"
+  },
+  "scripts": {
+    "build": {
+      "command": "make build"
+    },
+    "test": {
+      "command": "make test"
+    },
+    "serve": {
+      "type": "service",
+      "command": "PORT=$PASEO_PORT node site/serve.js"
+    }
+  }
+}

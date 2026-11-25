@@ -82,7 +82,7 @@ function onPointerMove(event) {
   const meta = drag.scope.slot(drag.name).meta.peek();
   const { step } = limits(meta);
   const pps = meta.pixelsPerStep ?? config.pixelsPerStep;
-  drag.scope.set(drag.name, nudge(drag.startValue, Math.trunc(dx / pps) * step, meta));
+  drag.scope.preview(drag.name, nudge(drag.startValue, Math.trunc(dx / pps) * step, meta));
 }
 
 function onPointerUp(event) {
@@ -92,6 +92,7 @@ function onPointerUp(event) {
   document.documentElement.classList.remove("tangle-dragging");
   if (finished.pointerType !== "mouse") hover.value = null;
   if (event.type === "pointercancel" || finished.moved) {
+    if (finished.moved) finished.scope.commit(finished.name);
     active.value = null;
     return;
   }
@@ -164,6 +165,9 @@ export function openEditor(el, { text = false } = {}) {
   placeBelow(input, el);
   editor = { input, scope, name, meta, text, where: occurrence(el) };
   active.value = keyOf(scope, name);
+  if (text) {
+    input.addEventListener("input", () => scope.preview(name, input.value));
+  }
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -181,8 +185,13 @@ export function openEditor(el, { text = false } = {}) {
 function closeEditor(commit, { strict = false } = {}) {
   if (!editor) return;
   const ed = editor;
-  if (commit && ed.text) {
-    ed.scope.set(ed.name, ed.input.value);
+  if (ed.text) {
+    if (commit) {
+      ed.scope.preview(ed.name, ed.input.value);
+      ed.scope.commit(ed.name);
+    } else {
+      ed.scope.revert(ed.name);
+    }
   } else if (commit) {
     const text = ed.input.value.trim();
     let next = Number(text.replace(/,/g, ""));
@@ -248,7 +257,7 @@ export function openMenu(el, options, query = "") {
   input.setAttribute("aria-controls", list.id);
   box.append(input, list);
   document.body.append(box);
-  menu = { el, box, input, list, options, scope, name, shown: [], index: -1 };
+  menu = { el, box, input, list, options, scope, name, original: scope.peek(name), shown: [], index: -1 };
   el.setAttribute("aria-expanded", "true");
   renderMenu();
   placeBelow(box, el);
@@ -276,16 +285,15 @@ export function openMenu(el, options, query = "") {
 
 /** Shows the options that match the search, highlighting the first, or else the current one. */
 function renderMenu() {
-  const { input, list, options, scope, name } = menu;
+  const { input, list, options, original } = menu;
   const query = input.value;
-  const current = scope.peek(name);
   menu.shown = filterOptions(options, query);
   list.replaceChildren(
     ...menu.shown.map((option, i) => {
       const row = document.createElement("li");
       row.id = `${list.id}-${i}`;
       row.setAttribute("role", "option");
-      row.setAttribute("aria-selected", String(Object.is(option.value, current)));
+      row.setAttribute("aria-selected", String(Object.is(option.value, original)));
       row.textContent = option.label;
       return row;
     }),
@@ -296,17 +304,22 @@ function renderMenu() {
     empty.textContent = "No matches";
     list.append(empty);
   }
-  highlight(query.trim() ? 0 : menu.shown.findIndex((o) => Object.is(o.value, current)));
+  highlight(query.trim() ? 0 : menu.shown.findIndex((o) => Object.is(o.value, original)));
 }
 
 function highlight(index, scroll = true) {
-  const { input, list, shown } = menu;
+  const { input, list, shown, scope, name } = menu;
   menu.index = shown.length ? Math.max(0, Math.min(index, shown.length - 1)) : -1;
   const rows = shown.length ? [...list.children] : [];
   rows.forEach((row, i) => row.classList.toggle("is-highlighted", i === menu.index));
   const row = rows[menu.index];
-  if (row) input.setAttribute("aria-activedescendant", row.id);
-  else input.removeAttribute("aria-activedescendant");
+  if (row) {
+    input.setAttribute("aria-activedescendant", row.id);
+    scope.preview(name, shown[menu.index].value);
+  } else {
+    input.removeAttribute("aria-activedescendant");
+    scope.revert(name);
+  }
   // Scroll the list, not the page (scrollIntoView would scroll both).
   if (row && scroll) {
     const bottom = row.offsetTop + row.offsetHeight;
@@ -320,7 +333,12 @@ export function closeMenu(pick = false) {
   const m = menu;
   menu = null;
   const option = pick ? m.shown[m.index] : undefined;
-  if (option) m.scope.set(m.name, option.value);
+  if (option) {
+    m.scope.preview(m.name, option.value);
+    m.scope.commit(m.name);
+  } else {
+    m.scope.revert(m.name);
+  }
   const refocus = document.activeElement === m.input;
   m.box.remove();
   m.el.setAttribute("aria-expanded", "false");

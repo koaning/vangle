@@ -96,6 +96,9 @@ import { scopeOf, registerFunction, registerFormat, tangleCall, configure, Tangl
 | `peek(name)` | The current value, without subscribing. |
 | `set(name, value)` | Sets a value. Everything that depends on it updates. |
 | `setValues({ a: 1, b: 2 })` | Sets several values in one go. |
+| `preview(name, value)` | Sets a live value during a drag, edit or menu browse without committing it yet (so `previous` waits). |
+| `commit(name)` | Finishes an active `preview`, committing the current value. |
+| `revert(name)` | Cancels an active `preview`, restoring the value from before it started. |
 | `define(name, fn)` | Defines a computed variable, like `<t-let>`. `fn` receives the scope: `(s) => s.get("w") * s.get("h")`. An expression string also works: `define("area", "w * h")`. |
 | `eval(expr)` | Evaluates an [expression](expressions.md) against the scope. |
 | `effect(fn)` | Runs `fn(scope)` now, and again whenever a variable it read changes. Returns a function that stops it. |

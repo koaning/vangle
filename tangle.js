@@ -288,7 +288,53 @@ export class Scope {
     return untracked(() => this.get(name));
   }
   set(name, value) {
-    this.slot(name).def.value = value;
+    const slot = this.slot(name);
+    const before = slot.previewing ? slot.baseline : slot.def.peek();
+    slot.previewing = false;
+    slot.baseline = undefined;
+    slot.def.value = value;
+    if (slot.prev && !Object.is(value, before)) {
+      this.set(slot.prev, before === undefined ? value : before);
+    }
+  }
+  /** Set a live, uncommitted value during a drag, edit or menu browse; end with commit() or revert(). */
+  preview(name, value) {
+    const slot = this.slot(name);
+    if (!slot.previewing) {
+      slot.baseline = slot.def.peek();
+      slot.previewing = true;
+    }
+    slot.def.value = value;
+  }
+  /** Finish an active preview, keeping the current value as committed. */
+  commit(name) {
+    const slot = this.slots.get(name);
+    if (!slot?.previewing) return;
+    const before = slot.baseline;
+    const after = slot.def.peek();
+    slot.previewing = false;
+    slot.baseline = undefined;
+    if (slot.prev && !Object.is(after, before)) {
+      this.set(slot.prev, before === undefined ? after : before);
+    }
+  }
+  /** Cancel an active preview, restoring the value from before preview() started. */
+  revert(name) {
+    const slot = this.slots.get(name);
+    if (!slot?.previewing) return;
+    const before = slot.baseline;
+    slot.previewing = false;
+    slot.baseline = undefined;
+    slot.def.value = before;
+  }
+  /** Store `name`'s previous committed value in `prevName` whenever `name` commits a change. */
+  trackPrevious(name, prevName) {
+    const slot = this.slot(name);
+    slot.prev = prevName;
+    const cur = slot.previewing ? slot.baseline : slot.def.peek();
+    if (cur !== undefined && this.slot(prevName).def.peek() === undefined) {
+      this.set(prevName, cur);
+    }
   }
   /** Set several variables at once. */
   setValues(values) {
@@ -709,7 +755,7 @@ function onPointerMove(event) {
   const meta = drag.scope.slot(drag.name).meta.peek();
   const { step } = limits(meta);
   const pps = meta.pixelsPerStep ?? config.pixelsPerStep;
-  drag.scope.set(drag.name, nudge(drag.startValue, Math.trunc(dx / pps) * step, meta));
+  drag.scope.preview(drag.name, nudge(drag.startValue, Math.trunc(dx / pps) * step, meta));
 }
 
 function onPointerUp(event) {
@@ -719,6 +765,7 @@ function onPointerUp(event) {
   document.documentElement.classList.remove("tangle-dragging");
   if (finished.pointerType !== "mouse") hover.value = null;
   if (event.type === "pointercancel" || finished.moved) {
+    if (finished.moved) finished.scope.commit(finished.name);
     active.value = null;
     return;
   }
@@ -791,6 +838,9 @@ function openEditor(el, { text = false } = {}) {
   placeBelow(input, el);
   editor = { input, scope, name, meta, text, where: occurrence(el) };
   active.value = keyOf(scope, name);
+  if (text) {
+    input.addEventListener("input", () => scope.preview(name, input.value));
+  }
   input.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
       event.preventDefault();
@@ -808,8 +858,13 @@ function openEditor(el, { text = false } = {}) {
 function closeEditor(commit, { strict = false } = {}) {
   if (!editor) return;
   const ed = editor;
-  if (commit && ed.text) {
-    ed.scope.set(ed.name, ed.input.value);
+  if (ed.text) {
+    if (commit) {
+      ed.scope.preview(ed.name, ed.input.value);
+      ed.scope.commit(ed.name);
+    } else {
+      ed.scope.revert(ed.name);
+    }
   } else if (commit) {
     const text = ed.input.value.trim();
     let next = Number(text.replace(/,/g, ""));
@@ -875,7 +930,7 @@ function openMenu(el, options, query = "") {
   input.setAttribute("aria-controls", list.id);
   box.append(input, list);
   document.body.append(box);
-  menu = { el, box, input, list, options, scope, name, shown: [], index: -1 };
+  menu = { el, box, input, list, options, scope, name, original: scope.peek(name), shown: [], index: -1 };
   el.setAttribute("aria-expanded", "true");
   renderMenu();
   placeBelow(box, el);
@@ -903,16 +958,15 @@ function openMenu(el, options, query = "") {
 
 /** Shows the options that match the search, highlighting the first, or else the current one. */
 function renderMenu() {
-  const { input, list, options, scope, name } = menu;
+  const { input, list, options, original } = menu;
   const query = input.value;
-  const current = scope.peek(name);
   menu.shown = filterOptions(options, query);
   list.replaceChildren(
     ...menu.shown.map((option, i) => {
       const row = document.createElement("li");
       row.id = `${list.id}-${i}`;
       row.setAttribute("role", "option");
-      row.setAttribute("aria-selected", String(Object.is(option.value, current)));
+      row.setAttribute("aria-selected", String(Object.is(option.value, original)));
       row.textContent = option.label;
       return row;
     }),
@@ -923,17 +977,22 @@ function renderMenu() {
     empty.textContent = "No matches";
     list.append(empty);
   }
-  highlight(query.trim() ? 0 : menu.shown.findIndex((o) => Object.is(o.value, current)));
+  highlight(query.trim() ? 0 : menu.shown.findIndex((o) => Object.is(o.value, original)));
 }
 
 function highlight(index, scroll = true) {
-  const { input, list, shown } = menu;
+  const { input, list, shown, scope, name } = menu;
   menu.index = shown.length ? Math.max(0, Math.min(index, shown.length - 1)) : -1;
   const rows = shown.length ? [...list.children] : [];
   rows.forEach((row, i) => row.classList.toggle("is-highlighted", i === menu.index));
   const row = rows[menu.index];
-  if (row) input.setAttribute("aria-activedescendant", row.id);
-  else input.removeAttribute("aria-activedescendant");
+  if (row) {
+    input.setAttribute("aria-activedescendant", row.id);
+    scope.preview(name, shown[menu.index].value);
+  } else {
+    input.removeAttribute("aria-activedescendant");
+    scope.revert(name);
+  }
   // Scroll the list, not the page (scrollIntoView would scroll both).
   if (row && scroll) {
     const bottom = row.offsetTop + row.offsetHeight;
@@ -947,7 +1006,12 @@ function closeMenu(pick = false) {
   const m = menu;
   menu = null;
   const option = pick ? m.shown[m.index] : undefined;
-  if (option) m.scope.set(m.name, option.value);
+  if (option) {
+    m.scope.preview(m.name, option.value);
+    m.scope.commit(m.name);
+  } else {
+    m.scope.revert(m.name);
+  }
   const refocus = document.activeElement === m.input;
   m.box.remove();
   m.el.setAttribute("aria-expanded", "false");
@@ -1996,6 +2060,7 @@ registerEngine("js", jsEngine);
 const Base = typeof HTMLElement === "undefined" ? class {} : HTMLElement;
 
 const NUMERIC_META = { min: "min", max: "max", step: "step", "pixels-per-step": "pixelsPerStep" };
+const PREVIOUS_TAGS = new Set(["t-num", "t-var", "t-text", "t-select"]);
 
 /** Read declaration attributes into the variable's metadata and set its initial value. */
 function declare(el, scope, name, initial) {
@@ -2008,6 +2073,11 @@ function declare(el, scope, name, initial) {
   }
   // A <t-num>'s format only becomes the variable's default if none is set yet.
   if (el.localName === "t-num" && scope.slot(name).meta.peek().format) delete patch.format;
+  if (PREVIOUS_TAGS.has(el.localName) && el.hasAttribute("previous")) {
+    const prev = el.getAttribute("previous");
+    if (prev && NAME_RE.test(prev) && prev !== name) scope.trackPrevious(name, prev);
+    else console.error(`tangle: <${el.localName}> needs a valid previous="…" (different from name)`, el);
+  }
   declareMeta(scope, name, patch, initial);
 }
 
@@ -8416,6 +8486,26 @@ class TVega extends TangleElement {
       this._target = document.createElement("div");
       this._target.className = "tangle-vega is-loading";
       this._target.textContent = "Loading chart…"; // Vega is a large download on first use
+      this._previewed = new Set();
+      this._dragging = false;
+      const stop = () => {
+        if (!this._dragging) return;
+        this._dragging = false;
+        const scope = scopeOf(this);
+        for (const name of this._previewed) scope.commit(name);
+        this._previewed.clear();
+        removeEventListener("pointerup", stop);
+        removeEventListener("pointercancel", stop);
+      };
+      this._target.addEventListener(
+        "pointerdown",
+        () => {
+          this._dragging = true;
+          addEventListener("pointerup", stop);
+          addEventListener("pointercancel", stop);
+        },
+        { capture: true },
+      );
       this.append(this._target);
     }
     let embed, source;
@@ -8512,7 +8602,13 @@ class TVega extends TangleElement {
       // Chart → variable: Vega's own inputs (bind) and selections set the variable.
       if (scope.peek(name) === undefined) scope.set(name, signal);
       view.addSignalListener(name, (_, value) => {
-        if (!Object.is(scope.peek(name), value)) scope.set(name, value);
+        if (Object.is(scope.peek(name), value)) return;
+        if (this._dragging) {
+          scope.preview(name, value);
+          this._previewed.add(name);
+        } else {
+          scope.set(name, value);
+        }
       });
     }
 
@@ -8770,6 +8866,26 @@ class TJsxgraph extends TangleElement {
       const meta = scope.meta(coord);
       return meta.min == null && meta.max == null && meta.step == null ? value : snap(value, meta);
     };
+    let dragging = false;
+    const previewed = new Set();
+    const stopDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      for (const name of previewed) scope.commit(name);
+      previewed.clear();
+      removeEventListener("pointerup", stopDrag);
+      removeEventListener("pointercancel", stopDrag);
+    };
+    this._target.addEventListener(
+      "pointerdown",
+      () => {
+        dragging = true;
+        addEventListener("pointerup", stopDrag);
+        addEventListener("pointercancel", stopDrag);
+      },
+      { capture: true },
+    );
+
     const bound = [];
     const point = (x, y, attributes = {}) => {
       const p = board.create("point", [read(x), read(y)], attributes);
@@ -8781,7 +8897,13 @@ class TJsxgraph extends TangleElement {
         p.on("down", () => {
           const root = document.documentElement;
           root.classList.add("tangle-grabbing");
-          addEventListener("pointerup", () => root.classList.remove("tangle-grabbing"), { once: true });
+          const stop = () => {
+            root.classList.remove("tangle-grabbing");
+            removeEventListener("pointerup", stop);
+            removeEventListener("pointercancel", stop);
+          };
+          addEventListener("pointerup", stop);
+          addEventListener("pointercancel", stop);
         });
       }
       // Variable → point, when something else on the page changes it.
@@ -8808,7 +8930,13 @@ class TJsxgraph extends TangleElement {
         if (typeof y === "string") values[y] = at[1];
         moved ||= at[0] !== p.X() || at[1] !== p.Y();
       }
-      untracked(() => scope.setValues(values));
+      untracked(() => {
+        if (!dragging) return scope.setValues(values);
+        for (const [k, v] of Object.entries(values)) {
+          scope.preview(k, v);
+          previewed.add(k);
+        }
+      });
       // A point whose variable changed follows it in its own effect. One that moved without
       // changing it (off a fixed coordinate, or less than a step) goes back here.
       if (moved) {

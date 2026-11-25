@@ -319,6 +319,78 @@ test("TangleElement: watch gets the scope and stops on disconnect, declare reads
   assert.deepEqual(seen, [3, 4]);
 });
 
+test("Scope preview, commit, revert and previous attribute on supported elements", () => {
+  const s = new Scope();
+  class Control extends TangleElement {
+    constructor(localName, attrs) {
+      super();
+      this.localName = localName;
+      this.attrs = attrs;
+    }
+    get scope() {
+      return s;
+    }
+    hasAttribute(name) {
+      return name in this.attrs;
+    }
+    getAttribute(name) {
+      return this.attrs[name] ?? null;
+    }
+  }
+
+  // Supported elements (<t-num>, <t-var>, <t-text>, <t-select>) wire `previous`.
+  new Control("t-num", { previous: "x_prev" }).declare("x", 4);
+  assert.equal(s.peek("x"), 4);
+  assert.equal(s.peek("x_prev"), 4);
+
+  // Drag 1: live preview does not overwrite x_prev; commit updates it to 4 (unchanged) -> baseline 10.
+  s.preview("x", 6);
+  s.preview("x", 10);
+  assert.equal(s.peek("x"), 10);
+  assert.equal(s.peek("x_prev"), 4);
+  s.commit("x");
+  assert.equal(s.peek("x"), 10);
+  assert.equal(s.peek("x_prev"), 4);
+
+  // Drag 2: x_prev stays 4 while previewing, then becomes 10 on commit.
+  s.preview("x", 12);
+  s.preview("x", 15);
+  assert.equal(s.peek("x_prev"), 4);
+  s.commit("x");
+  assert.equal(s.peek("x"), 15);
+  assert.equal(s.peek("x_prev"), 10);
+
+  // Cancelled edit (Esc): revert restores 15 and leaves x_prev at 10.
+  s.preview("x", 99);
+  assert.equal(s.peek("x"), 99);
+  s.revert("x");
+  assert.equal(s.peek("x"), 15);
+  assert.equal(s.peek("x_prev"), 10);
+
+  // Discrete set() updates x_prev immediately, and committing with no net change leaves it alone.
+  s.set("x", 20);
+  assert.equal(s.peek("x_prev"), 15);
+  s.preview("x", 25);
+  s.preview("x", 20);
+  s.commit("x");
+  assert.equal(s.peek("x_prev"), 15);
+
+  // Late `previous` binding after value already exists, plus <t-select> / <t-text>.
+  s.set("later", 7);
+  new Control("t-var", { previous: "later_prev" }).declare("later");
+  assert.equal(s.peek("later_prev"), 7);
+  new Control("t-text", { previous: "who_prev" }).declare("who", "reader");
+  assert.equal(s.peek("who_prev"), "reader");
+  new Control("t-select", { previous: "g_prev" }).declare("g", 9.81);
+  assert.equal(s.peek("g_prev"), 9.81);
+
+  // Unsupported elements (e.g. <t-choice>, <t-paint>) do not track `previous`.
+  new Control("t-choice", { previous: "c_prev" }).declare("c", "a");
+  assert.equal(s.peek("c_prev"), undefined);
+  s.set("c", "b");
+  assert.equal(s.peek("c_prev"), undefined);
+});
+
 test("buildRequest fills in the URL template, the query string and a JSON body", () => {
   const scope = new Scope();
   scope.setValues({ planet: "mars", year: 2020, age: 40 });

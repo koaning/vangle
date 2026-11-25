@@ -27,6 +27,7 @@ hovering one highlights its twin in the formula.
 | `color` | accent color | One CSS color, or two separated by a space for light and dark mode. |
 | `label` | the name | The accessible name. |
 | `pixels-per-step` | `5` | Drag sensitivity. |
+| `previous` | | A variable to hold the value from before the last drag or edit (useful for `\tangle{}` parameters and [`<t-jsxgraph>`](t-jsxgraph.md) points). |
 
 These are the same settings as [`<t-num>`](t-num.md); a `<t-var>`
 simply doesn't render.

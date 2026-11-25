@@ -5,11 +5,12 @@ to cycle through with a [`<t-choice>`](t-choice.md).
 
 <t-scope class="example" data-show-source="open">
   <p>Without air, a ball dropped from <t-num name="h" min="1" max="1000">10</t-num> m on
-    <t-select name="g" options="Mercury:3.70, Venus:8.87, Earth:9.81, the Moon:1.62, Mars:3.72,
+    <t-select name="g" previous="g_prev" options="Mercury:3.70, Venus:8.87, Earth:9.81, the Moon:1.62, Mars:3.72,
       Ceres:0.28, Jupiter:24.79, Io:1.80, Europa:1.31, Ganymede:1.43, Callisto:1.24, Saturn:10.44,
       Enceladus:0.11, Titan:1.35, Uranus:8.69, Neptune:11.15, Triton:0.78, Pluto:0.62">Mars</t-select>
     falls for <t-out expr="Math.sqrt(2 * h / g)" format="%.1f"></t-out> s and lands at
-    <t-out expr="Math.sqrt(2 * g * h)" format="%.1f"></t-out> m/s.</p>
+    <t-out expr="Math.sqrt(2 * g * h)" format="%.1f"></t-out> m/s
+    (previous gravity: <t-out expr="g_prev" format="%.2f"></t-out> m/s²).</p>
 </t-scope>
 
 ## Attributes
@@ -21,6 +22,7 @@ to cycle through with a [`<t-choice>`](t-choice.md).
 | `value` | text content | The starting option, matched against values first and then labels. Defaults to the first option. |
 | `color` | accent color | One CSS color, or two for light and dark mode. |
 | `label` | the name | The accessible name. |
+| `previous` | | A variable to hold the value from before the last pick. |
 
 The options work as in [`<t-choice>`](t-choice.md#labels-and-values): the reader sees the label,
 expressions get the value, and values that look like numbers become numbers.
@@ -34,9 +36,9 @@ expressions get the value, and values that look like numbers become numbers.
 | <kbd>←</kbd> or <kbd>→</kbd> | The previous or next option, without opening the menu. |
 
 In the menu, typing narrows the list: labels that start with what you typed come first, then labels
-with a word that starts with it, then the rest that contain it. <kbd>↑</kbd> and <kbd>↓</kbd> move
-through the list, <kbd>Enter</kbd> or a click picks, and <kbd>Esc</kbd> or clicking away closes the
-menu without a change.
+with a word that starts with it, then the rest that contain it. Hovering or pressing <kbd>↑</kbd> and
+<kbd>↓</kbd> previews each option live on the page, <kbd>Enter</kbd> or a click commits it, and
+<kbd>Esc</kbd> or clicking away closes the menu and reverts to the original choice.
 
 ## Options from JavaScript
 

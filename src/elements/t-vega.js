@@ -128,6 +128,26 @@ export class TVega extends TangleElement {
       this._target = document.createElement("div");
       this._target.className = "tangle-vega is-loading";
       this._target.textContent = "Loading chart…"; // Vega is a large download on first use
+      this._previewed = new Set();
+      this._dragging = false;
+      const stop = () => {
+        if (!this._dragging) return;
+        this._dragging = false;
+        const scope = scopeOf(this);
+        for (const name of this._previewed) scope.commit(name);
+        this._previewed.clear();
+        removeEventListener("pointerup", stop);
+        removeEventListener("pointercancel", stop);
+      };
+      this._target.addEventListener(
+        "pointerdown",
+        () => {
+          this._dragging = true;
+          addEventListener("pointerup", stop);
+          addEventListener("pointercancel", stop);
+        },
+        { capture: true },
+      );
       this.append(this._target);
     }
     let embed, source;
@@ -224,7 +244,13 @@ export class TVega extends TangleElement {
       // Chart → variable: Vega's own inputs (bind) and selections set the variable.
       if (scope.peek(name) === undefined) scope.set(name, signal);
       view.addSignalListener(name, (_, value) => {
-        if (!Object.is(scope.peek(name), value)) scope.set(name, value);
+        if (Object.is(scope.peek(name), value)) return;
+        if (this._dragging) {
+          scope.preview(name, value);
+          this._previewed.add(name);
+        } else {
+          scope.set(name, value);
+        }
       });
     }
 

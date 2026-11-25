@@ -23,6 +23,7 @@ as in `<t-num name="price" value="1000" format="$%,d"></t-num>`.
 | `color` | accent color | A CSS color, or two (`"#246bce #75a7ff"`) for light and dark mode. Every place the variable appears uses it, formulas included. |
 | `label` | the name | The accessible name screen readers announce. |
 | `pixels-per-step` | `5` | How far the pointer must travel to change the value by one step. Raise it for finer control. |
+| `previous` | | A variable to hold the value from before the last drag or edit (starts at the initial value, and updates when a gesture finishes with a new value). |
 
 Try them out: change the attributes in the code, then drag the number below it. This uses
 [`<t-tag>`](t-tag.md).
@@ -74,6 +75,18 @@ Raise it when you want precise, slow adjustments.
   <p>A learning rate of <t-num name="lr" min="0.001" max="1" step="0.001" pixels-per-step="2" format="%.3f">0.01</t-num>
     over <t-num name="steps" min="1" max="1000" step="10">100</t-num> steps moves the weights by
     <t-out expr="lr * steps" format="%.2f"></t-out>.</p>
+</t-scope>
+
+## Previous value
+
+Give `<t-num>` a `previous` attribute to keep the value from before the last drag or typed
+edit. While you drag, `previous` stays put; once you let go, it updates to where the drag
+started:
+
+<t-scope class="example" data-show-source="open">
+  <p>Drag <t-num name="price" previous="price_prev" min="10" max="200" step="5" format="$%d">80</t-num>:
+    was <t-out expr="price_prev" format="$%d"></t-out>
+    (<t-out expr="price - price_prev" format="%+d"></t-out>).</p>
 </t-scope>
 
 ## Notes

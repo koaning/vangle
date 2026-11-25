@@ -10,6 +10,7 @@ import { decorate, hover, active, syncClasses } from "./interaction.js";
 export const Base = typeof HTMLElement === "undefined" ? class {} : HTMLElement;
 
 const NUMERIC_META = { min: "min", max: "max", step: "step", "pixels-per-step": "pixelsPerStep" };
+const PREVIOUS_TAGS = new Set(["t-num", "t-var", "t-text", "t-select"]);
 
 /** Read declaration attributes into the variable's metadata and set its initial value. */
 export function declare(el, scope, name, initial) {
@@ -22,6 +23,11 @@ export function declare(el, scope, name, initial) {
   }
   // A <t-num>'s format only becomes the variable's default if none is set yet.
   if (el.localName === "t-num" && scope.slot(name).meta.peek().format) delete patch.format;
+  if (PREVIOUS_TAGS.has(el.localName) && el.hasAttribute("previous")) {
+    const prev = el.getAttribute("previous");
+    if (prev && NAME_RE.test(prev) && prev !== name) scope.trackPrevious(name, prev);
+    else console.error(`tangle: <${el.localName}> needs a valid previous="…" (different from name)`, el);
+  }
   declareMeta(scope, name, patch, initial);
 }
 

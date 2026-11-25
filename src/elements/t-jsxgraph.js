@@ -136,6 +136,26 @@ export class TJsxgraph extends TangleElement {
       const meta = scope.meta(coord);
       return meta.min == null && meta.max == null && meta.step == null ? value : snap(value, meta);
     };
+    let dragging = false;
+    const previewed = new Set();
+    const stopDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      for (const name of previewed) scope.commit(name);
+      previewed.clear();
+      removeEventListener("pointerup", stopDrag);
+      removeEventListener("pointercancel", stopDrag);
+    };
+    this._target.addEventListener(
+      "pointerdown",
+      () => {
+        dragging = true;
+        addEventListener("pointerup", stopDrag);
+        addEventListener("pointercancel", stopDrag);
+      },
+      { capture: true },
+    );
+
     const bound = [];
     const point = (x, y, attributes = {}) => {
       const p = board.create("point", [read(x), read(y)], attributes);
@@ -147,7 +167,13 @@ export class TJsxgraph extends TangleElement {
         p.on("down", () => {
           const root = document.documentElement;
           root.classList.add("tangle-grabbing");
-          addEventListener("pointerup", () => root.classList.remove("tangle-grabbing"), { once: true });
+          const stop = () => {
+            root.classList.remove("tangle-grabbing");
+            removeEventListener("pointerup", stop);
+            removeEventListener("pointercancel", stop);
+          };
+          addEventListener("pointerup", stop);
+          addEventListener("pointercancel", stop);
         });
       }
       // Variable → point, when something else on the page changes it.
@@ -174,7 +200,13 @@ export class TJsxgraph extends TangleElement {
         if (typeof y === "string") values[y] = at[1];
         moved ||= at[0] !== p.X() || at[1] !== p.Y();
       }
-      untracked(() => scope.setValues(values));
+      untracked(() => {
+        if (!dragging) return scope.setValues(values);
+        for (const [k, v] of Object.entries(values)) {
+          scope.preview(k, v);
+          previewed.add(k);
+        }
+      });
       // A point whose variable changed follows it in its own effect. One that moved without
       // changing it (off a fixed coordinate, or less than a step) goes back here.
       if (moved) {

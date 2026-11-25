@@ -24,6 +24,7 @@ export const NAV = [
     ["charts", "Updating a chart"],
     ["custom-elements", "Your own elements"],
     ["blogging", "Using it on a blog"],
+    ["internals", "How it works inside"],
   ]],
   ["Elements", [
     ["t-num", "<code>&lt;t-num&gt;</code>"],

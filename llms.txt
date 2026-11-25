@@ -15,6 +15,7 @@
 - [Updating a chart](docs/charts.md): for charts `<t-vega>` and `<t-obsplot>` don't cover: drawing an SVG chart with fixed scales from the variables with `scopeOf(...).effect`, canvas and chart libraries, and setting variables from a click in the chart. Keywords: custom plot, d3, canvas.
 - [Your own elements](docs/custom-elements.md): writing custom elements by extending `TangleElement`: `watch` effects that stop on disconnect, `declare` from attributes, and `makeDraggable` for a widget that drags like `<t-num>`. Examples: a bar, a range slider, a row of draggable dots. Keywords: custom widget, range slider, dots.
 - [Using it on a blog](docs/blogging.md): layouts, raw-HTML settings for Markdown generators, KaTeX setup, CSP and feeds. Keywords: static site, publish.
+- [How it works inside](docs/internals.md): a live paragraph with its dependency graph, what makes it reactive (variables, recorded reads, batched redraws), a drag shown as a live diagram, a bigger example whose debug graph has 13 variables, reading and setting variables from JavaScript with `scopeOf(el).get`, `.set` and `.effect`, where each piece lives in `src/`, and short notes on declaration order, expressions, scopes, formulas, stale values and lazy loading. Keywords: architecture, internals, signals, reactivity, contributing.
 
 ## Elements
 
